@@ -10,6 +10,8 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-E22651" alt="License: AGPL-3.0-only"></a>
+  <a href="https://github.com/Draggable/openrows/releases/latest"><img src="https://img.shields.io/github/v/release/Draggable/openrows?color=E22651" alt="Latest release"></a>
+  <a href="https://www.npmjs.com/package/@openrows/sdk"><img src="https://img.shields.io/npm/v/@openrows/sdk?label=%40openrows%2Fsdk&color=E22651" alt="@openrows/sdk on npm"></a>
 </p>
 
 <p align="center">
