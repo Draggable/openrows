@@ -1,0 +1,89 @@
+# Publishes the npm packages with provenance, one per pushed tag:
+#   sdk-v<version>         @openrows/sdk                 (packages/sdk)
+#   mcp-server-v<version>  @openrows/mcp-server          (packages/mcp-server, needs that SDK
+#                                                         version on npm first)
+#   n8n-v<version>         @openrows/n8n-nodes-openrows  (packages/n8n-nodes-openrows)
+#   blocks-v<version>      @openrows/blocks              (packages/blocks, the extensions SDK)
+# e.g. `git tag sdk-v0.1.0 && git push origin sdk-v0.1.0`. The version must be the one in the
+# package's package.json and the tagged commit must be on main. Needs the repository secret
+# NPM_TOKEN (a granular npm token that may publish @openrows). Nothing else publishes them, and
+# never a local machine.
+#
+# GitHub-hosted on purpose: npm only signs provenance from cloud-hosted runners, not self-hosted
+# ones. Kept to one short job: install, build, the package's own tests, the
+# tarball check (scripts/check-packages.mjs), publish.
+name: Release packages
+
+on:
+  push:
+    tags: ['sdk-v*', 'mcp-server-v*', 'n8n-v*', 'blocks-v*']
+
+permissions:
+  contents: read
+  # The OIDC token npm's provenance statement is signed with.
+  id-token: write
+
+concurrency:
+  group: release-packages-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # main's history without file contents, for the check that the tag is on main.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Resolve the tag to its package
+        id: pkg
+        run: node scripts/check-packages.mjs --tag "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+      - name: Check that the tagged commit is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) isn't on main"
+            exit 1
+          fi
+      - name: Check that NPM_TOKEN is set
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::The NPM_TOKEN secret is not set"
+            exit 1
+          fi
+      - name: Check that this version isn't on npm yet
+        env:
+          SPEC: ${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if npm view "$SPEC" version >/dev/null 2>&1; then
+            echo "::error::$SPEC is already published"
+            exit 1
+          fi
+      - run: npm ci --no-audit --no-fund
+      # shared for the SDK's codegen test, the n8n nodes' registry test and the blocks' runtime
+      # test; the SDK for the MCP server, which runs on it.
+      - run: npm run build -w @openrows/shared -w @openrows/sdk -w "$NAME"
+        env:
+          NAME: ${{ steps.pkg.outputs.name }}
+      - run: npx --no-install vitest run --project "$PROJECT" --project scripts
+        env:
+          PROJECT: ${{ steps.pkg.outputs.project }}
+      - name: Check the tarball
+        run: node scripts/check-packages.mjs "$DIR"
+        env:
+          DIR: ${{ steps.pkg.outputs.dir }}
+      - name: Publish
+        run: npm publish -w "$NAME" --provenance --access public
+        env:
+          NAME: ${{ steps.pkg.outputs.name }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

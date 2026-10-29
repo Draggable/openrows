@@ -1,0 +1,1 @@
+ALTER TABLE "fields" ADD COLUMN "recompute_requested_at" timestamp with time zone;

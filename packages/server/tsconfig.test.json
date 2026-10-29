@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "types": ["node"],
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.test.tsbuildinfo"
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/__fixtures__/*.ts",
+    "test/**/*.ts",
+    "drizzle.config.ts",
+    "vitest*.config.ts"
+  ],
+  "references": [
+    { "path": "./tsconfig.build.json" },
+    { "path": "../sdk/tsconfig.build.json" },
+    { "path": "../mcp-server/tsconfig.build.json" },
+    { "path": "../n8n-nodes-openrows/tsconfig.build.json" }
+  ]
+}

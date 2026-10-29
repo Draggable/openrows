@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a new capability or an improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [existing issues](https://github.com/Draggable/openrows/issues) first; someone may have asked already.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How it could work. Mention the Airtable equivalent if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: edition
+    attributes:
+      label: Edition
+      description: Self-hostable core features are AGPL; hosted-only paid features (billing, enterprise SSO/SCIM/audit logs) live in the hosted edition.
+      options:
+        - Core (self-hostable)
+        - Hosted only
+        - Not sure

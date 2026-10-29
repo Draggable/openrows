@@ -1,0 +1,49 @@
+# Build context for docker/Dockerfile (built from the repo root). The image needs only the root
+# manifests, scripts/install-hooks.js and packages/; everything else stays out.
+
+# Legacy prototype code (reference only, never shipped)
+legacy
+
+# Dependencies and build outputs (rebuilt inside the image)
+node_modules
+**/node_modules
+dist
+**/dist
+*.tsbuildinfo
+.turbo
+
+# Secrets and local env files
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Not part of the image
+.git
+.github
+docker
+docs
+e2e
+bench
+coverage
+playwright-report
+test-results
+*.md
+*.log
+npm-debug.log*
+
+# Tests (the build excludes them anyway)
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/__tests__
+packages/server/test
+
+# IDE and OS files
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+

@@ -1,0 +1,51 @@
+{
+  "name": "@openrows/mcp-server",
+  "version": "0.1.0",
+  "description": "Model Context Protocol (MCP) server for OpenRows: bases, records and comments for AI agents",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Draggable/openrows.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://app.openrows.io/docs/api/mcp",
+  "keywords": [
+    "openrows",
+    "airtable",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "openrows-mcp-server": "dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json && chmod +x dist/bin.js",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@openrows/sdk": "^0.1.0",
+    "zod": "^4.6.7"
+  }
+}

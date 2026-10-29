@@ -1,0 +1,115 @@
+{{- $v := .Values -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openrows.fullname" . }}-api
+  labels:
+    {{- include "openrows.labels" (dict "root" . "component" "api") | nindent 4 }}
+spec:
+  replicas: {{ $v.api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "openrows.selectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openrows.selectorLabels" (dict "root" . "component" "api") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with $v.api.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "openrows.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with $v.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $v.podSecurityContext | nindent 8 }}
+      # The shutdown handler lets in-flight requests finish (Compose's stop_grace_period).
+      terminationGracePeriodSeconds: 20
+      initContainers:
+        {{- include "openrows.waitForMigrations" (dict "root" . "component" "api") | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "openrows.image" . }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command: ["node", "dist/index.js"]
+          ports:
+            - name: http
+              containerPort: 3000
+            - name: metrics
+              containerPort: 9464
+          envFrom:
+            - configMapRef:
+                name: {{ include "openrows.fullname" . }}
+          env:
+            - name: PORT
+              value: "3000"
+            # GET /metrics for Prometheus on its own port, which the Service doesn't expose.
+            - name: METRICS_PORT
+              value: "9464"
+            {{- include "openrows.secretEnv" (dict "root" . "component" "api") | trim | nindent 12 }}
+          # /health: the process serves (never touches dependencies). /ready: Postgres, S3 (and
+          # Redis when set) answer; a pod that can't reach them gets no traffic.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            {{- toYaml $v.securityContext | trim | nindent 12 }}
+          resources:
+            {{- toYaml $v.api.resources | trim | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # The root filesystem is read-only; scratch space only.
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi
+      {{- with $v.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openrows.fullname" . }}
+  labels:
+    {{- include "openrows.labels" (dict "root" . "component" "api") | nindent 4 }}
+spec:
+  type: {{ $v.service.type }}
+  selector:
+    {{- include "openrows.selectorLabels" (dict "root" . "component" "api") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $v.service.port }}
+      targetPort: http

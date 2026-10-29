@@ -1,0 +1,6 @@
+DROP INDEX "workspace_invitations_pending_email_idx";--> statement-breakpoint
+ALTER TABLE "workspace_invitations" ADD COLUMN "base_id" uuid;--> statement-breakpoint
+ALTER TABLE "workspace_invitations" ADD CONSTRAINT "workspace_invitations_base_fk" FOREIGN KEY ("workspace_id","base_id") REFERENCES "public"."bases"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "workspace_invitations_pending_base_email_idx" ON "workspace_invitations" USING btree ("base_id","email") WHERE "workspace_invitations"."accepted_at" IS NULL AND "workspace_invitations"."revoked_at" IS NULL AND "workspace_invitations"."base_id" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "workspace_invitations_pending_email_idx" ON "workspace_invitations" USING btree ("workspace_id","email") WHERE "workspace_invitations"."accepted_at" IS NULL AND "workspace_invitations"."revoked_at" IS NULL AND "workspace_invitations"."base_id" IS NULL;--> statement-breakpoint
+ALTER TABLE "workspace_invitations" ADD CONSTRAINT "workspace_invitations_base_role_check" CHECK (base_id IS NULL OR role IN ('creator', 'editor', 'commenter', 'read_only'));

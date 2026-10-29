@@ -1,0 +1,83 @@
+{{- if .Values.valkey.enabled }}
+{{- $vk := .Values.valkey -}}
+# Valkey with a password, no persistence (nothing in OpenRows keeps state there yet). The api's
+# REDIS_URL points here and /ready checks it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openrows.valkeyHost" . }}
+  labels:
+    {{- include "openrows.labels" (dict "root" . "component" "valkey") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "openrows.selectorLabels" (dict "root" . "component" "valkey") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openrows.selectorLabels" (dict "root" . "component" "valkey") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      # The alpine image's valkey user.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: valkey
+          image: {{ $vk.image }}
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "exec valkey-server --save '' --appendonly no --requirepass \"$VALKEY_PASSWORD\""]
+          ports:
+            - name: valkey
+              containerPort: 6379
+          env:
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openrows.secretName" . }}
+                  key: VALKEY_PASSWORD
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "valkey-cli --no-auth-warning -a \"$VALKEY_PASSWORD\" ping | grep -q PONG"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "valkey-cli --no-auth-warning -a \"$VALKEY_PASSWORD\" ping | grep -q PONG"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml $vk.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openrows.valkeyHost" . }}
+  labels:
+    {{- include "openrows.labels" (dict "root" . "component" "valkey") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "openrows.selectorLabels" (dict "root" . "component" "valkey") | nindent 4 }}
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey
+{{- end }}

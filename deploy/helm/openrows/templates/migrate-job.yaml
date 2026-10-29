@@ -1,0 +1,89 @@
+{{- $v := .Values -}}
+# The migrations (node dist/migrate.js: Drizzle's, then the job queue's schema, then the
+# openrows_app password), under an advisory lock, so a second run waits and then skips.
+# On install it is a plain Job, started with the bundled Postgres it needs, and the api and worker
+# wait for it (their wait-for-migrations init container). On upgrade it is a pre-upgrade hook:
+# the migrations run before any pod of the new release starts, and a failure stops the upgrade.
+# The name carries the revision because a Job's pod template can't change.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "openrows.fullname" . }}-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "openrows.labels" (dict "root" . "component" "migrate") | nindent 4 }}
+  {{- if .Release.IsUpgrade }}
+  annotations:
+    helm.sh/hook: pre-upgrade
+    helm.sh/hook-weight: "0"
+    # A failed run stays for `kubectl logs` until the next upgrade replaces it.
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+  {{- end }}
+spec:
+  backoffLimit: {{ $v.migrate.backoffLimit }}
+  activeDeadlineSeconds: {{ $v.migrate.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "openrows.selectorLabels" (dict "root" . "component" "migrate") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "openrows.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with $v.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $v.podSecurityContext | nindent 8 }}
+      initContainers:
+        # Waits for Postgres to accept the owner's connection (the bundled one starts with it).
+        - name: wait-for-postgres
+          image: {{ include "openrows.image" . }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command:
+            - node
+            - -e
+            - |
+              const pg = require('pg');
+              (async () => {
+                for (;;) {
+                  const client = new pg.Client({ connectionString: process.env.MIGRATION_DATABASE_URL, connectionTimeoutMillis: 5000 });
+                  try {
+                    await client.connect();
+                    await client.query('SELECT 1');
+                    process.exit(0);
+                  } catch {
+                    console.log('Waiting for Postgres');
+                  } finally {
+                    await client.end().catch(() => {});
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 3000));
+                }
+              })();
+          env:
+            {{- include "openrows.databaseEnv" (dict "root" . "component" "migrate") | trim | nindent 12 }}
+          securityContext:
+            {{- toYaml $v.securityContext | trim | nindent 12 }}
+          resources:
+            {{- toYaml $v.migrate.resources | trim | nindent 12 }}
+      containers:
+        - name: migrate
+          image: {{ include "openrows.image" . }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command: ["node", "dist/migrate.js"]
+          env:
+            # Production refuses a default or placeholder OPENROWS_APP_DB_PASSWORD.
+            - name: NODE_ENV
+              value: production
+            {{- include "openrows.databaseEnv" (dict "root" . "component" "migrate") | trim | nindent 12 }}
+          securityContext:
+            {{- toYaml $v.securityContext | trim | nindent 12 }}
+          resources:
+            {{- toYaml $v.migrate.resources | trim | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

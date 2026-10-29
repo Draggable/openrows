@@ -1,0 +1,804 @@
+---
+# Source: openrows/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openrows
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: serviceaccount
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+# OpenRows never talks to the Kubernetes API.
+automountServiceAccountToken: false
+
+---
+# Source: openrows/templates/configmap.yaml
+# The api's and worker's non-secret settings (.env.example documents each). Secrets never go
+# here: they come from the existing Secret (values.yaml, existingSecret).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openrows
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: config
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+data:
+  NODE_ENV: production
+  LOG_LEVEL: "info"
+  APP_URL: "https://openrows.example.org"
+  TRUST_PROXY: "true"
+  TRUST_PROXY_HOPS: "1"
+  OIDC_ISSUER_URL: "https://auth.example.org/realms/openrows"
+  OIDC_CLIENT_ID: "openrows-app"
+  S3_ENDPOINT: "https://s3.example.org"
+  S3_REGION: "us-east-1"
+  S3_BUCKET: "openrows-attachments"
+  SMTP_HOST: "smtp.example.org"
+  SMTP_PORT: "587"
+  SMTP_SECURE: "starttls"
+  SMTP_USER: "openrows"
+  SMTP_FROM: "OpenRows <no-reply@example.org>"
+  OUTBOUND_HTTP_ALLOW_HTTP: "false"
+
+---
+# Source: openrows/templates/api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: openrows
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: api
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+
+---
+# Source: openrows/templates/postgresql.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: openrows-postgresql
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: postgresql
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: postgresql
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+
+---
+# Source: openrows/templates/api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openrows-api
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: api
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openrows
+      app.kubernetes.io/instance: openrows
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openrows
+        app.kubernetes.io/instance: openrows
+        app.kubernetes.io/component: api
+      annotations:
+        checksum/config: 5cbcddb390e67f5462851b779244511f1111d599ae1136bcd9ce95d68187c707
+    spec:
+      serviceAccountName: openrows
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      # The shutdown handler lets in-flight requests finish (Compose's stop_grace_period).
+      terminationGracePeriodSeconds: 20
+      initContainers:
+        - name: wait-for-migrations
+          image: ghcr.io/draggable/openrows:sha-0123456789abcdef0123456789abcdef01234567
+          imagePullPolicy: IfNotPresent
+          command:
+            - node
+            - -e
+            - |
+              const pg = require('pg');
+              const sql = "SELECT CASE WHEN to_regnamespace('pgboss') IS NULL THEN false ELSE has_schema_privilege('pgboss', 'USAGE') END AS ok";
+              (async () => {
+                for (;;) {
+                  const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
+                  try {
+                    await client.connect();
+                    const { rows } = await client.query(sql);
+                    if (rows[0].ok) process.exit(0);
+                  } catch {
+                    // Not migrated yet: openrows_app can't log in before the Job's last step.
+                  } finally {
+                    await client.end().catch(() => {});
+                  }
+                  console.log('Waiting for the migrate Job');
+                  await new Promise((resolve) => setTimeout(resolve, 3000));
+                }
+              })();
+          env:
+            - name: OPENROWS_APP_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: OPENROWS_APP_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://openrows_app:$(OPENROWS_APP_DB_PASSWORD)@openrows-postgresql:5432/openrows"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+      containers:
+        - name: api
+          image: ghcr.io/draggable/openrows:sha-0123456789abcdef0123456789abcdef01234567
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/index.js"]
+          ports:
+            - name: http
+              containerPort: 3000
+            - name: metrics
+              containerPort: 9464
+          envFrom:
+            - configMapRef:
+                name: openrows
+          env:
+            - name: PORT
+              value: "3000"
+            # GET /metrics for Prometheus on its own port, which the Service doesn't expose.
+            - name: METRICS_PORT
+              value: "9464"
+            - name: OPENROWS_APP_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: OPENROWS_APP_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://openrows_app:$(OPENROWS_APP_DB_PASSWORD)@openrows-postgresql:5432/openrows"
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: ENCRYPTION_KEY
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: S3_ACCESS_KEY
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: S3_SECRET_KEY
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: OIDC_CLIENT_SECRET
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: REDIS_URL
+                  optional: true
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: SMTP_PASSWORD
+          # /health: the process serves (never touches dependencies). /ready: Postgres, S3 (and
+          # Redis when set) answer; a pod that can't reach them gets no traffic.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # The root filesystem is read-only; scratch space only.
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi
+
+---
+# Source: openrows/templates/worker.yaml
+# Background jobs on pg-boss (ADR-004): the outbox relay, webhooks, automations, imports,
+# snapshots, prunes and the other cron jobs. Cron runs once per occurrence across replicas.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openrows-worker
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openrows
+      app.kubernetes.io/instance: openrows
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openrows
+        app.kubernetes.io/instance: openrows
+        app.kubernetes.io/component: worker
+      annotations:
+        checksum/config: 5cbcddb390e67f5462851b779244511f1111d599ae1136bcd9ce95d68187c707
+    spec:
+      serviceAccountName: openrows
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      # SIGTERM lets running jobs finish (up to 15 s); pg-boss retries anything cut off.
+      terminationGracePeriodSeconds: 25
+      initContainers:
+        - name: wait-for-migrations
+          image: ghcr.io/draggable/openrows:sha-0123456789abcdef0123456789abcdef01234567
+          imagePullPolicy: IfNotPresent
+          command:
+            - node
+            - -e
+            - |
+              const pg = require('pg');
+              const sql = "SELECT CASE WHEN to_regnamespace('pgboss') IS NULL THEN false ELSE has_schema_privilege('pgboss', 'USAGE') END AS ok";
+              (async () => {
+                for (;;) {
+                  const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
+                  try {
+                    await client.connect();
+                    const { rows } = await client.query(sql);
+                    if (rows[0].ok) process.exit(0);
+                  } catch {
+                    // Not migrated yet: openrows_app can't log in before the Job's last step.
+                  } finally {
+                    await client.end().catch(() => {});
+                  }
+                  console.log('Waiting for the migrate Job');
+                  await new Promise((resolve) => setTimeout(resolve, 3000));
+                }
+              })();
+          env:
+            - name: OPENROWS_APP_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: OPENROWS_APP_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://openrows_app:$(OPENROWS_APP_DB_PASSWORD)@openrows-postgresql:5432/openrows"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+      containers:
+        - name: worker
+          image: ghcr.io/draggable/openrows:sha-0123456789abcdef0123456789abcdef01234567
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/worker.js"]
+          ports:
+            # GET /health (pg-boss runs and Postgres answers) and GET /metrics.
+            - name: http
+              containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: openrows
+          env:
+            - name: WORKER_PORT
+              value: "3001"
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: POSTGRES_PASSWORD
+            - name: OPENROWS_APP_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: OPENROWS_APP_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://openrows_app:$(OPENROWS_APP_DB_PASSWORD)@openrows-postgresql:5432/openrows"
+            - name: INDEX_DATABASE_URL
+              value: "postgresql://openrows:$(PG_PASSWORD)@openrows-postgresql:5432/openrows"
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: ENCRYPTION_KEY
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: S3_ACCESS_KEY
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: S3_SECRET_KEY
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: SMTP_PASSWORD
+          # The worker has no /ready: its /health already checks pg-boss and Postgres.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+
+---
+# Source: openrows/templates/postgresql.yaml
+# The bundled Postgres 16 (one replica, a PersistentVolumeClaim). The migrate Job connects as its
+# superuser; the api and worker as openrows_app, which row-level security applies to (ADR-002).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: openrows-postgresql
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: postgresql
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+spec:
+  serviceName: openrows-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openrows
+      app.kubernetes.io/instance: openrows
+      app.kubernetes.io/component: postgresql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openrows
+        app.kubernetes.io/instance: openrows
+        app.kubernetes.io/component: postgresql
+    spec:
+      automountServiceAccountToken: false
+      # The image's postgres user.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgresql
+          image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "openrows"
+            - name: POSTGRES_USER
+              value: "openrows"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: POSTGRES_PASSWORD
+            # A subdirectory: the volume's root may hold lost+found.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -h 127.0.0.1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -h 127.0.0.1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -h 127.0.0.1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+# Source: openrows/templates/migrate-job.yaml
+# The migrations (node dist/migrate.js: Drizzle's, then the job queue's schema, then the
+# openrows_app password), under an advisory lock, so a second run waits and then skips.
+# On install it is a plain Job, started with the bundled Postgres it needs, and the api and worker
+# wait for it (their wait-for-migrations init container). On upgrade it is a pre-upgrade hook:
+# the migrations run before any pod of the new release starts, and a failure stops the upgrade.
+# The name carries the revision because a Job's pod template can't change.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openrows-migrate-1
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: migrate
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openrows
+        app.kubernetes.io/instance: openrows
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: openrows
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Waits for Postgres to accept the owner's connection (the bundled one starts with it).
+        - name: wait-for-postgres
+          image: ghcr.io/draggable/openrows:sha-0123456789abcdef0123456789abcdef01234567
+          imagePullPolicy: IfNotPresent
+          command:
+            - node
+            - -e
+            - |
+              const pg = require('pg');
+              (async () => {
+                for (;;) {
+                  const client = new pg.Client({ connectionString: process.env.MIGRATION_DATABASE_URL, connectionTimeoutMillis: 5000 });
+                  try {
+                    await client.connect();
+                    await client.query('SELECT 1');
+                    process.exit(0);
+                  } catch {
+                    console.log('Waiting for Postgres');
+                  } finally {
+                    await client.end().catch(() => {});
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 3000));
+                }
+              })();
+          env:
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: POSTGRES_PASSWORD
+            - name: OPENROWS_APP_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: OPENROWS_APP_DB_PASSWORD
+            - name: MIGRATION_DATABASE_URL
+              value: "postgresql://openrows:$(PG_PASSWORD)@openrows-postgresql:5432/openrows"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+      containers:
+        - name: migrate
+          image: ghcr.io/draggable/openrows:sha-0123456789abcdef0123456789abcdef01234567
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/migrate.js"]
+          env:
+            # Production refuses a default or placeholder OPENROWS_APP_DB_PASSWORD.
+            - name: NODE_ENV
+              value: production
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: POSTGRES_PASSWORD
+            - name: OPENROWS_APP_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openrows-secrets
+                  key: OPENROWS_APP_DB_PASSWORD
+            - name: MIGRATION_DATABASE_URL
+              value: "postgresql://openrows:$(PG_PASSWORD)@openrows-postgresql:5432/openrows"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+
+---
+# Source: openrows/templates/ingress.yaml
+# One host, everything to the api: the web client, /api, /auth, /mcp and the realtime WebSocket
+# at /ws (an HTTP upgrade on the same path; see the timeouts in values.yaml).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openrows
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: api
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 64m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+      - openrows.example.org
+      secretName: openrows-tls
+  rules:
+    - host: "openrows.example.org"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: openrows
+                port:
+                  name: http
+---
+# Source: openrows/templates/tests/ready.yaml
+# `helm test <release>`: the api's /health, /ready and web client through its Service, from
+# inside the namespace.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: openrows-test-ready
+  labels:
+    helm.sh/chart: openrows-0.1.0
+    app.kubernetes.io/name: openrows
+    app.kubernetes.io/instance: openrows
+    app.kubernetes.io/component: test
+    app.kubernetes.io/version: "0.5.0"
+    app.kubernetes.io/part-of: openrows
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    fsGroup: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: ready
+      image: ghcr.io/draggable/openrows:sha-0123456789abcdef0123456789abcdef01234567
+      imagePullPolicy: IfNotPresent
+      command:
+        - node
+        - -e
+        - |
+          const base = 'http://openrows:80';
+          (async () => {
+            for (const path of ['/health', '/ready', '/']) {
+              const res = await fetch(base + path);
+              console.log(path, res.status);
+              if (!res.ok) process.exit(1);
+            }
+            const ready = await (await fetch(base + '/ready')).json();
+            console.log(JSON.stringify(ready.checks));
+          })().catch((err) => { console.error(err); process.exit(1); });
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
+

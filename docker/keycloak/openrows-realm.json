@@ -1,0 +1,193 @@
+{
+  "realm": "openrows",
+  "displayName": "OpenRows",
+  "loginTheme": "openrows",
+  "emailTheme": "openrows",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "rememberMe": false,
+  "passwordPolicy": "length(12) and notUsername and notEmail",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 10,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "maxTemporaryLockouts": 0,
+  "accessTokenLifespan": 300,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "ssoSessionIdleTimeout": 604800,
+  "ssoSessionMaxLifespan": 2592000,
+  "accessCodeLifespanLogin": 1800,
+  "eventsEnabled": true,
+  "eventsExpiration": 604800,
+  "eventsListeners": ["jboss-logging"],
+  "adminEventsEnabled": false,
+  "smtpServer": {
+    "host": "127.0.0.1",
+    "port": "1025",
+    "from": "no-reply@openrows.test",
+    "fromDisplayName": "OpenRows (dev)",
+    "auth": "false",
+    "starttls": "false",
+    "ssl": "false"
+  },
+  "clients": [
+    {
+      "clientId": "openrows-app",
+      "name": "openrows",
+      "description": "The OpenRows server (backend-for-frontend, ADR-006). Development only: localhost URLs and a dev secret.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "openrows-dev-client-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "rootUrl": "http://localhost:5173",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:5173/auth/callback",
+        "http://localhost:4173/auth/callback",
+        "http://localhost:8180/auth/callback"
+      ],
+      "webOrigins": ["http://localhost:5173", "http://localhost:4173", "http://localhost:8180"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/##http://localhost:4173/##http://localhost:8180/"
+      },
+      "protocolMappers": [
+        {
+          "name": "identity provider",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usersessionmodel-note-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.session.note": "identity_provider",
+            "claim.name": "identity_provider",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "openrows-admin",
+      "name": "openrows-admin",
+      "description": "The OpenRows worker's service account (#76): deletes the users of purged accounts (realm-management manage-users). No browser flows. Development only: a dev secret.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "openrows-dev-admin-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "frontchannelLogout": false,
+      "redirectUris": [],
+      "webOrigins": []
+    },
+    {
+      "clientId": "openrows-sso",
+      "name": "openrows-sso",
+      "description": "The OpenRows api's service account for per-workspace single sign-on (#158): creates, changes and removes workspaces' identity providers (realm-management manage-identity-providers only). No browser flows. Development only: a dev secret.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "openrows-dev-sso-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "frontchannelLogout": false,
+      "redirectUris": [],
+      "webOrigins": []
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": "${OPENROWS_GOOGLE_ENABLED:false}",
+      "trustEmail": true,
+      "storeToken": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${OPENROWS_GOOGLE_CLIENT_ID:}",
+        "clientSecret": "${OPENROWS_GOOGLE_CLIENT_SECRET:}",
+        "syncMode": "IMPORT",
+        "guiOrder": "1"
+      }
+    },
+    {
+      "alias": "github",
+      "displayName": "GitHub",
+      "providerId": "github",
+      "enabled": "${OPENROWS_GITHUB_ENABLED:false}",
+      "trustEmail": true,
+      "storeToken": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${OPENROWS_GITHUB_CLIENT_ID:}",
+        "clientSecret": "${OPENROWS_GITHUB_CLIENT_SECRET:}",
+        "defaultScope": "user:email",
+        "syncMode": "IMPORT",
+        "guiOrder": "2"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "dev@openrows.test",
+      "email": "dev@openrows.test",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Dev",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "openrows-dev-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "service-account-openrows-admin",
+      "enabled": true,
+      "serviceAccountClientId": "openrows-admin",
+      "clientRoles": {
+        "realm-management": ["manage-users"]
+      }
+    },
+    {
+      "username": "service-account-openrows-sso",
+      "enabled": true,
+      "serviceAccountClientId": "openrows-sso",
+      "clientRoles": {
+        "realm-management": ["manage-identity-providers"]
+      }
+    }
+  ]
+}

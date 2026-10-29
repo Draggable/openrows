@@ -1,0 +1,102 @@
+{
+  "realm": "customer",
+  "displayName": "Customer IdP (dev)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "clients": [
+    {
+      "clientId": "openrows-broker",
+      "name": "OpenRows (OIDC)",
+      "description": "The OpenRows Keycloak realm brokering this realm over OIDC (#158). Development and CI only: a dev secret.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "customer-dev-broker-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:8080/realms/openrows/broker/*"],
+      "webOrigins": []
+    },
+    {
+      "clientId": "http://localhost:8080/realms/openrows",
+      "name": "OpenRows (SAML)",
+      "description": "The OpenRows Keycloak realm brokering this realm over SAML (#158): its entity id. Development and CI only.",
+      "enabled": true,
+      "protocol": "saml",
+      "frontchannelLogout": true,
+      "redirectUris": ["http://localhost:8080/realms/openrows/broker/*"],
+      "attributes": {
+        "saml.authnstatement": "true",
+        "saml.server.signature": "true",
+        "saml.assertion.signature": "true",
+        "saml.client.signature": "false",
+        "saml.encrypt": "false",
+        "saml.force.post.binding": "true",
+        "saml_force_name_id_format": "true",
+        "saml_name_id_format": "email",
+        "saml.signature.algorithm": "RSA_SHA256"
+      },
+      "protocolMappers": [
+        {
+          "name": "email",
+          "protocol": "saml",
+          "protocolMapper": "saml-user-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "email",
+            "attribute.name": "email",
+            "attribute.nameformat": "Basic",
+            "friendly.name": "email"
+          }
+        },
+        {
+          "name": "firstName",
+          "protocol": "saml",
+          "protocolMapper": "saml-user-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "firstName",
+            "attribute.name": "firstName",
+            "attribute.nameformat": "Basic",
+            "friendly.name": "firstName"
+          }
+        },
+        {
+          "name": "lastName",
+          "protocol": "saml",
+          "protocolMapper": "saml-user-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "lastName",
+            "attribute.name": "lastName",
+            "attribute.nameformat": "Basic",
+            "friendly.name": "lastName"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice@customer.test",
+      "email": "alice@customer.test",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Customer",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "customer-dev-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

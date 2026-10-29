@@ -1,0 +1,63 @@
+# Formulas in the style of Airtable's formula field reference and support articles
+{Price} * {Qty}
+{Unit Price} * {Qty} * (1 - {Discount})
+CONCATENATE({Name}, " - ", {Status})
+{Name} & " - " & {Status}
+IF({Due} < TODAY(), "Overdue", "On time")
+IF(IS_BEFORE({Due}, TODAY()), "Overdue", IF(IS_SAME({Due}, TODAY(), "day"), "Due today", "Upcoming"))
+DATETIME_DIFF({Due}, TODAY(), "days")
+DATETIME_DIFF(TODAY(), {Created}, "days") & " days old"
+DATEADD({Start}, {Duration} / 86400, "days")
+DATETIME_FORMAT({Due}, "MMMM D, YYYY")
+DATETIME_FORMAT(DATEADD({Due}, -7, "days"), "M/D/YYYY")
+IF({Done}, "✅", "❌")
+IF({Done}, "Complete", IF({Due}, "Scheduled", "Backlog"))
+IF(AND({Price} > 0, {Qty} > 0), {Price} * {Qty}, BLANK())
+IF(OR({Status} = "Blocked", {Status} = "At risk"), "🚩", "")
+SWITCH({Status}, "Todo", 0, "In progress", 0.5, "Done", 1, 0)
+SWITCH({Rating}, 5, "★★★★★", 4, "★★★★", 3, "★★★", "—")
+ROUND({Price} * 1.0825, 2)
+ROUND({Rating} / 5 * 100, 0) & "%"
+"$" & ROUND({Price}, 2)
+UPPER(LEFT({Name}, 1)) & MID({Name}, 2, 100)
+LEFT({Notes}, 140) & IF(LEN({Notes}) > 140, "…", "")
+TRIM(LOWER({Email}))
+SUBSTITUTE(LOWER({Name}), " ", "-")
+REGEX_REPLACE(LOWER({Name}), "[^a-z0-9]+", "-")
+"https://example.com/items/" & RECORD_ID()
+"mailto:" & {Email} & "?subject=" & ENCODE_URL_COMPONENT("Order " & {ID})
+YEAR({Due}) & "-Q" & ROUNDUP(MONTH({Due}) / 3, 0)
+"Week " & WEEKNUM({Due})
+IF(WEEKDAY({Due}) = 0, "Sunday", IF(WEEKDAY({Due}) = 6, "Saturday", "Weekday"))
+WORKDAY_DIFF({Start}, {Due})
+WORKDAY({Start}, 5)
+DATETIME_DIFF({Due}, {Start}, "hours") / 24
+IF(DATETIME_DIFF({Due}, TODAY(), "days") <= 7, "This week", "Later")
+IF({Due}, DATETIME_FORMAT({Due}, "YYYY-MM-DD"), "No date")
+MAX({Price}, {Unit Price}, 0)
+MIN({Price}, 100)
+AVERAGE({Price}, {Unit Price})
+SUM({Lookup Prices}) * (1 - {Discount})
+ARRAYJOIN(ARRAYUNIQUE({Tags}), ", ")
+COUNTA({Tags})
+LEN(ARRAYJOIN({Tags}, ",")) - LEN(SUBSTITUTE(ARRAYJOIN({Tags}, ","), ",", "")) + 1
+IF(FIND("urgent", LOWER({Notes})), "Urgent", "Normal")
+IF(SEARCH("vip", {Tags} & ""), "VIP")
+IF(REGEX_MATCH({Email}, "^[^@]+@[^@]+$"), "valid", "invalid")
+REGEX_EXTRACT({Website}, "https?://([^/]+)")
+VALUE(SUBSTITUTE({Phone}, "-", ""))
+INT(DATETIME_DIFF(TODAY(), {Due}, "days") / 365)
+MOD(DATETIME_DIFF(TODAY(), {Created}, "days"), 7)
+DATETIME_FORMAT(SET_TIMEZONE(NOW(), "Europe/London"), "HH:mm")
+IF(ISERROR(VALUE({Name})), 0, VALUE({Name}))
+IF({Created By} = "Ada Lovelace", "mine", "theirs")
+{Created By} & " on " & DATESTR({Created})
+IF(LAST_MODIFIED_TIME() > DATEADD(NOW(), -1, "days"), "Recently edited")
+CONCATENATE(YEAR({Due}), "-", RIGHT("0" & MONTH({Due}), 2))
+IF({Qty} = 0, 0, {Price} / {Qty})
+{Price} * {Qty} > 1000
+NOT({Done}) = TRUE()
+IF(AND(NOT({Done}), {Due} < TODAY()), "Late")
+ROUND((({Price} - {Unit Price}) / {Unit Price}) * 100, 1) & "%"
+{Score} * {Qty} + {Back\\slash}
+{Label} & " · " & {Ünïcödé}

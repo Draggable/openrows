@@ -1,0 +1,83 @@
+# Arithmetic and precedence
+1 + 2
+1 - 2
+2 * 3
+6 / 3
+1 + 2 * 3
+(1 + 2) * 3
+1 * 2 + 3
+1 - 2 - 3
+1 - (2 - 3)
+8 / 4 / 2
+8 / (4 / 2)
+1 + 2 - 3 + 4
+2 * 3 / 4 * 5
+1+2*3-4/5
+((1 + 2) * (3 - 4)) / 5
+-1
++1
+-(-1)
+--1
+- - 1
+-1 + 2
+-(1 + 2)
+2 * -3
+2 - -3
+-2 * -3
+-{Price}
++{Price}
+-{Price} * {Qty}
+1 +
+# Concatenation
+"a" & "b"
+"a" & "b" & "c"
+"a" & ("b" & "c")
+{Name} & " (" & {Status} & ")"
+1 & 2
+"Total: " & {Price} * {Qty}
+"Total: " & ({Price} * {Qty})
+({Price} & "") * 2
+{Name} & 1 + 2
+{Due} & ""
+{Tags} & ""
+{Done} & "!"
+# Comparison
+1 = 1
+1 != 2
+1 <> 2
+1 < 2
+1 <= 2
+1 > 2
+1 >= 2
+"a" = "a"
+{Price} > 100
+{Price} * {Qty} >= 1000
+{Name} = "Widget"
+{Name} != ""
+{Status} = "Done"
+{Done} = TRUE
+{Done} = 1
+{Due} > TODAY()
+{Due} <= "2024-12-31"
+{Start} < {Due}
+1 = 1 = TRUE
+1 < 2 = TRUE
+(1 < 2) = (3 < 4)
+"a" & "b" = "ab"
+1 + 1 = 2
+{Price} >= {Qty}
+{Name} < "M"
+{Price} > {Name}
+{Due} > 5
+{Tags} = "x"
+{Tags} > 1
+"b" > {Tags}
+# Mixed
+{Price} * (1 - {Discount})
+{Unit Price} * {Qty} * (1 + 0.2)
+{Rating} / 5 * 100
+{Duration} / 3600
+{ID} * 1000 + 1
+{Price} / {Qty} - {Discount} * 2
+1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10
+1 * (2 + (3 * (4 + (5 * (6 + 7)))))

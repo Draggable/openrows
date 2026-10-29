@@ -1,0 +1,1277 @@
+{
+  "package": "@openrows/sdk",
+  "version": "0.1.0",
+  "items": [
+    {
+      "name": "OpenRows",
+      "kind": "class",
+      "summary": "The OpenRows REST API v1 client.\n\n```ts\nconst openrows = new OpenRows({ apiKey: process.env.OPENROWS_TOKEN });\nconst tasks = openrows.table(baseId, 'Tasks');\nconst done = await tasks.select({ filterByFormula: \"{Status} = 'Done'\" }).all();\n```",
+      "generated": false,
+      "members": [
+        {
+          "name": "bases",
+          "kind": "property",
+          "signatures": ["readonly bases: Bases"],
+          "summary": "The bases the token (and its owner) can reach."
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "signatures": ["new OpenRows(options?: ClientOptions)"],
+          "summary": ""
+        },
+        {
+          "name": "base",
+          "kind": "method",
+          "signatures": ["base(baseId: string): BaseClient"],
+          "summary": "A base: its tables, a table, its webhooks."
+        },
+        {
+          "name": "tables",
+          "kind": "method",
+          "signatures": ["tables(baseId: string): Tables"],
+          "summary": "A base's tables (schema)."
+        },
+        {
+          "name": "table",
+          "kind": "method",
+          "signatures": ["table<F>(baseId: string, tableIdOrName: string): Table<F>"],
+          "summary": "A table of a base, by id or name, to read and write its records."
+        },
+        {
+          "name": "webhooks",
+          "kind": "method",
+          "signatures": ["webhooks(baseId: string): Webhooks"],
+          "summary": "A base's webhooks (the `webhook:manage` scope and the base's creator role)."
+        },
+        {
+          "name": "automations",
+          "kind": "method",
+          "signatures": ["automations(baseId: string): Automations"],
+          "summary": "A base's automations (the base's creator role; `automations:read`, `automations:manage` to\nturn them on or off, `automations:run` to trigger them)."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "BaseClient",
+      "kind": "class",
+      "summary": "One base: `openrows.base(baseId)`.",
+      "generated": false,
+      "members": [
+        {
+          "name": "tables",
+          "kind": "property",
+          "signatures": ["readonly tables: Tables"],
+          "summary": "The base's tables (schema)."
+        },
+        {
+          "name": "webhooks",
+          "kind": "property",
+          "signatures": ["readonly webhooks: Webhooks"],
+          "summary": "The base's webhooks."
+        },
+        {
+          "name": "automations",
+          "kind": "property",
+          "signatures": ["readonly automations: Automations"],
+          "summary": "The base's automations."
+        },
+        { "name": "id", "kind": "property", "signatures": ["readonly id: string"], "summary": "" },
+        {
+          "name": "table",
+          "kind": "method",
+          "signatures": ["table<F>(tableIdOrName: string): Table<F>"],
+          "summary": "A table of the base, by id or name."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "Tables",
+      "kind": "class",
+      "summary": "A base's tables: `openrows.tables(baseId)`.",
+      "generated": false,
+      "members": [
+        {
+          "name": "baseId",
+          "kind": "property",
+          "signatures": ["readonly baseId: string"],
+          "summary": ""
+        },
+        {
+          "name": "list",
+          "kind": "method",
+          "signatures": ["list(): Promise<TableSchema[]>"],
+          "summary": "The base's tables with their fields (types and options) and views."
+        },
+        {
+          "name": "create",
+          "kind": "method",
+          "signatures": ["create(table: V1MetaCreateTableBody): Promise<TableSchema>"],
+          "summary": "Creates a table; its first field is the primary field."
+        },
+        {
+          "name": "table",
+          "kind": "method",
+          "signatures": ["table<F>(tableIdOrName: string): Table<F>"],
+          "summary": "A table of the base, by id or name."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "Table",
+      "kind": "class",
+      "summary": "A table's records, fields and comments. Writes of more than 10 records go 10 at a time.",
+      "generated": false,
+      "members": [
+        {
+          "name": "fields",
+          "kind": "property",
+          "signatures": ["readonly fields: Fields"],
+          "summary": "The table's fields (schema)."
+        },
+        {
+          "name": "baseId",
+          "kind": "property",
+          "signatures": ["readonly baseId: string"],
+          "summary": ""
+        },
+        {
+          "name": "tableIdOrName",
+          "kind": "property",
+          "signatures": ["readonly tableIdOrName: string"],
+          "summary": ""
+        },
+        {
+          "name": "select",
+          "kind": "method",
+          "signatures": ["select(params?: SelectParams): Query<F>"],
+          "summary": "A query over the table's records: `.all()`, `.firstPage()`, `.eachPage()` or `for await`."
+        },
+        {
+          "name": "find",
+          "kind": "method",
+          "signatures": [
+            "find(recordId: string, options?: V1RecordsGetQuery): Promise<OpenRowsRecord<F>>"
+          ],
+          "summary": "One record by id."
+        },
+        {
+          "name": "create",
+          "kind": "method",
+          "signatures": [
+            "create(fields: Partial<F>, options?: WriteOptions): Promise<OpenRowsRecord<F>>",
+            "create(records: { fields: Partial<F> }[], options?: WriteOptions): Promise<OpenRowsRecord<F>[]>"
+          ],
+          "summary": "Creates one record from its cells.\n\nCreates records, in order, 10 per request."
+        },
+        {
+          "name": "update",
+          "kind": "method",
+          "signatures": [
+            "update(recordId: string, fields: Partial<F>, options?: WriteOptions): Promise<OpenRowsRecord<F>>",
+            "update(records: RecordUpdate<F>[], options?: WriteOptions): Promise<OpenRowsRecord<F>[]>"
+          ],
+          "summary": "Changes the cells given of one record; the others stay.\n\nChanges the cells given of each record, 10 per request."
+        },
+        {
+          "name": "replace",
+          "kind": "method",
+          "signatures": [
+            "replace(recordId: string, fields: Partial<F>, options?: WriteOptions): Promise<OpenRowsRecord<F>>",
+            "replace(records: RecordUpdate<F>[], options?: WriteOptions): Promise<OpenRowsRecord<F>[]>"
+          ],
+          "summary": "Replaces one record's cells: fields left out are cleared.\n\nReplaces each record's cells, 10 per request."
+        },
+        {
+          "name": "upsert",
+          "kind": "method",
+          "signatures": [
+            "upsert(records: { id?: string; fields: Partial<F> }[], options: UpsertOptions & { replace?: boolean }): Promise<UpsertResult<F>>"
+          ],
+          "summary": "Updates the records that match on `fieldsToMergeOn` (or have an `id`) and creates the rest,\n10 per request. With `replace`, the fields left out of a matched record are cleared."
+        },
+        {
+          "name": "destroy",
+          "kind": "method",
+          "signatures": [
+            "destroy(recordId: string): Promise<DeletedRecord>",
+            "destroy(recordIds: string[]): Promise<DeletedRecord[]>"
+          ],
+          "summary": "Moves one record to the trash.\n\nMoves records to the trash, 10 per request."
+        },
+        {
+          "name": "comments",
+          "kind": "method",
+          "signatures": ["comments(recordId: string): Comments"],
+          "summary": "A record's comments."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "Query",
+      "kind": "class",
+      "summary": "A list of records, fetched a page at a time (at most 100 records each; `pageSize` and\n`maxRecords` narrow it).",
+      "generated": false,
+      "members": [
+        {
+          "name": "firstPage",
+          "kind": "method",
+          "signatures": ["firstPage(): Promise<OpenRowsRecord<F>[]>"],
+          "summary": "The first page of records."
+        },
+        {
+          "name": "eachPage",
+          "kind": "method",
+          "signatures": [
+            "eachPage(onPage: (records: OpenRowsRecord<F>[]) => unknown): Promise<void>"
+          ],
+          "summary": "Calls `onPage` with each page in turn; answering `false` stops."
+        },
+        {
+          "name": "all",
+          "kind": "method",
+          "signatures": ["all(): Promise<OpenRowsRecord<F>[]>"],
+          "summary": "Every record, all pages."
+        },
+        {
+          "name": "[asyncIterator]",
+          "kind": "method",
+          "signatures": ["[asyncIterator](): AsyncGenerator<OpenRowsRecord<F>>"],
+          "summary": "`for await (const record of table.select())`: one page in memory at a time."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "Comments",
+      "kind": "class",
+      "summary": "A record's comments: `table.comments(recordId)`.",
+      "generated": false,
+      "members": [
+        {
+          "name": "page",
+          "kind": "method",
+          "signatures": [
+            "page(options?: { pageSize?: number; offset?: string }): Promise<CommentPage>"
+          ],
+          "summary": "One page of comments, newest first."
+        },
+        {
+          "name": "all",
+          "kind": "method",
+          "signatures": ["all(): Promise<Comment[]>"],
+          "summary": "Every comment, newest first."
+        },
+        {
+          "name": "create",
+          "kind": "method",
+          "signatures": ["create(text: string): Promise<Comment>"],
+          "summary": "Posts a comment (`@[Name](user:<id>)` mentions someone)."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "Webhooks",
+      "kind": "class",
+      "summary": "A base's webhooks.",
+      "generated": false,
+      "members": [
+        {
+          "name": "baseId",
+          "kind": "property",
+          "signatures": ["readonly baseId: string"],
+          "summary": ""
+        },
+        {
+          "name": "list",
+          "kind": "method",
+          "signatures": ["list(): Promise<Webhook[]>"],
+          "summary": "The base's webhooks (never their secrets)."
+        },
+        {
+          "name": "create",
+          "kind": "method",
+          "signatures": ["create(webhook: V1WebhooksCreateBody): Promise<WebhookWithSecret>"],
+          "summary": "Creates a webhook; the answer's `secret` is shown only this once."
+        },
+        {
+          "name": "update",
+          "kind": "method",
+          "signatures": [
+            "update(webhookId: string, change: V1WebhooksUpdateBody): Promise<WebhookWithSecret>"
+          ],
+          "summary": "Changes, enables or disables a webhook; `{ rotateSecret: true }` answers a new `secret`."
+        },
+        {
+          "name": "delete",
+          "kind": "method",
+          "signatures": ["delete(webhookId: string): Promise<void>"],
+          "summary": "Deletes a webhook and its delivery log."
+        },
+        {
+          "name": "deliveries",
+          "kind": "method",
+          "signatures": [
+            "deliveries(webhookId: string, options?: { limit?: number }): Promise<WebhookDelivery[]>"
+          ],
+          "summary": "The webhook's delivery attempts of the last 7 days, newest first."
+        },
+        {
+          "name": "ping",
+          "kind": "method",
+          "signatures": ["ping(webhookId: string): Promise<WebhookDelivery>"],
+          "summary": "Sends a signed `ping` now and answers with the attempt."
+        },
+        {
+          "name": "redeliver",
+          "kind": "method",
+          "signatures": [
+            "redeliver(webhookId: string, deliveryId: string): Promise<{ queued: true; eventId: string }>"
+          ],
+          "summary": "Queues a logged delivery's event again, with the same event id; the attempt shows in\n`deliveries` once the worker sent it. Not for pings, nor while the webhook is off (409)."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "Automations",
+      "kind": "class",
+      "summary": "A base's automations: built in the app, listed, switched and triggered here.",
+      "generated": false,
+      "members": [
+        {
+          "name": "baseId",
+          "kind": "property",
+          "signatures": ["readonly baseId: string"],
+          "summary": ""
+        },
+        {
+          "name": "list",
+          "kind": "method",
+          "signatures": ["list(): Promise<V1AutomationsGetResponse[]>"],
+          "summary": "The base's automations."
+        },
+        {
+          "name": "get",
+          "kind": "method",
+          "signatures": ["get(automationId: string): Promise<V1AutomationsGetResponse>"],
+          "summary": "One automation."
+        },
+        {
+          "name": "setEnabled",
+          "kind": "method",
+          "signatures": [
+            "setEnabled(automationId: string, enabled: boolean): Promise<V1AutomationsGetResponse>"
+          ],
+          "summary": "Turns an automation on (it then runs as you) or off."
+        },
+        {
+          "name": "runs",
+          "kind": "method",
+          "signatures": [
+            "runs(automationId: string, options?: { limit?: number; status?: \"succeeded\" | \"failed\" | \"skipped\" }): Promise<{ id: string; automationId: string; status: \"succeeded\" | \"failed\" | \"skipped\"; mode: \"live\" | \"test\" | \"retry\"; skipReason: \"loop\" | \"quota\" | null; retryOf: string | null; trigger: unknown; steps: { index: number; type: \"createRecord\" | \"updateRecord\" | \"findRecords\" | \"sendEmail\" | \"httpRequest\" | \"slackMessage\" | \"runScript\"; status: \"succeeded\" | \"failed\" | \"skipped\"; input: unknown; output: unknown; error: string | null; durationMs: number }[]; error: string | null; depth: number; triggeredBy: string | null; durationMs: number; createdAt: string }[]>"
+          ],
+          "summary": "The automation's runs of the last 30 days, newest first."
+        },
+        {
+          "name": "trigger",
+          "kind": "method",
+          "signatures": [
+            "trigger(automationId: string, input?: { body?: unknown; recordId?: string }): Promise<V1AutomationsTriggerResponse>"
+          ],
+          "summary": "Triggers a webhook-received automation with `{ body }` (any JSON, as if POSTed to its URL)\nor a button-clicked one with `{ recordId }` (a click on that record's button, as you)."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "OpenRowsError",
+      "kind": "class",
+      "summary": "The server refused a request. `type` is Airtable's error type where one fits (`NOT_FOUND`,\n`INVALID_PERMISSIONS`, `INVALID_FILTER_BY_FORMULA`, `TOO_MANY_REQUESTS`), `code` OpenRows'\nstable code, `requestId` the id to quote when reporting a problem (also in the server's logs).",
+      "generated": false,
+      "members": [
+        {
+          "name": "name",
+          "kind": "property",
+          "signatures": ["readonly name: \"OpenRowsError\""],
+          "summary": ""
+        },
+        {
+          "name": "status",
+          "kind": "property",
+          "signatures": ["readonly status: number"],
+          "summary": "The HTTP status: 401, 403, 404, 409, 413, 422, 429 or 5xx."
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "signatures": ["readonly type: string"],
+          "summary": ""
+        },
+        {
+          "name": "code",
+          "kind": "property",
+          "signatures": ["readonly code: string"],
+          "summary": ""
+        },
+        {
+          "name": "requestId",
+          "kind": "property",
+          "signatures": ["readonly requestId: string | null"],
+          "summary": ""
+        },
+        {
+          "name": "errors",
+          "kind": "property",
+          "signatures": ["readonly errors: OpenRowsErrorDetail[]"],
+          "summary": "What failed validation, for a 422."
+        },
+        {
+          "name": "limit",
+          "kind": "property",
+          "signatures": ["readonly limit: string | null"],
+          "summary": "For a 429: the bucket that ran out (`base`, `token` or `user`)."
+        },
+        {
+          "name": "retryAfter",
+          "kind": "property",
+          "signatures": ["readonly retryAfter: number | null"],
+          "summary": "For a 429: seconds the server asked to wait (`Retry-After`)."
+        },
+        {
+          "name": "request",
+          "kind": "property",
+          "signatures": ["readonly request: string"],
+          "summary": "The request that failed, like `GET /api/v1/<base>/Tasks`."
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "signatures": [
+            "new OpenRowsError(init: { status: number; type: string; code: string; message: string; requestId: string | null; request: string; errors?: OpenRowsErrorDetail[]; limit?: string | null; retryAfter?: number | null })"
+          ],
+          "summary": ""
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "chunks",
+      "kind": "function",
+      "summary": "`items` in slices of at most `size`.",
+      "generated": false,
+      "members": [],
+      "signatures": ["chunks<T>(items: readonly T[], size?: number): T[][]"]
+    },
+    {
+      "name": "isOpenRowsError",
+      "kind": "function",
+      "summary": "Whether `error` is an `OpenRowsError` (also across copies of the SDK in one bundle).",
+      "generated": false,
+      "members": [],
+      "signatures": ["isOpenRowsError(error: unknown): error is OpenRowsError"]
+    },
+    {
+      "name": "Bases",
+      "kind": "interface",
+      "summary": "The bases the caller can reach.",
+      "generated": false,
+      "members": [
+        {
+          "name": "list",
+          "kind": "method",
+          "signatures": ["list(): Promise<Base[]>"],
+          "summary": "Every base the token (and its owner) can read, with the permission level."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "Fields",
+      "kind": "interface",
+      "summary": "A table's fields (the `schema.bases:write` scope and the creator role).",
+      "generated": false,
+      "members": [
+        {
+          "name": "create",
+          "kind": "method",
+          "signatures": ["create(field: V1MetaCreateFieldBody): Promise<Field>"],
+          "summary": "Adds a field; `type` is ours or Airtable's name for it."
+        },
+        {
+          "name": "update",
+          "kind": "method",
+          "signatures": ["update(fieldId: string, change: V1MetaUpdateFieldBody): Promise<Field>"],
+          "summary": "Renames a field or changes its description."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "OpenRowsErrorDetail",
+      "kind": "interface",
+      "summary": "One problem with the request, as the server names it (`path` is like `records.0.fields`).",
+      "generated": false,
+      "members": [
+        { "name": "path", "kind": "property", "signatures": ["path: string"], "summary": "" },
+        { "name": "message", "kind": "property", "signatures": ["message: string"], "summary": "" }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "ClientOptions",
+      "kind": "interface",
+      "summary": "",
+      "generated": false,
+      "members": [
+        {
+          "name": "apiKey",
+          "kind": "property",
+          "signatures": ["apiKey?: string"],
+          "summary": "A personal access token (`or_pat_…`). Leave it out in a browser signed in to the same app."
+        },
+        {
+          "name": "baseUrl",
+          "kind": "property",
+          "signatures": ["baseUrl?: string"],
+          "summary": "The app's origin, e.g. `https://app.openrows.io` (the default) or your own server's."
+        },
+        {
+          "name": "maxRetries",
+          "kind": "property",
+          "signatures": ["maxRetries?: number"],
+          "summary": "How many times to retry a request answered 429, after its `Retry-After` (default 3)."
+        },
+        {
+          "name": "maxRetryDelay",
+          "kind": "property",
+          "signatures": ["maxRetryDelay?: number"],
+          "summary": "The longest `Retry-After` to wait, in ms; a longer one fails at once (default 60 s)."
+        },
+        {
+          "name": "timeout",
+          "kind": "property",
+          "signatures": ["timeout?: number"],
+          "summary": "Per-request timeout in ms (default 60 s; 0 for none)."
+        },
+        {
+          "name": "fetch",
+          "kind": "property",
+          "signatures": ["fetch?: Fetch"],
+          "summary": "A `fetch` to use instead of the global one."
+        },
+        {
+          "name": "headers",
+          "kind": "property",
+          "signatures": ["headers?: Record<string, string>"],
+          "summary": "Extra headers sent with every request."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "Base",
+      "kind": "interface",
+      "summary": "A base the caller can reach, with Airtable's name for their role (`read` … `owner`).",
+      "generated": false,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "Field",
+      "kind": "interface",
+      "summary": "A field: `type` is Airtable's name for its type, `openrowsType` ours.",
+      "generated": false,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "View",
+      "kind": "interface",
+      "summary": "A view of a table.",
+      "generated": false,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "TableSchema",
+      "kind": "interface",
+      "summary": "A table with its fields and views (`primaryFieldId` is its first field).",
+      "generated": false,
+      "members": [
+        { "name": "fields", "kind": "property", "signatures": ["fields: Field[]"], "summary": "" },
+        { "name": "views", "kind": "property", "signatures": ["views: View[]"], "summary": "" }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "WriteOptions",
+      "kind": "interface",
+      "summary": "",
+      "generated": false,
+      "members": [
+        {
+          "name": "typecast",
+          "kind": "property",
+          "signatures": ["typecast?: boolean"],
+          "summary": "Read values as Airtable's typecast does: new select options, linked records by name."
+        },
+        {
+          "name": "returnFieldsByFieldId",
+          "kind": "property",
+          "signatures": ["returnFieldsByFieldId?: boolean"],
+          "summary": "Answer cells keyed by field id instead of name."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "UpsertOptions",
+      "kind": "interface",
+      "summary": "",
+      "generated": false,
+      "members": [
+        {
+          "name": "fieldsToMergeOn",
+          "kind": "property",
+          "signatures": ["fieldsToMergeOn: string[]"],
+          "summary": "The 1 to 3 fields that match a record without an id to an existing one."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "RecordUpdate",
+      "kind": "interface",
+      "summary": "",
+      "generated": false,
+      "members": [
+        { "name": "id", "kind": "property", "signatures": ["id: string"], "summary": "" },
+        {
+          "name": "fields",
+          "kind": "property",
+          "signatures": ["fields: Partial<F>"],
+          "summary": ""
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "UpsertResult",
+      "kind": "interface",
+      "summary": "",
+      "generated": false,
+      "members": [
+        {
+          "name": "records",
+          "kind": "property",
+          "signatures": ["records: OpenRowsRecord<F>[]"],
+          "summary": ""
+        },
+        {
+          "name": "createdRecords",
+          "kind": "property",
+          "signatures": ["createdRecords: string[]"],
+          "summary": "Ids of the records created."
+        },
+        {
+          "name": "updatedRecords",
+          "kind": "property",
+          "signatures": ["updatedRecords: string[]"],
+          "summary": "Ids of the records updated."
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "DeletedRecord",
+      "kind": "interface",
+      "summary": "A record moved to the trash.",
+      "generated": false,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "Comment",
+      "kind": "interface",
+      "summary": "A comment on a record (`text` is Markdown with `@[Name](user:<id>)` mentions).",
+      "generated": false,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "CommentPage",
+      "kind": "interface",
+      "summary": "A page of comments, newest first; `offset` fetches the next one.",
+      "generated": false,
+      "members": [
+        {
+          "name": "comments",
+          "kind": "property",
+          "signatures": ["comments: Comment[]"],
+          "summary": ""
+        }
+      ],
+      "signatures": []
+    },
+    {
+      "name": "Webhook",
+      "kind": "interface",
+      "summary": "A webhook (never with its secret).",
+      "generated": false,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "WebhookWithSecret",
+      "kind": "interface",
+      "summary": "A webhook as created or rotated: `secret` is its signing secret, shown only this once.",
+      "generated": false,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "WebhookDelivery",
+      "kind": "interface",
+      "summary": "One delivery attempt of a webhook (or a ping).",
+      "generated": false,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1ErrorBody",
+      "kind": "type",
+      "summary": "The body of every error answer.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1MetaBasesQuery",
+      "kind": "type",
+      "summary": "The query of GET /api/v1/meta/bases: Bases the caller (and token) can read, with their permission level.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1MetaBasesResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/meta/bases: Bases the caller (and token) can read, with their permission level.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1MetaTablesResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/meta/bases/:baseId/tables: A base's tables with their fields (types and options) and views.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1MetaCreateTableBody",
+      "kind": "type",
+      "summary": "The body of POST /api/v1/meta/bases/:baseId/tables: Create a table with its fields (the first is the primary field).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1MetaCreateTableResponse",
+      "kind": "type",
+      "summary": "The answer of POST /api/v1/meta/bases/:baseId/tables: Create a table with its fields (the first is the primary field).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1MetaCreateFieldBody",
+      "kind": "type",
+      "summary": "The body of POST /api/v1/meta/bases/:baseId/tables/:tableIdOrName/fields: Create a field.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1MetaCreateFieldResponse",
+      "kind": "type",
+      "summary": "The answer of POST /api/v1/meta/bases/:baseId/tables/:tableIdOrName/fields: Create a field.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1MetaUpdateFieldBody",
+      "kind": "type",
+      "summary": "The body of PATCH /api/v1/meta/bases/:baseId/tables/:tableIdOrName/fields/:fieldId: Rename a field or change its description.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1MetaUpdateFieldResponse",
+      "kind": "type",
+      "summary": "The answer of PATCH /api/v1/meta/bases/:baseId/tables/:tableIdOrName/fields/:fieldId: Rename a field or change its description.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsListResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/:baseId/:tableIdOrName: List records: pageSize, offset, maxRecords, view, sort, fields, filterByFormula.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsListPostBody",
+      "kind": "type",
+      "summary": "The body of POST /api/v1/:baseId/:tableIdOrName/listRecords: List records with the parameters in the body (for long formulas).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsListPostResponse",
+      "kind": "type",
+      "summary": "The answer of POST /api/v1/:baseId/:tableIdOrName/listRecords: List records with the parameters in the body (for long formulas).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsCreateBody",
+      "kind": "type",
+      "summary": "The body of POST /api/v1/:baseId/:tableIdOrName: Create one record (`fields`) or up to 10 (`records`).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsCreateResponse",
+      "kind": "type",
+      "summary": "The answer of POST /api/v1/:baseId/:tableIdOrName: Create one record (`fields`) or up to 10 (`records`).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsUpdateManyBody",
+      "kind": "type",
+      "summary": "The body of PATCH /api/v1/:baseId/:tableIdOrName: Update up to 10 records (or upsert with performUpsert).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsUpdateManyResponse",
+      "kind": "type",
+      "summary": "The answer of PATCH /api/v1/:baseId/:tableIdOrName: Update up to 10 records (or upsert with performUpsert).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsReplaceManyBody",
+      "kind": "type",
+      "summary": "The body of PUT /api/v1/:baseId/:tableIdOrName: Replace up to 10 records: fields left out are cleared.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsReplaceManyResponse",
+      "kind": "type",
+      "summary": "The answer of PUT /api/v1/:baseId/:tableIdOrName: Replace up to 10 records: fields left out are cleared.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsDeleteManyResponse",
+      "kind": "type",
+      "summary": "The answer of DELETE /api/v1/:baseId/:tableIdOrName: Delete up to 10 records (`records[]`), to the trash.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsGetQuery",
+      "kind": "type",
+      "summary": "The query of GET /api/v1/:baseId/:tableIdOrName/:recordId: One record.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsGetResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/:baseId/:tableIdOrName/:recordId: One record.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsUpdateBody",
+      "kind": "type",
+      "summary": "The body of PATCH /api/v1/:baseId/:tableIdOrName/:recordId: Update a record: only the fields given change.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsUpdateResponse",
+      "kind": "type",
+      "summary": "The answer of PATCH /api/v1/:baseId/:tableIdOrName/:recordId: Update a record: only the fields given change.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsReplaceBody",
+      "kind": "type",
+      "summary": "The body of PUT /api/v1/:baseId/:tableIdOrName/:recordId: Replace a record: fields left out are cleared.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsReplaceResponse",
+      "kind": "type",
+      "summary": "The answer of PUT /api/v1/:baseId/:tableIdOrName/:recordId: Replace a record: fields left out are cleared.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1RecordsDeleteResponse",
+      "kind": "type",
+      "summary": "The answer of DELETE /api/v1/:baseId/:tableIdOrName/:recordId: Delete a record (to the trash).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1CommentsListQuery",
+      "kind": "type",
+      "summary": "The query of GET /api/v1/:baseId/:tableIdOrName/:recordId/comments: A record's comments, newest first.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1CommentsListResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/:baseId/:tableIdOrName/:recordId/comments: A record's comments, newest first.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1CommentsCreateBody",
+      "kind": "type",
+      "summary": "The body of POST /api/v1/:baseId/:tableIdOrName/:recordId/comments: Comment on a record.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1CommentsCreateResponse",
+      "kind": "type",
+      "summary": "The answer of POST /api/v1/:baseId/:tableIdOrName/:recordId/comments: Comment on a record.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1WebhooksListResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/bases/:baseId/webhooks: A base's webhooks (never their secrets).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1WebhooksCreateBody",
+      "kind": "type",
+      "summary": "The body of POST /api/v1/bases/:baseId/webhooks: Create a webhook; the answer holds its signing secret, shown only this once.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1WebhooksCreateResponse",
+      "kind": "type",
+      "summary": "The answer of POST /api/v1/bases/:baseId/webhooks: Create a webhook; the answer holds its signing secret, shown only this once.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1WebhooksUpdateBody",
+      "kind": "type",
+      "summary": "The body of PATCH /api/v1/bases/:baseId/webhooks/:webhookId: Change, enable or disable a webhook, or rotate its secret (returned once).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1WebhooksUpdateResponse",
+      "kind": "type",
+      "summary": "The answer of PATCH /api/v1/bases/:baseId/webhooks/:webhookId: Change, enable or disable a webhook, or rotate its secret (returned once).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1WebhooksDeliveriesQuery",
+      "kind": "type",
+      "summary": "The query of GET /api/v1/bases/:baseId/webhooks/:webhookId/deliveries: A webhook's delivery attempts of the last 7 days, newest first.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1WebhooksDeliveriesResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/bases/:baseId/webhooks/:webhookId/deliveries: A webhook's delivery attempts of the last 7 days, newest first.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1WebhooksPingResponse",
+      "kind": "type",
+      "summary": "The answer of POST /api/v1/bases/:baseId/webhooks/:webhookId/ping: Send a signed test event now and answer with the attempt.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1WebhooksRedeliverResponse",
+      "kind": "type",
+      "summary": "The answer of POST /api/v1/bases/:baseId/webhooks/:webhookId/deliveries/:deliveryId/redeliver: Queue a logged delivery's event again, with the same event id.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationsListResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/bases/:baseId/automations: A base's automations (never their webhook URLs).",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationsGetResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/bases/:baseId/automations/:automationId: One automation: its trigger, actions and last run.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationsUpdateBody",
+      "kind": "type",
+      "summary": "The body of PATCH /api/v1/bases/:baseId/automations/:automationId: Turn an automation on or off; turning it on makes it run as you.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationsUpdateResponse",
+      "kind": "type",
+      "summary": "The answer of PATCH /api/v1/bases/:baseId/automations/:automationId: Turn an automation on or off; turning it on makes it run as you.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationsRunsQuery",
+      "kind": "type",
+      "summary": "The query of GET /api/v1/bases/:baseId/automations/:automationId/runs: An automation's runs of the last 30 days, newest first.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationsRunsResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/bases/:baseId/automations/:automationId/runs: An automation's runs of the last 30 days, newest first.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationsTriggerBody",
+      "kind": "type",
+      "summary": "The body of POST /api/v1/bases/:baseId/automations/:automationId/trigger: Trigger a webhook-received (`body`) or button-clicked (`recordId`) automation.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationsTriggerResponse",
+      "kind": "type",
+      "summary": "The answer of POST /api/v1/bases/:baseId/automations/:automationId/trigger: Trigger a webhook-received (`body`) or button-clicked (`recordId`) automation.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "Fetch",
+      "kind": "type",
+      "summary": "",
+      "generated": false,
+      "members": [],
+      "signatures": ["type Fetch = (input: string, init: RequestInit) => Promise<Response>"]
+    },
+    {
+      "name": "FieldSet",
+      "kind": "type",
+      "summary": "A record's cells by field name (or by field id with `returnFieldsByFieldId`).",
+      "generated": false,
+      "members": [],
+      "signatures": ["type FieldSet = Record<string, unknown>"]
+    },
+    {
+      "name": "OpenRowsRecord",
+      "kind": "type",
+      "summary": "A record: its id, when it was created and its non-empty cells.",
+      "generated": false,
+      "members": [],
+      "signatures": [
+        "type OpenRowsRecord<F> = Omit<V1RecordsGetResponse, \"fields\"> & { fields: Partial<F> }"
+      ]
+    },
+    {
+      "name": "CreateTableInput",
+      "kind": "type",
+      "summary": "",
+      "generated": false,
+      "members": [],
+      "signatures": ["type CreateTableInput = V1MetaCreateTableBody"]
+    },
+    {
+      "name": "CreateFieldInput",
+      "kind": "type",
+      "summary": "",
+      "generated": false,
+      "members": [],
+      "signatures": ["type CreateFieldInput = V1MetaCreateFieldBody"]
+    },
+    {
+      "name": "UpdateFieldInput",
+      "kind": "type",
+      "summary": "",
+      "generated": false,
+      "members": [],
+      "signatures": ["type UpdateFieldInput = V1MetaUpdateFieldBody"]
+    },
+    {
+      "name": "SelectParams",
+      "kind": "type",
+      "summary": "`select()`'s parameters (`offset` is the SDK's to manage).",
+      "generated": false,
+      "members": [],
+      "signatures": ["type SelectParams = Omit<V1RecordsListPostBody, \"offset\">"]
+    },
+    {
+      "name": "FindOptions",
+      "kind": "type",
+      "summary": "`find()`'s options.",
+      "generated": false,
+      "members": [],
+      "signatures": ["type FindOptions = V1RecordsGetQuery"]
+    },
+    {
+      "name": "CreateWebhookInput",
+      "kind": "type",
+      "summary": "",
+      "generated": false,
+      "members": [],
+      "signatures": ["type CreateWebhookInput = V1WebhooksCreateBody"]
+    },
+    {
+      "name": "UpdateWebhookInput",
+      "kind": "type",
+      "summary": "",
+      "generated": false,
+      "members": [],
+      "signatures": ["type UpdateWebhookInput = V1WebhooksUpdateBody"]
+    },
+    {
+      "name": "Automation",
+      "kind": "type",
+      "summary": "An automation: its trigger, actions and last run (never its webhook URL).",
+      "generated": false,
+      "members": [],
+      "signatures": ["type Automation = V1AutomationsGetResponse"]
+    },
+    {
+      "name": "AutomationRun",
+      "kind": "type",
+      "summary": "One run of an automation, with its steps' (redacted) inputs and outputs.",
+      "generated": false,
+      "members": [],
+      "signatures": ["type AutomationRun = V1AutomationsRunsResponse[\"runs\"][number]"]
+    },
+    {
+      "name": "AutomationRunStatus",
+      "kind": "type",
+      "summary": "",
+      "generated": false,
+      "members": [],
+      "signatures": ["type AutomationRunStatus = AutomationRun[\"status\"]"]
+    },
+    {
+      "name": "AutomationTriggered",
+      "kind": "type",
+      "summary": "A queued trigger: the run shows in the history once the worker ran it.",
+      "generated": false,
+      "members": [],
+      "signatures": ["type AutomationTriggered = V1AutomationsTriggerResponse"]
+    },
+    {
+      "name": "V1_PAGE_SIZE_MAX",
+      "kind": "variable",
+      "summary": "Largest page of records or comments.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1_BATCH_MAX",
+      "kind": "variable",
+      "summary": "Most records one create, update, replace or delete request takes.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1_ENDPOINTS",
+      "kind": "variable",
+      "summary": "Every v1 endpoint's method, path and success status.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "DEFAULT_BASE_URL",
+      "kind": "variable",
+      "summary": "",
+      "generated": false,
+      "members": [],
+      "signatures": ["const DEFAULT_BASE_URL: \"https://app.openrows.io\""]
+    }
+  ]
+}

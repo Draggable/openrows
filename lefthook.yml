@@ -1,0 +1,15 @@
+# Git hooks, installed by `npm install` (the root `prepare` script runs `lefthook install`).
+# Skip them once with `LEFTHOOK=0 git commit ...`.
+
+pre-commit:
+  jobs:
+    - name: biome
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,json,jsonc,css}"
+      # Formats and lint-fixes staged files, then re-stages them. Fails on unfixable errors.
+      run: npx biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: npx commitlint --edit {1}

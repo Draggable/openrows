@@ -1,0 +1,13 @@
+{
+  "name": "@openrows/bench",
+  "version": "0.0.0",
+  "description": "Storage benchmarks for ADR-001 (physical tables vs JSONB). Not part of the workspace build.",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench": "tsx src/run.ts",
+    "bench:quick": "BENCH_ROWS=20000 BENCH_COMPANIES=1000 BENCH_ITERATIONS=3 BENCH_WRITE_SECONDS=2 BENCH_CATALOG_TABLES=200 BENCH_OUT=results/quick tsx src/run.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

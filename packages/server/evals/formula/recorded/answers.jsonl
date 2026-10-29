@@ -1,0 +1,56 @@
+{"id": "full-name", "answers": ["{First} & \" \" & {Last}"]}
+{"id": "upper-code", "answers": ["UPPER({Code})"]}
+{"id": "lower-email", "answers": ["LOWER({Email})"]}
+{"id": "initials", "answers": ["LEFT({First}, 1) & LEFT({Last}, 1)"]}
+{"id": "name-length", "answers": ["LEN({Name})"]}
+{"id": "trimmed-title", "answers": ["TRIM({Title})"]}
+{"id": "email-domain", "answers": ["RIGHT({Email}, \"@\")", "MID({Email}, FIND(\"@\", {Email}) + 1, LEN({Email}))"]}
+{"id": "phone-digits", "answers": ["SUBSTITUTE({Phone}, \"-\", \"\")"]}
+{"id": "greeting", "answers": ["\"Hello, \" & {Name} & \"!\""]}
+{"id": "first-word", "answers": ["LEFT({Title}, FIND(\" \", {Title} & \" \") - 1)"]}
+{"id": "tags-joined", "answers": ["ARRAYJOIN({Tags}, \"; \")"]}
+{"id": "slug", "answers": ["LOWER(REPLACE({Name}, \" \", \"-\"))", "LOWER(SUBSTITUTE({Name}, \" \", \"-\"))"]}
+{"id": "rating-stars", "answers": ["REPT(\"*\", {Rating})"]}
+{"id": "mentions-urgent", "answers": ["IF(FIND(\"urgent\", LOWER({Notes})) > 0, 1, 0)"]}
+{"id": "status-label", "answers": ["\"[\" & {Status} & \"]\""]}
+{"id": "line-total", "answers": ["{Qty} * {Unit Price}"]}
+{"id": "price-with-tax", "answers": ["{Price} * 1.2"]}
+{"id": "discounted-price", "answers": ["{Price} * (1 - {Discount} / 100)"]}
+{"id": "average-score", "answers": ["ROUND(AVERAGE({A}, {B}, {C}), 1)"]}
+{"id": "quarter-sum", "answers": ["SUM({Q1}, {Q2}, {Q3})"]}
+{"id": "profit-margin", "answers": ["({Revenue} - {Cost}) / {Revenue}"]}
+{"id": "higher-score", "answers": ["MAX({Home}, {Away})"]}
+{"id": "budget-gap", "answers": ["ABS({Budget} - {Actual})"]}
+{"id": "boxes-needed", "answers": ["ROUNDUP({Items} / 12, 0)"]}
+{"id": "is-even", "answers": ["IF(MOD({Qty}, 2) = 0, 1, 0)"]}
+{"id": "circle-area", "answers": ["ROUND(PI() * POWER({Radius}, 2), 2)", "ROUND(3.14159265359 * POWER({Radius}, 2), 2)"]}
+{"id": "amount-number", "answers": ["VALUE({Amount})"]}
+{"id": "percent-done", "answers": ["ROUND({Done} / {Total} * 100, 0)"]}
+{"id": "cost-per-unit", "answers": ["IF({Units} = 0, BLANK(), {Cost} / {Units})"]}
+{"id": "whole-hours", "answers": ["INT({Hours})"]}
+{"id": "pass-fail", "answers": ["IF({Score} >= 50, \"Pass\", \"Fail\")"]}
+{"id": "done-yes-no", "answers": ["IF({Done}, \"Yes\", \"No\")"]}
+{"id": "priority-number", "answers": ["SWITCH({Priority}, \"High\", 3, \"Medium\", 2, \"Low\", 1, 0)"]}
+{"id": "both-approved", "answers": ["IF(AND({Legal}, {Finance}), 1, 0)"]}
+{"id": "missing-email", "answers": ["IF({Email}, \"OK\", \"Missing\")"]}
+{"id": "size-bucket", "answers": ["IF({Count} < 10, \"Small\", IF({Count} < 100, \"Medium\", \"Large\"))"]}
+{"id": "overdue", "answers": ["IF(AND(IS_BEFORE({Due}, TODAY()), NOT({Done})), \"Overdue\", \"On track\")"]}
+{"id": "vip", "answers": ["IF(OR({Spend} > 1000, {Tier} = \"Gold\"), \"VIP\", \"Regular\")"]}
+{"id": "letter-grade", "answers": ["IF({Score} >= 90, \"A\", IF({Score} >= 80, \"B\", IF({Score} >= 70, \"C\", \"F\")))"]}
+{"id": "filled-phones", "answers": ["COUNTA({Home}, {Work}, {Mobile})"]}
+{"id": "balance-sign", "answers": ["IF({Balance} > 0, \"Positive\", IF({Balance} < 0, \"Negative\", \"Zero\"))"]}
+{"id": "full-address", "answers": ["{Street} & \", \" & {City} & \", \" & {Postcode}"]}
+{"id": "days-between", "answers": ["DATETIME_DIFF({End}, {Start}, \"days\")"]}
+{"id": "order-year", "answers": ["YEAR({Order date})"]}
+{"id": "order-month", "answers": ["MONTH({Order date})"]}
+{"id": "due-plus-week", "answers": ["DATEADD({Due}, 7, \"days\")"]}
+{"id": "format-dmy", "answers": ["DATETIME_FORMAT({Date}, \"DD/MM/YYYY\")"]}
+{"id": "age-days", "answers": ["DATETIME_DIFF(TODAY(), {Created}, \"days\")"]}
+{"id": "weekday-number", "answers": ["WEEKDAY({Date})"]}
+{"id": "weekend", "answers": ["IF(OR(WEEKDAY({Date}) = 0, WEEKDAY({Date}) = 6), \"Weekend\", \"Weekday\")"]}
+{"id": "quarter-label", "answers": ["\"Q\" & ROUNDUP(MONTH({Date}) / 3, 0)"]}
+{"id": "months-between", "answers": ["DATETIME_DIFF({End}, {Start}, \"months\")"]}
+{"id": "renewal-date", "answers": ["DATEADD({Start}, 1, \"years\")"]}
+{"id": "shift-hours", "answers": ["DATETIME_DIFF({End}, {Start}, \"minutes\") / 60"]}
+{"id": "days-left", "answers": ["DATETIME_DIFF({Deadline}, TODAY(), \"days\")"]}
+{"id": "short-date", "answers": ["DATETIME_FORMAT({Date}, \"ddd D MMM\")"]}

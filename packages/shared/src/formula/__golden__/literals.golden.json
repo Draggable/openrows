@@ -1,0 +1,673 @@
+[
+  {
+    "formula": "0",
+    "stored": "0",
+    "display": "0",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 0,
+      "range": {
+        "start": 0,
+        "end": 1
+      }
+    }
+  },
+  {
+    "formula": "1",
+    "stored": "1",
+    "display": "1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 1,
+      "range": {
+        "start": 0,
+        "end": 1
+      }
+    }
+  },
+  {
+    "formula": "42",
+    "stored": "42",
+    "display": "42",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 42,
+      "range": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "3.14",
+    "stored": "3.14",
+    "display": "3.14",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 3.14,
+      "range": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": ".5",
+    "stored": "0.5",
+    "display": "0.5",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 0.5,
+      "range": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "5.",
+    "stored": "5",
+    "display": "5",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 5,
+      "range": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "1e3",
+    "stored": "1000",
+    "display": "1000",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 1000,
+      "range": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "1E3",
+    "stored": "1000",
+    "display": "1000",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 1000,
+      "range": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "2.5e-3",
+    "stored": "0.0025",
+    "display": "0.0025",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 0.0025,
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "1e+10",
+    "stored": "10000000000",
+    "display": "10000000000",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 10000000000,
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "0001",
+    "stored": "1",
+    "display": "1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 1,
+      "range": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "123456789012345",
+    "stored": "123456789012345",
+    "display": "123456789012345",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 123456789012345,
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "0.1",
+    "stored": "0.1",
+    "display": "0.1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 0.1,
+      "range": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "1e308",
+    "stored": "1e+308",
+    "display": "1e+308",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 1e+308,
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "1e400",
+    "error": {
+      "code": "invalidNumber",
+      "message": "This number is too large",
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "\"hello\"",
+    "stored": "\"hello\"",
+    "display": "\"hello\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "hello",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "'hello'",
+    "stored": "\"hello\"",
+    "display": "\"hello\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "hello",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "\"\"",
+    "stored": "\"\"",
+    "display": "\"\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "",
+      "range": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "''",
+    "stored": "\"\"",
+    "display": "\"\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "",
+      "range": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "\"it's\"",
+    "stored": "\"it's\"",
+    "display": "\"it's\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "it's",
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "'say \"hi\"'",
+    "stored": "\"say \\\"hi\\\"\"",
+    "display": "\"say \\\"hi\\\"\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "say \"hi\"",
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "\"say \\\"hi\\\"\"",
+    "stored": "\"say \\\"hi\\\"\"",
+    "display": "\"say \\\"hi\\\"\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "say \"hi\"",
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "'it\\'s'",
+    "stored": "\"it's\"",
+    "display": "\"it's\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "it's",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "\"line\\nbreak\"",
+    "stored": "\"line\\nbreak\"",
+    "display": "\"line\\nbreak\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "line\nbreak",
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "\"tab\\there\"",
+    "stored": "\"tab\\there\"",
+    "display": "\"tab\\there\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "tab\there",
+      "range": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "\"back\\\\slash\"",
+    "stored": "\"back\\\\slash\"",
+    "display": "\"back\\\\slash\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "back\\slash",
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "\"regex \\d+\"",
+    "stored": "\"regex \\\\d+\"",
+    "display": "\"regex \\\\d+\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "regex \\d+",
+      "range": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "\"unicode ünïcödé\"",
+    "stored": "\"unicode ünïcödé\"",
+    "display": "\"unicode ünïcödé\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "unicode ünïcödé",
+      "range": {
+        "start": 0,
+        "end": 17
+      }
+    }
+  },
+  {
+    "formula": "\"emoji 🎉\"",
+    "stored": "\"emoji 🎉\"",
+    "display": "\"emoji 🎉\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "emoji 🎉",
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "\"   spaces   \"",
+    "stored": "\"   spaces   \"",
+    "display": "\"   spaces   \"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "   spaces   ",
+      "range": {
+        "start": 0,
+        "end": 14
+      }
+    }
+  },
+  {
+    "formula": "\"{not a field}\"",
+    "stored": "\"{not a field}\"",
+    "display": "\"{not a field}\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "{not a field}",
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "\"commas, and (parens)\"",
+    "stored": "\"commas, and (parens)\"",
+    "display": "\"commas, and (parens)\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "commas, and (parens)",
+      "range": {
+        "start": 0,
+        "end": 22
+      }
+    }
+  },
+  {
+    "formula": "TRUE",
+    "stored": "TRUE",
+    "display": "TRUE",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "boolean",
+      "value": true,
+      "range": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "FALSE",
+    "stored": "FALSE",
+    "display": "FALSE",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "boolean",
+      "value": false,
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "true",
+    "stored": "TRUE",
+    "display": "TRUE",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "boolean",
+      "value": true,
+      "range": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "False",
+    "stored": "FALSE",
+    "display": "FALSE",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "boolean",
+      "value": false,
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "TRUE()",
+    "stored": "TRUE()",
+    "display": "TRUE()",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "TRUE",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 6
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "FALSE()",
+    "stored": "FALSE()",
+    "display": "FALSE()",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "FALSE",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 7
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "true()",
+    "stored": "TRUE()",
+    "display": "TRUE()",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "TRUE",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 6
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "  1  ",
+    "stored": "1",
+    "display": "1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 1,
+      "range": {
+        "start": 2,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "\t\"tab-indented\"",
+    "stored": "\"tab-indented\"",
+    "display": "\"tab-indented\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "tab-indented",
+      "range": {
+        "start": 1,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "(1)",
+    "stored": "1",
+    "display": "1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "number",
+      "value": 1,
+      "range": {
+        "start": 1,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "(((\"deep\")))",
+    "stored": "\"deep\"",
+    "display": "\"deep\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "string",
+      "value": "deep",
+      "range": {
+        "start": 3,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "(  TRUE  )",
+    "stored": "TRUE",
+    "display": "TRUE",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "boolean",
+      "value": true,
+      "range": {
+        "start": 3,
+        "end": 7
+      }
+    }
+  }
+]

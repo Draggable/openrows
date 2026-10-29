@@ -1,0 +1,59 @@
+{
+  "name": "@openrows/sdk",
+  "version": "0.1.0",
+  "description": "Typed JavaScript client for the OpenRows REST API v1",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Draggable/openrows.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://app.openrows.io/docs/api/sdk",
+  "keywords": [
+    "openrows",
+    "airtable",
+    "api",
+    "sdk",
+    "client"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json tsconfig.cjs.json && node scripts/cjs-package.mjs",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "generate": "tsx scripts/generate.ts",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@openrows/shared": "*",
+    "typedoc": "^0.28.20",
+    "zod": "^4.6.7"
+  }
+}

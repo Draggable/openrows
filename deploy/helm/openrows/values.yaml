@@ -1,0 +1,206 @@
+# OpenRows Helm chart (the AGPL-3.0 core). Every value is checked by values.schema.json.
+# The chart refuses to render without image.tag (or image.digest), appUrl, existingSecret,
+# oidc.issuerUrl, s3.endpoint and s3.bucket. It never creates a Secret: every secret comes from
+# the Secret named by existingSecret (keys below), which you create first.
+# The guide: docs/guide/self-hosting.md, "Kubernetes (Helm)".
+
+image:
+  # The open-source image (docker/Dockerfile's `oss` target). Never the hosted `cloud` target.
+  repository: ghcr.io/draggable/openrows
+  # Required unless digest is set: the registry has sha-<full commit sha> tags (and a moving
+  # `main`), not version tags. The image and its migrations go together, so pin one.
+  tag: ""
+  # Optional, e.g. sha256:<64 hex>; wins over tag.
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# The public https origin browsers use (OIDC redirects to <appUrl>/auth/callback). Required.
+appUrl: ""
+
+# The Secret every secret value comes from (create it first; the chart never writes one).
+# Keys, always:
+#   ENCRYPTION_KEY            openssl rand -base64 32
+#   OIDC_CLIENT_SECRET        the OIDC client's secret
+#   S3_ACCESS_KEY, S3_SECRET_KEY
+# With the bundled Postgres (postgresql.enabled):
+#   POSTGRES_PASSWORD         the superuser the migrate Job connects as (URL-safe: openssl rand -hex 24)
+#   OPENROWS_APP_DB_PASSWORD  the api and worker's openrows_app role (URL-safe, distinct)
+# With an external Postgres (postgresql.enabled: false):
+#   DATABASE_URL              postgresql://openrows_app:<password>@<host>:5432/<db>
+#   MIGRATION_DATABASE_URL    the schema owner (docs/deploy/database.md)
+#   INDEX_DATABASE_URL        optional: the schema owner, for field index builds (worker)
+#   OPENROWS_APP_DB_PASSWORD  optional: the migrate Job gives openrows_app this password
+# With the bundled Valkey (valkey.enabled):
+#   VALKEY_PASSWORD           URL-safe
+# Optional: REDIS_URL (an external Redis/Valkey, when valkey.enabled is false), SMTP_PASSWORD
+# (with smtp.user), OIDC_ADMIN_CLIENT_SECRET (with oidc.adminClientId), TURNSTILE_SECRET_KEY
+# (with turnstile.siteKey), AI_API_KEY (with ai.model).
+existingSecret: ""
+
+logLevel: info
+# Only behind a reverse proxy or ingress that sets X-Forwarded-For (hops = proxies in front).
+trustProxy:
+  enabled: false
+  hops: 1
+
+oidc:
+  # Required, https, e.g. https://auth.example.org/realms/openrows.
+  issuerUrl: ""
+  clientId: openrows-app
+  # The worker's service account for deleting purged accounts' users at Keycloak.
+  # Set it with OIDC_ADMIN_CLIENT_SECRET in the Secret, or leave it empty.
+  adminClientId: ""
+  # "Continue with ..." buttons: comma-separated identity-provider aliases, e.g. github,google.
+  authProviders: ""
+
+s3:
+  # Required: any S3-compatible service (path-style). Browsers PUT and GET attachments with
+  # presigned URLs, so they must reach it (or s3.publicUrl) and the bucket needs CORS for appUrl.
+  endpoint: ""
+  region: us-east-1
+  bucket: ""
+  publicUrl: ""
+
+smtp:
+  # Empty host: mail is logged, not sent.
+  host: ""
+  port: 587
+  # starttls (587) or "true" (465); production refuses "false" with a user.
+  secure: starttls
+  user: ""
+  from: ""
+
+turnstile:
+  # Cloudflare Turnstile for public forms: the site key here, TURNSTILE_SECRET_KEY in the Secret.
+  siteKey: ""
+
+ai:
+  # The instance's OpenAI-compatible provider; AI_API_KEY in the Secret (optional).
+  baseUrl: ""
+  model: ""
+  allowedHosts: ""
+
+# Comma-separated emails of system admins (no tenant access, ADR-002).
+systemAdmins: ""
+statusPageUrl: ""
+
+# Outbound requests to user URLs (webhooks, automations).
+outbound:
+  allowHttp: false
+  ports: ""
+  allow: ""
+  deny: ""
+
+# More non-secret environment variables for the api and the worker, by name (.env.example lists
+# them), e.g. CLAMAV_URL: tcp://clamav:3310. Names that look like secrets are refused.
+extraEnv: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Shared by every OpenRows pod (api, worker, migrate): the image's `node` user.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+api:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+worker:
+  # Cron jobs run once per occurrence across workers, so more than one is safe.
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# The migrate Job: on install a plain Job the api and worker wait for, on upgrade a pre-upgrade
+# hook that runs before any new pod.
+migrate:
+  backoffLimit: 3
+  activeDeadlineSeconds: 900
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  # Defaults to appUrl's host.
+  host: ""
+  # The realtime WebSocket (/ws) needs upgrades through the ingress and long read timeouts.
+  # ingress-nginx proxies upgrades by default; these keep idle sockets open for an hour and let
+  # CSV imports (up to 50 MB) through. Other controllers: set their equivalents.
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: 64m
+  # e.g. [{ secretName: openrows-tls, hosts: [openrows.example.org] }]
+  tls: []
+
+# A Postgres 16 StatefulSet in the release. For production, prefer a managed or operator-run
+# Postgres (postgresql.enabled: false and the URLs in the Secret).
+postgresql:
+  enabled: true
+  image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
+  database: openrows
+  # The superuser the migrate Job and the worker's index builds connect as.
+  username: openrows
+  persistence:
+    size: 10Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# A Valkey for /ready's Redis check (off by default; nothing needs it yet).
+valkey:
+  enabled: false
+  image: valkey/valkey:8.1.10-alpine@sha256:081c2f5cb575efc901aa80ff9cdbd1ec6a301682fd35e1ebb4b0990a4a4a8507
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi

@@ -1,0 +1,140 @@
+# selfhost overlay: a production stack of your own on one Docker host, on top of compose.yml
+# (docs/guide/self-hosting.md "A production stack"):
+#
+#   c="docker compose -p openrows -f docker/compose.yml -f docker/selfhost.yml --env-file /srv/openrows/.env"
+#   $c up -d --wait
+#
+# The env file starts from docker/.env.selfhost.example (mode 600, outside the checkout). Only the
+# api is published, on loopback (OPENROWS_BIND, default 127.0.0.1:3000), for your reverse proxy
+# or tunnel; it serves the app, the API and the realtime WebSocket on one origin (APP_URL).
+# Postgres has no host port. Optional profiles (COMPOSE_PROFILES in the env file):
+#   keycloak  Keycloak in this stack, with its own database `keycloak` in this Postgres and the
+#             realm docker/keycloak/openrows-realm.prod.json; published on loopback too
+#             (KEYCLOAK_BIND, default 127.0.0.1:8080) for your proxy (docs/deploy/keycloak.md)
+#   clamav    malware scanning of uploads (then CLAMAV_URL=tcp://clamav:3310)
+#   valkey    compose.yml's Valkey (then REDIS_URL)
+# Secrets and per-host values come from the env file; nothing here is a secret.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "10"
+    compress: "true"
+
+services:
+  api:
+    ports:
+      - "${OPENROWS_BIND:-127.0.0.1:3000}:3000"
+    environment:
+      CLAMAV_URL: ${CLAMAV_URL:-}
+
+  worker:
+    environment:
+      CLAMAV_URL: ${CLAMAV_URL:-}
+      REVISION_RETENTION_DAYS: ${REVISION_RETENTION_DAYS:-}
+
+  keycloak-db:
+    # One-shot on every `up`: role and database `keycloak` in this stack's Postgres (idempotent).
+    profiles: ["keycloak"]
+    image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
+    command: ["sh", "/init/init-db.sh"]
+    restart: "no"
+    logging: *logging
+    environment:
+      PGHOST: postgres
+      PGUSER: ${PG_USER}
+      PGPASSWORD: ${PG_PASSWORD}
+      PGDATABASE: ${PG_DB}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-}
+    volumes:
+      - ./keycloak/init-db.sh:/init/init-db.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  keycloak:
+    profiles: ["keycloak"]
+    image: quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab1e7afd63b5f530e1b5c0590bd7aa60b40a40463e29b2c
+    # Production mode, TLS at your proxy. --import-realm imports the realm file only when the
+    # realm doesn't exist yet: later changes are made in Keycloak (docs/deploy/keycloak.md).
+    command: ["start", "--import-realm"]
+    restart: unless-stopped
+    logging: *logging
+    stop_grace_period: 15s
+    # The JVM sizes its heap from the limit (70 %), not from the host's RAM.
+    mem_limit: 1g
+    ports:
+      - "${KEYCLOAK_BIND:-127.0.0.1:8080}:8080"
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-}
+      # The temporary master admin of the FIRST start: replace it with a permanent admin.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USER:-bootstrap-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-}
+      # The public origin: every token's `iss` is KC_HOSTNAME/realms/openrows (= OIDC_ISSUER_URL).
+      KC_HOSTNAME: ${KC_HOSTNAME:-}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      # Read by the realm file's placeholders, at import only.
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OPENROWS_KC_SMTP_HOST: ${OPENROWS_KC_SMTP_HOST:-}
+      OPENROWS_KC_SMTP_PORT: ${OPENROWS_KC_SMTP_PORT:-587}
+      OPENROWS_KC_SMTP_FROM: ${OPENROWS_KC_SMTP_FROM:-}
+      OPENROWS_KC_SMTP_AUTH: ${OPENROWS_KC_SMTP_AUTH:-false}
+      OPENROWS_KC_SMTP_USER: ${OPENROWS_KC_SMTP_USER:-}
+      OPENROWS_KC_SMTP_PASSWORD: ${OPENROWS_KC_SMTP_PASSWORD:-}
+      OPENROWS_KC_SMTP_STARTTLS: ${OPENROWS_KC_SMTP_STARTTLS:-false}
+      OPENROWS_KC_SMTP_SSL: ${OPENROWS_KC_SMTP_SSL:-false}
+      OPENROWS_GOOGLE_ENABLED: ${OPENROWS_GOOGLE_ENABLED:-false}
+      OPENROWS_GOOGLE_CLIENT_ID: ${OPENROWS_GOOGLE_CLIENT_ID:-}
+      OPENROWS_GOOGLE_CLIENT_SECRET: ${OPENROWS_GOOGLE_CLIENT_SECRET:-}
+      OPENROWS_GITHUB_ENABLED: ${OPENROWS_GITHUB_ENABLED:-false}
+      OPENROWS_GITHUB_CLIENT_ID: ${OPENROWS_GITHUB_CLIENT_ID:-}
+      OPENROWS_GITHUB_CLIENT_SECRET: ${OPENROWS_GITHUB_CLIENT_SECRET:-}
+    volumes:
+      - ./keycloak/openrows-realm.prod.json:/opt/keycloak/data/import/openrows-realm.json:ro
+      - ./keycloak/themes/openrows:/opt/keycloak/themes/openrows:ro
+    depends_on:
+      keycloak-db:
+        condition: service_completed_successfully
+    healthcheck:
+      # The image has no curl: bash's /dev/tcp asks the management port (9000, never published).
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          head -1 <&3 | grep -q ' 200 '
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  clamav:
+    # ClamAV's clamd for the worker's upload scans (CLAMAV_URL=tcp://clamav:3310 on the api and
+    # the worker). Its freshclam updates the signatures; the first start downloads them before
+    # clamd listens. No port is published. Uploads up to 100 MB are streamed whole.
+    profiles: ["clamav"]
+    image: clamav/clamav:1.5@sha256:bda39705e291105049c3936e2803ac90b955172af8030f94f05dce1252df6c6d
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 3g
+    environment:
+      CLAMD_CONF_StreamMaxLength: 110M
+      CLAMD_CONF_MaxFileSize: 110M
+      CLAMD_CONF_MaxScanSize: 400M
+    volumes:
+      - clamavdata:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+
+volumes:
+  clamavdata:

@@ -1,0 +1,48 @@
+name: Bug report
+description: Something that should work doesn't
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [existing issues](https://github.com/Draggable/openrows/issues) first, and include the version or commit you run.
+        **Security issues:** don't report them here; report them privately as [SECURITY.md](https://github.com/Draggable/openrows/blob/main/SECURITY.md) describes.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. docker/compose.sh dev up -d --wait
+        2. Sign in as dev@openrows.test
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Self-hosted / local dev stack
+        - Hosted (app.openrows.io)
+        - CI
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      description: "`git rev-parse --short HEAD`, or the image tag"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and environment
+      description: Relevant log lines (the `requestId` from an error response helps), browser, OS, Node and Docker versions.
+      render: text

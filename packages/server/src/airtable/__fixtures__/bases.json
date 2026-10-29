@@ -1,0 +1,14 @@
+{
+  "bases": [
+    {
+      "id": "appFixtureBase001",
+      "name": "Product launch",
+      "permissionLevel": "create"
+    },
+    {
+      "id": "appOtherBase00001",
+      "name": "Someone else's base",
+      "permissionLevel": "read"
+    }
+  ]
+}

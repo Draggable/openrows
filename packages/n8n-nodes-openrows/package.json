@@ -1,0 +1,53 @@
+{
+  "name": "@openrows/n8n-nodes-openrows",
+  "version": "0.1.0",
+  "description": "n8n community nodes for OpenRows: records in, records out, and a trigger on base changes",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Draggable/openrows.git",
+    "directory": "packages/n8n-nodes-openrows"
+  },
+  "homepage": "https://app.openrows.io/docs/api",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "openrows",
+    "airtable"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "!dist/testing"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": [
+      "dist/credentials/OpenRowsApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/OpenRows/OpenRows.node.js",
+      "dist/nodes/OpenRows/OpenRowsTrigger.node.js"
+    ]
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json && node scripts/copy-icons.mjs",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@openrows/shared": "*",
+    "n8n-workflow": "^2.16.0"
+  }
+}

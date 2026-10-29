@@ -1,0 +1,14 @@
+node_modules
+.env
+dist
+.DS_Store
+.vscode
+.idea
+*.log
+*.tsbuildinfo
+coverage
+playwright-report
+test-results
+# docker/compose.sh env files (the *.example templates are committed)
+docker/.env.*
+!docker/.env.*.example

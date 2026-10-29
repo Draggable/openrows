@@ -1,0 +1,48 @@
+# Numbers
+0
+1
+42
+3.14
+.5
+5.
+1e3
+1E3
+2.5e-3
+1e+10
+0001
+123456789012345
+0.1
+1e308
+1e400
+# Strings, both quote styles and escapes
+"hello"
+'hello'
+""
+''
+"it's"
+'say "hi"'
+"say \"hi\""
+'it\'s'
+"line\nbreak"
+"tab\there"
+"back\\slash"
+"regex \d+"
+"unicode ünïcödé"
+"emoji 🎉"
+"   spaces   "
+"{not a field}"
+"commas, and (parens)"
+# Booleans
+TRUE
+FALSE
+true
+False
+TRUE()
+FALSE()
+true()
+# Whitespace
+  1  
+	"tab-indented"
+(1)
+((("deep")))
+(  TRUE  )

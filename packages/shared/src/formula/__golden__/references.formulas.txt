@@ -1,0 +1,55 @@
+# Braced names
+{Name}
+{Price}
+{Unit Price}
+{ Unit Price }
+{unit price}
+{UNIT PRICE}
+{Weird \} name}
+{Back\\slash}
+{Ünïcödé}
+{Total (USD)}
+{Created By}
+{Modified By}
+{Score}
+{Label}
+{Lookup Prices}
+{Mystery}
+# Case: exact matches win, a case-only match must be unique
+{Case}
+{case}
+{CASE}
+# Bare names
+Price
+Qty * Price
+price
+Name & "!"
+Ünïcödé
+Done
+Status = "Open"
+Price*Qty
+Name&Status
+# Unknown fields
+{Nope}
+{Price }
+Nope
+{Unit  Price}
+nope + 1
+{Name} & {Missing}
+# Every field type
+{Notes}
+{Discount}
+{Done}
+{Due}
+{Start}
+{Duration}
+{Rating}
+{Status}
+{Tags}
+{Email}
+{Website}
+{Phone}
+{Files}
+{ID}
+{Created}
+{Modified}

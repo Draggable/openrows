@@ -1,0 +1,10 @@
+{
+  "node": "@openrows/n8n-nodes-openrows.openRows",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": ["Data & Storage", "Productivity"],
+  "resources": {
+    "credentialDocumentation": [{ "url": "https://app.openrows.io/docs/api" }],
+    "primaryDocumentation": [{ "url": "https://app.openrows.io/docs/api" }]
+  }
+}

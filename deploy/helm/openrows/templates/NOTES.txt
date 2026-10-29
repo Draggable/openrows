@@ -1,0 +1,17 @@
+OpenRows {{ .Chart.AppVersion }} (image {{ include "openrows.image" . }}) is starting in {{ .Release.Namespace }}.
+
+The migrate Job runs first; the api and worker wait for it:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  kubectl -n {{ .Release.Namespace }} logs job/{{ include "openrows.fullname" . }}-migrate-{{ .Release.Revision }}
+
+Readiness (Postgres, S3{{ if .Values.valkey.enabled }}, Valkey{{ end }}):
+  helm test -n {{ .Release.Namespace }} {{ .Release.Name }}
+
+{{- if .Values.ingress.enabled }}
+
+Open {{ .Values.appUrl }} and sign in through {{ .Values.oidc.issuerUrl }}.
+{{- else }}
+
+No Ingress: point your proxy at the Service {{ include "openrows.fullname" . }}:{{ .Values.service.port }}
+(it must pass WebSocket upgrades on /ws), so that {{ .Values.appUrl }} reaches it.
+{{- end }}

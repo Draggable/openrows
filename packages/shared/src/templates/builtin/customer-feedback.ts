@@ -1,0 +1,143 @@
+import { defineTemplate } from '../define.js';
+
+export const customerFeedback = defineTemplate({
+  slug: 'customer-feedback',
+  name: 'Customer feedback',
+  description: 'Collect feedback from every channel and tie it to the feature requests it backs.',
+  category: 'Product',
+  icon: 'message-square',
+  color: '#BE185D',
+  tables: [
+    {
+      key: 'feedback',
+      name: 'Feedback',
+      fields: [
+        { key: 'summary', name: 'Summary', type: 'singleLineText' },
+        { key: 'customer', name: 'Customer', type: 'singleLineText' },
+        {
+          key: 'channel',
+          name: 'Channel',
+          type: 'singleSelect',
+          choices: ['Support ticket', 'Sales call', 'Survey', 'Community', 'Interview'],
+        },
+        {
+          key: 'sentiment',
+          name: 'Sentiment',
+          type: 'singleSelect',
+          choices: [
+            ['Positive', 'green'],
+            ['Neutral', 'slate'],
+            ['Negative', 'red'],
+          ],
+        },
+        { key: 'received', name: 'Received', type: 'date' },
+        {
+          key: 'request',
+          name: 'Feature request',
+          type: 'link',
+          table: 'requests',
+          inverse: { key: 'feedback', name: 'Feedback' },
+        },
+        { key: 'quote', name: 'Quote', type: 'longText' },
+      ],
+      views: [
+        { name: 'Inbox', type: 'grid', sorts: [['received', 'desc']] },
+        { name: 'By sentiment', type: 'kanban', stack: 'sentiment' },
+        { name: 'Share feedback', type: 'form' },
+      ],
+      records: [
+        {
+          summary: 'Wants a calendar sync',
+          customer: 'Northwind Traders',
+          channel: 'Sales call',
+          sentiment: 'Neutral',
+          received: '2026-10-21',
+          request: ['Calendar sync'],
+          quote: 'We live in our calendars; deadlines should show up there.',
+        },
+        {
+          summary: 'Loves the keyboard shortcuts',
+          customer: 'Initech',
+          channel: 'Survey',
+          sentiment: 'Positive',
+          received: '2026-10-19',
+          quote: 'Feels faster than a spreadsheet.',
+        },
+        {
+          summary: 'Import from Excel failed',
+          customer: 'Vandelay Industries',
+          channel: 'Support ticket',
+          sentiment: 'Negative',
+          received: '2026-10-24',
+          request: ['Excel import'],
+        },
+        {
+          summary: 'Needs approvals on records',
+          customer: 'Umbrella Health',
+          channel: 'Interview',
+          sentiment: 'Neutral',
+          received: '2026-10-12',
+          request: ['Record approvals'],
+        },
+        {
+          summary: 'Asked for Excel import again',
+          customer: 'Globex',
+          channel: 'Community',
+          sentiment: 'Negative',
+          received: '2026-10-26',
+          request: ['Excel import'],
+        },
+        {
+          summary: 'Calendar sync for the field team',
+          customer: 'Stark Logistics',
+          channel: 'Support ticket',
+          sentiment: 'Neutral',
+          received: '2026-10-27',
+          request: ['Calendar sync'],
+        },
+        {
+          summary: 'Sharing a view with clients worked great',
+          customer: 'Hooli',
+          channel: 'Survey',
+          sentiment: 'Positive',
+          received: '2026-10-15',
+        },
+      ],
+    },
+    {
+      key: 'requests',
+      name: 'Feature requests',
+      fields: [
+        { key: 'name', name: 'Request', type: 'singleLineText' },
+        {
+          key: 'status',
+          name: 'Status',
+          type: 'singleSelect',
+          choices: [
+            ['Under review', 'slate'],
+            ['Planned', 'blue'],
+            ['Building', 'amber'],
+            ['Released', 'green'],
+          ],
+        },
+        { key: 'mentions', name: 'Mentions', type: 'count', link: 'feedback' },
+        {
+          key: 'customers',
+          name: 'Customers',
+          type: 'lookup',
+          link: 'feedback',
+          field: 'customer',
+        },
+      ],
+      views: [
+        { name: 'All requests', type: 'grid' },
+        { name: 'Roadmap', type: 'kanban', stack: 'status' },
+      ],
+      records: [
+        { name: 'Calendar sync', status: 'Planned' },
+        { name: 'Excel import', status: 'Building' },
+        { name: 'Record approvals', status: 'Under review' },
+      ],
+    },
+  ],
+});

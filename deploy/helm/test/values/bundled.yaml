@@ -1,0 +1,22 @@
+# The bundled Postgres, an Ingress with TLS: the guide's example.
+image:
+  tag: sha-0123456789abcdef0123456789abcdef01234567
+appUrl: https://openrows.example.org
+existingSecret: openrows-secrets
+oidc:
+  issuerUrl: https://auth.example.org/realms/openrows
+s3:
+  endpoint: https://s3.example.org
+  bucket: openrows-attachments
+smtp:
+  host: smtp.example.org
+  user: openrows
+  from: OpenRows <no-reply@example.org>
+trustProxy:
+  enabled: true
+ingress:
+  enabled: true
+  className: nginx
+  tls:
+    - secretName: openrows-tls
+      hosts: [openrows.example.org]

@@ -1,0 +1,65 @@
+# Empty and incomplete
+()
+(
+)
+1 +
+1 + * 2
+* 2
+1 2
+"a" "b"
+{Name} {Price}
+(1 + 2
+1 + 2)
+((1)
+IF(
+IF(1,
+IF(1, 2
+IF(1,, 2)
+IF(,1)
+SUM(1 2)
+SUM(1,)
+SUM((1, 2))
+CONCATENATE("a" "b")
+LEN"x")
+1 = = 2
+1 == 2
+1 => 2
+1 =< 2
+1 >< 2
+1 <<= 2
+!TRUE
+1 && 2
+1 || 2
+1 % 2
+2 ^ 3
+1 ; 2
+a.b
+@{Name}
+#REF
+$1
+1 ,
+,1
+# Strings and references
+"unterminated
+'unterminated
+"ends with backslash\
+{Name
+{
+{}
+{   }
+Name}
+}
+{Name}}
+# Odd characters
+1 ? 2 : 3
+[1, 2]
+1 + [Price]
+`code`
+1 ~ 2
+1 | 2
+1 \ 2
+# Numbers
+1.2.3
+1e
+1e+
+1..2

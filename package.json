@@ -1,0 +1,67 @@
+{
+  "name": "openrows",
+  "version": "0.1.0",
+  "description": "Open-source, privacy-first alternative to Airtable",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/client",
+    "packages/sdk",
+    "packages/blocks",
+    "packages/mcp-server",
+    "packages/n8n-nodes-openrows"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @openrows/shared && concurrently --kill-others-on-fail -n shared,server,client -c blue,green,magenta \"npm run dev -w @openrows/shared\" \"npm run dev -w @openrows/server\" \"npm run dev -w @openrows/client\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "npm run test:integration -w @openrows/server",
+    "e2e": "playwright test",
+    "e2e:auth": "playwright test --config playwright.auth.config.ts",
+    "typecheck": "tsc -b",
+    "type-check": "npm run typecheck",
+    "lint": "biome check . && npm run lint:brand",
+    "lint:brand": "node scripts/check-brand-name.mjs",
+    "check:packages": "node scripts/check-packages.mjs",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "db:generate": "npm run db:generate -w @openrows/server",
+    "db:check": "npm run db:check -w @openrows/server",
+    "db:migrate": "npm run db:migrate -w @openrows/server",
+    "db:seed": "npm run db:seed -w @openrows/server --",
+    "eval:ai": "npm run eval:ai -w @openrows/server --",
+    "prepare": "node scripts/install-hooks.js",
+    "lint:openapi": "npm run openapi:lint -w @openrows/server"
+  },
+  "keywords": [
+    "airtable",
+    "database",
+    "spreadsheet",
+    "collaboration",
+    "open-source",
+    "self-hosted"
+  ],
+  "author": "OpenRows Team",
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@biomejs/biome": "2.6.3",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@playwright/test": "^1.64.1",
+    "@redocly/openapi-core": "^2.71.1",
+    "@types/pg": "^8.23.1",
+    "@vitest/coverage-v8": "^5.0.5",
+    "concurrently": "^10.0.6",
+    "lefthook": "^2.2.2",
+    "pg": "^8.23.1",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

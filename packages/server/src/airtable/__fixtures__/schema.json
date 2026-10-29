@@ -1,0 +1,457 @@
+{
+  "tables": [
+    {
+      "id": "tblProjects000001",
+      "name": "Projects",
+      "description": "Everything we ship",
+      "primaryFieldId": "fldName0000000000",
+      "fields": [
+        {
+          "id": "fldName0000000000",
+          "name": "Name",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldNotes000000000",
+          "name": "Notes",
+          "type": "multilineText",
+          "description": "Free text"
+        },
+        {
+          "id": "fldBrief000000000",
+          "name": "Brief",
+          "type": "richText"
+        },
+        {
+          "id": "fldEmail000000000",
+          "name": "Contact",
+          "type": "email"
+        },
+        {
+          "id": "fldWebsite0000000",
+          "name": "Website",
+          "type": "url"
+        },
+        {
+          "id": "fldPhone000000000",
+          "name": "Phone",
+          "type": "phoneNumber"
+        },
+        {
+          "id": "fldEstimate000000",
+          "name": "Estimate",
+          "type": "number",
+          "options": {
+            "precision": 1
+          }
+        },
+        {
+          "id": "fldBudget00000000",
+          "name": "Budget",
+          "type": "currency",
+          "options": {
+            "precision": 2,
+            "symbol": "€"
+          }
+        },
+        {
+          "id": "fldDone0000000000",
+          "name": "Done",
+          "type": "percent",
+          "options": {
+            "precision": 0
+          }
+        },
+        {
+          "id": "fldSpent000000000",
+          "name": "Time spent",
+          "type": "duration",
+          "options": {
+            "durationFormat": "h:mm:ss"
+          }
+        },
+        {
+          "id": "fldRating00000000",
+          "name": "Priority",
+          "type": "rating",
+          "options": {
+            "icon": "star",
+            "max": 5,
+            "color": "yellowBright"
+          }
+        },
+        {
+          "id": "fldShipped0000000",
+          "name": "Shipped",
+          "type": "checkbox",
+          "options": {
+            "icon": "check",
+            "color": "greenBright"
+          }
+        },
+        {
+          "id": "fldDue00000000000",
+          "name": "Due",
+          "type": "date",
+          "options": {
+            "dateFormat": {
+              "name": "iso",
+              "format": "YYYY-MM-DD"
+            }
+          }
+        },
+        {
+          "id": "fldKickoff0000000",
+          "name": "Kickoff",
+          "type": "dateTime",
+          "options": {
+            "dateFormat": {
+              "name": "european",
+              "format": "D/M/YYYY"
+            },
+            "timeFormat": {
+              "name": "24hour",
+              "format": "HH:mm"
+            },
+            "timeZone": "Europe/Berlin"
+          }
+        },
+        {
+          "id": "fldStatus00000000",
+          "name": "Status",
+          "type": "singleSelect",
+          "options": {
+            "choices": [
+              {
+                "id": "selTodo0000000000",
+                "name": "Todo",
+                "color": "redLight2"
+              },
+              {
+                "id": "selDoing000000000",
+                "name": "Doing",
+                "color": "yellowLight2"
+              },
+              {
+                "id": "selDone0000000000",
+                "name": "Done",
+                "color": "greenLight2"
+              }
+            ]
+          }
+        },
+        {
+          "id": "fldTags0000000000",
+          "name": "Tags",
+          "type": "multipleSelects",
+          "options": {
+            "choices": [
+              {
+                "id": "selWeb00000000000",
+                "name": "Web",
+                "color": "blueLight2"
+              },
+              {
+                "id": "selMobile00000000",
+                "name": "Mobile",
+                "color": "purpleBright"
+              },
+              {
+                "id": "selAPI00000000000",
+                "name": "API",
+                "color": "cyanDark1"
+              }
+            ]
+          }
+        },
+        {
+          "id": "fldOwner000000000",
+          "name": "Owner",
+          "type": "singleCollaborator"
+        },
+        {
+          "id": "fldTeam0000000000",
+          "name": "Team",
+          "type": "multipleCollaborators"
+        },
+        {
+          "id": "fldTasks000000000",
+          "name": "Tasks",
+          "type": "multipleRecordLinks",
+          "options": {
+            "linkedTableId": "tblTasks000000001",
+            "isReversed": false,
+            "prefersSingleRecordLink": false,
+            "inverseLinkFieldId": "fldTProject000000"
+          }
+        },
+        {
+          "id": "fldTaskNames00000",
+          "name": "Task names",
+          "type": "multipleLookupValues",
+          "options": {
+            "isValid": true,
+            "recordLinkFieldId": "fldTasks000000000",
+            "fieldIdInLinkedTable": "fldTTitle00000000",
+            "result": {
+              "type": "singleLineText"
+            }
+          }
+        },
+        {
+          "id": "fldTaskCount00000",
+          "name": "Task count",
+          "type": "count",
+          "options": {
+            "isValid": true,
+            "recordLinkFieldId": "fldTasks000000000"
+          }
+        },
+        {
+          "id": "fldEffort00000000",
+          "name": "Effort",
+          "type": "rollup",
+          "options": {
+            "isValid": true,
+            "recordLinkFieldId": "fldTasks000000000",
+            "fieldIdInLinkedTable": "fldTNo00000000000",
+            "referencedFieldIds": [],
+            "result": {
+              "type": "number",
+              "options": {
+                "precision": 0
+              }
+            }
+          }
+        },
+        {
+          "id": "fldFiles000000000",
+          "name": "Files",
+          "type": "multipleAttachments",
+          "options": {
+            "isReversed": false
+          }
+        },
+        {
+          "id": "fldBudgetX2000000",
+          "name": "Budget x2",
+          "type": "formula",
+          "options": {
+            "isValid": true,
+            "formula": "{fldBudget00000000} * 2",
+            "referencedFieldIds": ["fldBudget00000000"],
+            "result": {
+              "type": "currency",
+              "options": {
+                "precision": 2,
+                "symbol": "€"
+              }
+            }
+          }
+        },
+        {
+          "id": "fldSize0000000000",
+          "name": "Size",
+          "type": "formula",
+          "options": {
+            "isValid": true,
+            "formula": "IF({fldBudgetX2000000} > 100, \"big\", \"small\")",
+            "referencedFieldIds": ["fldBudgetX2000000"],
+            "result": {
+              "type": "singleLineText"
+            }
+          }
+        },
+        {
+          "id": "fldCode0000000000",
+          "name": "Code",
+          "type": "formula",
+          "options": {
+            "isValid": true,
+            "formula": "AUTONUMBER() & \"-\" & {fldName0000000000}",
+            "referencedFieldIds": ["fldName0000000000"],
+            "result": {
+              "type": "singleLineText"
+            }
+          }
+        },
+        {
+          "id": "fldSummary0000000",
+          "name": "Summary",
+          "type": "formula",
+          "options": {
+            "isValid": true,
+            "formula": "ARRAYJOIN({fldTaskNames00000})",
+            "referencedFieldIds": ["fldTaskNames00000"],
+            "result": {
+              "type": "singleLineText"
+            }
+          }
+        },
+        {
+          "id": "fldCreated0000000",
+          "name": "Created",
+          "type": "createdTime",
+          "options": {
+            "result": {
+              "type": "dateTime",
+              "options": {
+                "dateFormat": {
+                  "name": "iso",
+                  "format": "YYYY-MM-DD"
+                },
+                "timeFormat": {
+                  "name": "24hour",
+                  "format": "HH:mm"
+                },
+                "timeZone": "utc"
+              }
+            }
+          }
+        },
+        {
+          "id": "fldModified000000",
+          "name": "Modified",
+          "type": "lastModifiedTime",
+          "options": {
+            "isValid": true,
+            "referencedFieldIds": [],
+            "result": {
+              "type": "date",
+              "options": {
+                "dateFormat": {
+                  "name": "us",
+                  "format": "M/D/YYYY"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "fldCreator0000000",
+          "name": "Created by",
+          "type": "createdBy"
+        },
+        {
+          "id": "fldEditor00000000",
+          "name": "Modified by",
+          "type": "lastModifiedBy"
+        },
+        {
+          "id": "fldNumber00000000",
+          "name": "No.",
+          "type": "autoNumber"
+        },
+        {
+          "id": "fldBarcode0000000",
+          "name": "SKU",
+          "type": "barcode"
+        },
+        {
+          "id": "fldOpen0000000000",
+          "name": "Open",
+          "type": "button"
+        },
+        {
+          "id": "fldSync0000000000",
+          "name": "Synced from",
+          "type": "externalSyncSource",
+          "options": {
+            "choices": []
+          }
+        },
+        {
+          "id": "fldDueDay00000000",
+          "name": "AI summary",
+          "type": "aiText",
+          "options": {
+            "prompt": [],
+            "referencedFieldIds": []
+          }
+        }
+      ],
+      "views": [
+        {
+          "id": "viwProjGrid000001",
+          "name": "All projects",
+          "type": "grid",
+          "visibleFieldIds": [
+            "fldName0000000000",
+            "fldStatus00000000",
+            "fldBudget00000000",
+            "fldTasks000000000"
+          ]
+        },
+        {
+          "id": "viwProjKanban0001",
+          "name": "By status",
+          "type": "kanban"
+        },
+        {
+          "id": "viwProjCal0000001",
+          "name": "Due dates",
+          "type": "calendar"
+        }
+      ]
+    },
+    {
+      "id": "tblTasks000000001",
+      "name": "Tasks",
+      "primaryFieldId": "fldTName000000000",
+      "fields": [
+        {
+          "id": "fldTName000000000",
+          "name": "Task",
+          "type": "formula",
+          "options": {
+            "isValid": true,
+            "formula": "{fldTTitle00000000} & \" #\" & {fldTNo00000000000}",
+            "referencedFieldIds": ["fldTTitle00000000", "fldTNo00000000000"],
+            "result": {
+              "type": "singleLineText"
+            }
+          }
+        },
+        {
+          "id": "fldTTitle00000000",
+          "name": "Title",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldTNo00000000000",
+          "name": "Number",
+          "type": "autoNumber"
+        },
+        {
+          "id": "fldTProject000000",
+          "name": "Project",
+          "type": "multipleRecordLinks",
+          "options": {
+            "linkedTableId": "tblProjects000001",
+            "isReversed": false,
+            "prefersSingleRecordLink": true,
+            "inverseLinkFieldId": "fldTasks000000000"
+          }
+        }
+      ],
+      "views": [
+        {
+          "id": "viwTaskGrid000001",
+          "name": "Grid view",
+          "type": "grid",
+          "visibleFieldIds": [
+            "fldTName000000000",
+            "fldTTitle00000000",
+            "fldTNo00000000000",
+            "fldTProject000000"
+          ]
+        },
+        {
+          "id": "viwTaskForm000001",
+          "name": "New task",
+          "type": "form"
+        }
+      ]
+    }
+  ]
+}

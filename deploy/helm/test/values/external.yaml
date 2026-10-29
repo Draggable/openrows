@@ -1,0 +1,43 @@
+# An external Postgres, the bundled Valkey, a digest, every optional setting.
+image:
+  repository: registry.example.org/openrows
+  digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+imagePullSecrets:
+  - name: registry
+appUrl: https://rows.example.org
+existingSecret: rows
+oidc:
+  issuerUrl: https://login.example.org
+  clientId: rows
+  adminClientId: rows-admin
+  authProviders: github,google
+s3:
+  endpoint: https://s3.eu-west-1.amazonaws.com
+  region: eu-west-1
+  bucket: rows
+  publicUrl: https://files.example.org/rows
+turnstile:
+  siteKey: 0x4AAAAAAAsite
+ai:
+  baseUrl: https://api.openai.com/v1
+  model: gpt-5-mini
+systemAdmins: ops@example.org
+statusPageUrl: https://status.example.org
+outbound:
+  allowHttp: true
+  ports: "8080"
+  allow: n8n.internal
+extraEnv:
+  CLAMAV_URL: tcp://clamav:3310
+  REVISION_RETENTION_DAYS: 90
+api:
+  replicas: 2
+worker:
+  replicas: 2
+postgresql:
+  enabled: false
+valkey:
+  enabled: true
+service:
+  type: ClusterIP
+  port: 8080

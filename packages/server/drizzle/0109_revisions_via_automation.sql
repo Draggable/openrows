@@ -1,0 +1,2 @@
+ALTER TABLE "record_revisions" DROP CONSTRAINT "record_revisions_via_check";--> statement-breakpoint
+ALTER TABLE "record_revisions" ADD CONSTRAINT "record_revisions_via_check" CHECK ("record_revisions"."via" IS NULL OR "record_revisions"."via" IN ('form', 'automation'));

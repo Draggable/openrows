@@ -1,0 +1,96 @@
+{{- $v := .Values -}}
+# Background jobs on pg-boss (ADR-004): the outbox relay, webhooks, automations, imports,
+# snapshots, prunes and the other cron jobs. Cron runs once per occurrence across replicas.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openrows.fullname" . }}-worker
+  labels:
+    {{- include "openrows.labels" (dict "root" . "component" "worker") | nindent 4 }}
+spec:
+  replicas: {{ $v.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "openrows.selectorLabels" (dict "root" . "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openrows.selectorLabels" (dict "root" . "component" "worker") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with $v.worker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "openrows.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with $v.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $v.podSecurityContext | nindent 8 }}
+      # SIGTERM lets running jobs finish (up to 15 s); pg-boss retries anything cut off.
+      terminationGracePeriodSeconds: 25
+      initContainers:
+        {{- include "openrows.waitForMigrations" (dict "root" . "component" "worker") | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "openrows.image" . }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command: ["node", "dist/worker.js"]
+          ports:
+            # GET /health (pg-boss runs and Postgres answers) and GET /metrics.
+            - name: http
+              containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: {{ include "openrows.fullname" . }}
+          env:
+            - name: WORKER_PORT
+              value: "3001"
+            {{- include "openrows.secretEnv" (dict "root" . "component" "worker") | trim | nindent 12 }}
+          # The worker has no /ready: its /health already checks pg-boss and Postgres.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            {{- toYaml $v.securityContext | trim | nindent 12 }}
+          resources:
+            {{- toYaml $v.worker.resources | trim | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+      {{- with $v.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

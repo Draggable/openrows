@@ -1,0 +1,5 @@
+apiVersion: v2
+name: openrows-smoke-fixtures
+description: The kind smoke test's Secret and S3 server (test only, never published)
+type: application
+version: 0.0.0

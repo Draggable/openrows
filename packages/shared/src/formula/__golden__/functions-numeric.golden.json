@@ -1,0 +1,2274 @@
+[
+  {
+    "formula": "ABS(-5)",
+    "stored": "ABS(-5)",
+    "display": "ABS(-5)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ABS",
+      "args": [
+        {
+          "type": "unary",
+          "operator": "-",
+          "operand": {
+            "type": "number",
+            "value": 5,
+            "range": {
+              "start": 5,
+              "end": 6
+            }
+          },
+          "range": {
+            "start": 4,
+            "end": 6
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 7
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "ABS({Price})",
+    "stored": "ABS({00000000-0000-7000-8000-000000000003})",
+    "display": "ABS({Price})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ABS",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 4,
+            "end": 11
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 12
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "ABS({Name})",
+    "stored": "ABS({00000000-0000-7000-8000-000000000001})",
+    "display": "ABS({Name})",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "ABS needs a number for argument 1, but this is text",
+        "range": {
+          "start": 4,
+          "end": 10
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ABS",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 4,
+            "end": 10
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 11
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "ABS()",
+    "stored": "ABS()",
+    "display": "ABS()",
+    "type": "number",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "ABS takes 1 argument, got 0",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ABS",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 5
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "SUM(1, 2, 3)",
+    "stored": "SUM(1, 2, 3)",
+    "display": "SUM(1, 2, 3)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 7,
+            "end": 8
+          }
+        },
+        {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 10,
+            "end": 11
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 12
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "SUM({Price}, {Qty})",
+    "stored": "SUM({00000000-0000-7000-8000-000000000003}, {00000000-0000-7000-8000-000000000004})",
+    "display": "SUM({Price}, {Qty})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 4,
+            "end": 11
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 13,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "SUM({Lookup Prices})",
+    "stored": "SUM({00000000-0000-7000-8000-000000000029})",
+    "display": "SUM({Lookup Prices})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000029",
+          "range": {
+            "start": 4,
+            "end": 19
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 20
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "SUM({Tags})",
+    "stored": "SUM({00000000-0000-7000-8000-000000000013})",
+    "display": "SUM({Tags})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 4,
+            "end": 10
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 11
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "SUM({Name})",
+    "stored": "SUM({00000000-0000-7000-8000-000000000001})",
+    "display": "SUM({Name})",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "SUM needs numbers for argument 1, but this is text",
+        "range": {
+          "start": 4,
+          "end": 10
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 4,
+            "end": 10
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 11
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "SUM()",
+    "stored": "SUM()",
+    "display": "SUM()",
+    "type": "number",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "SUM takes at least 1 argument, got 0",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 5
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "SUM({Done}, 1)",
+    "stored": "SUM({00000000-0000-7000-8000-000000000007}, 1)",
+    "display": "SUM({Done}, 1)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 4,
+            "end": 10
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 12,
+            "end": 13
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 14
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "AVERAGE({Price}, {Qty}, {Rating})",
+    "stored": "AVERAGE({00000000-0000-7000-8000-000000000003}, {00000000-0000-7000-8000-000000000004}, {00000000-0000-7000-8000-000000000011})",
+    "display": "AVERAGE({Price}, {Qty}, {Rating})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "AVERAGE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 8,
+            "end": 15
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 17,
+            "end": 22
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000011",
+          "range": {
+            "start": 24,
+            "end": 32
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 33
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "AVERAGE({Lookup Prices})",
+    "stored": "AVERAGE({00000000-0000-7000-8000-000000000029})",
+    "display": "AVERAGE({Lookup Prices})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "AVERAGE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000029",
+          "range": {
+            "start": 8,
+            "end": 23
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 24
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "MAX(1, 2)",
+    "stored": "MAX(1, 2)",
+    "display": "MAX(1, 2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "MAX",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 7,
+            "end": 8
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 9
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "MAX({Price}, 0)",
+    "stored": "MAX({00000000-0000-7000-8000-000000000003}, 0)",
+    "display": "MAX({Price}, 0)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "MAX",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 4,
+            "end": 11
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 13,
+            "end": 14
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 15
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "MIN({Price}, {Qty})",
+    "stored": "MIN({00000000-0000-7000-8000-000000000003}, {00000000-0000-7000-8000-000000000004})",
+    "display": "MIN({Price}, {Qty})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "MIN",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 4,
+            "end": 11
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 13,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "MIN({Due}, {Start})",
+    "stored": "MIN({00000000-0000-7000-8000-000000000008}, {00000000-0000-7000-8000-000000000009})",
+    "display": "MIN({Due}, {Start})",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "MIN needs numbers for argument 1, but this is a date",
+        "range": {
+          "start": 4,
+          "end": 9
+        }
+      },
+      {
+        "code": "typeMismatch",
+        "message": "MIN needs numbers for argument 2, but this is a date",
+        "range": {
+          "start": 11,
+          "end": 18
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "MIN",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000008",
+          "range": {
+            "start": 4,
+            "end": 9
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000009",
+          "range": {
+            "start": 11,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "COUNT(1, \"a\", {Price})",
+    "stored": "COUNT(1, \"a\", {00000000-0000-7000-8000-000000000003})",
+    "display": "COUNT(1, \"a\", {Price})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "COUNT",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 6,
+            "end": 7
+          }
+        },
+        {
+          "type": "string",
+          "value": "a",
+          "range": {
+            "start": 9,
+            "end": 12
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 14,
+            "end": 21
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 22
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "COUNTA({Name}, {Notes})",
+    "stored": "COUNTA({00000000-0000-7000-8000-000000000001}, {00000000-0000-7000-8000-000000000002})",
+    "display": "COUNTA({Name}, {Notes})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "COUNTA",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 7,
+            "end": 13
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000002",
+          "range": {
+            "start": 15,
+            "end": 22
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 23
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "COUNTALL({Tags})",
+    "stored": "COUNTALL({00000000-0000-7000-8000-000000000013})",
+    "display": "COUNTALL({Tags})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "COUNTALL",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 9,
+            "end": 15
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 16
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 8
+      }
+    }
+  },
+  {
+    "formula": "COUNT()",
+    "stored": "COUNT()",
+    "display": "COUNT()",
+    "type": "number",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "COUNT takes at least 1 argument, got 0",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "COUNT",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 7
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "ROUND({Price}, 2)",
+    "stored": "ROUND({00000000-0000-7000-8000-000000000003}, 2)",
+    "display": "ROUND({Price}, 2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ROUND",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 6,
+            "end": 13
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 15,
+            "end": 16
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 17
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "ROUND({Price})",
+    "stored": "ROUND({00000000-0000-7000-8000-000000000003})",
+    "display": "ROUND({Price})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ROUND",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 6,
+            "end": 13
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 14
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "ROUND({Price} * 1.2, 0)",
+    "stored": "ROUND({00000000-0000-7000-8000-000000000003} * 1.2, 0)",
+    "display": "ROUND({Price} * 1.2, 0)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ROUND",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "*",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 6,
+              "end": 13
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 1.2,
+            "range": {
+              "start": 16,
+              "end": 19
+            }
+          },
+          "range": {
+            "start": 6,
+            "end": 19
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 21,
+            "end": 22
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 23
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "ROUND({Price}, \"2\")",
+    "stored": "ROUND({00000000-0000-7000-8000-000000000003}, \"2\")",
+    "display": "ROUND({Price}, \"2\")",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "ROUND needs a number for argument 2, but this is text",
+        "range": {
+          "start": 15,
+          "end": 18
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ROUND",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 6,
+            "end": 13
+          }
+        },
+        {
+          "type": "string",
+          "value": "2",
+          "range": {
+            "start": 15,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "ROUNDUP({Price}, 0)",
+    "stored": "ROUNDUP({00000000-0000-7000-8000-000000000003}, 0)",
+    "display": "ROUNDUP({Price}, 0)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ROUNDUP",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 8,
+            "end": 15
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 17,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "ROUNDDOWN({Price}, 1)",
+    "stored": "ROUNDDOWN({00000000-0000-7000-8000-000000000003}, 1)",
+    "display": "ROUNDDOWN({Price}, 1)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ROUNDDOWN",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 10,
+            "end": 17
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 19,
+            "end": 20
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 21
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "CEILING({Price})",
+    "stored": "CEILING({00000000-0000-7000-8000-000000000003})",
+    "display": "CEILING({Price})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "CEILING",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 8,
+            "end": 15
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 16
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "CEILING({Price}, 5)",
+    "stored": "CEILING({00000000-0000-7000-8000-000000000003}, 5)",
+    "display": "CEILING({Price}, 5)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "CEILING",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 8,
+            "end": 15
+          }
+        },
+        {
+          "type": "number",
+          "value": 5,
+          "range": {
+            "start": 17,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "FLOOR({Price}, 0.5)",
+    "stored": "FLOOR({00000000-0000-7000-8000-000000000003}, 0.5)",
+    "display": "FLOOR({Price}, 0.5)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "FLOOR",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 6,
+            "end": 13
+          }
+        },
+        {
+          "type": "number",
+          "value": 0.5,
+          "range": {
+            "start": 15,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "INT({Price})",
+    "stored": "INT({00000000-0000-7000-8000-000000000003})",
+    "display": "INT({Price})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "INT",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 4,
+            "end": 11
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 12
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "INT(\"3\")",
+    "stored": "INT(\"3\")",
+    "display": "INT(\"3\")",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "INT needs a number for argument 1, but this is text",
+        "range": {
+          "start": 4,
+          "end": 7
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "INT",
+      "args": [
+        {
+          "type": "string",
+          "value": "3",
+          "range": {
+            "start": 4,
+            "end": 7
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 8
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "EVEN(3)",
+    "stored": "EVEN(3)",
+    "display": "EVEN(3)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "EVEN",
+      "args": [
+        {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 5,
+            "end": 6
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 7
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "ODD(4)",
+    "stored": "ODD(4)",
+    "display": "ODD(4)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ODD",
+      "args": [
+        {
+          "type": "number",
+          "value": 4,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 6
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "EXP(1)",
+    "stored": "EXP(1)",
+    "display": "EXP(1)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "EXP",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 6
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "LOG(100)",
+    "stored": "LOG(100)",
+    "display": "LOG(100)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "LOG",
+      "args": [
+        {
+          "type": "number",
+          "value": 100,
+          "range": {
+            "start": 4,
+            "end": 7
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 8
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "LOG(8, 2)",
+    "stored": "LOG(8, 2)",
+    "display": "LOG(8, 2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "LOG",
+      "args": [
+        {
+          "type": "number",
+          "value": 8,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 7,
+            "end": 8
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 9
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "LOG(8, 2, 3)",
+    "stored": "LOG(8, 2, 3)",
+    "display": "LOG(8, 2, 3)",
+    "type": "number",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "LOG takes 1 to 2 arguments, got 3",
+        "range": {
+          "start": 0,
+          "end": 12
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "LOG",
+      "args": [
+        {
+          "type": "number",
+          "value": 8,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 7,
+            "end": 8
+          }
+        },
+        {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 10,
+            "end": 11
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 12
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "MOD({ID}, 2)",
+    "stored": "MOD({00000000-0000-7000-8000-000000000018}, 2)",
+    "display": "MOD({ID}, 2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "MOD",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000018",
+          "range": {
+            "start": 4,
+            "end": 8
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 10,
+            "end": 11
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 12
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "MOD({ID})",
+    "stored": "MOD({00000000-0000-7000-8000-000000000018})",
+    "display": "MOD({ID})",
+    "type": "number",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "MOD takes 2 arguments, got 1",
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "MOD",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000018",
+          "range": {
+            "start": 4,
+            "end": 8
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 9
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "MOD({ID}, 2) = 0",
+    "stored": "MOD({00000000-0000-7000-8000-000000000018}, 2) = 0",
+    "display": "MOD({ID}, 2) = 0",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "call",
+        "name": "MOD",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000018",
+            "range": {
+              "start": 4,
+              "end": 8
+            }
+          },
+          {
+            "type": "number",
+            "value": 2,
+            "range": {
+              "start": 10,
+              "end": 11
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 12
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 3
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 0,
+        "range": {
+          "start": 15,
+          "end": 16
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 16
+      }
+    }
+  },
+  {
+    "formula": "POWER(2, 10)",
+    "stored": "POWER(2, 10)",
+    "display": "POWER(2, 10)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "POWER",
+      "args": [
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 6,
+            "end": 7
+          }
+        },
+        {
+          "type": "number",
+          "value": 10,
+          "range": {
+            "start": 9,
+            "end": 11
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 12
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "POWER(2)",
+    "stored": "POWER(2)",
+    "display": "POWER(2)",
+    "type": "number",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "POWER takes 2 arguments, got 1",
+        "range": {
+          "start": 0,
+          "end": 8
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "POWER",
+      "args": [
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 6,
+            "end": 7
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 8
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "SQRT({Price})",
+    "stored": "SQRT({00000000-0000-7000-8000-000000000003})",
+    "display": "SQRT({Price})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SQRT",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 5,
+            "end": 12
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 13
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "SQRT(-1)",
+    "stored": "SQRT(-1)",
+    "display": "SQRT(-1)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SQRT",
+      "args": [
+        {
+          "type": "unary",
+          "operator": "-",
+          "operand": {
+            "type": "number",
+            "value": 1,
+            "range": {
+              "start": 6,
+              "end": 7
+            }
+          },
+          "range": {
+            "start": 5,
+            "end": 7
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 8
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "VALUE(\"42\")",
+    "stored": "VALUE(\"42\")",
+    "display": "VALUE(\"42\")",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "VALUE",
+      "args": [
+        {
+          "type": "string",
+          "value": "42",
+          "range": {
+            "start": 6,
+            "end": 10
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 11
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "VALUE({Name})",
+    "stored": "VALUE({00000000-0000-7000-8000-000000000001})",
+    "display": "VALUE({Name})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "VALUE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 6,
+            "end": 12
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 13
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "VALUE({Price})",
+    "stored": "VALUE({00000000-0000-7000-8000-000000000003})",
+    "display": "VALUE({Price})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "VALUE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 6,
+            "end": 13
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 14
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "VALUE({Name}) * 2",
+    "stored": "VALUE({00000000-0000-7000-8000-000000000001}) * 2",
+    "display": "VALUE({Name}) * 2",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "call",
+        "name": "VALUE",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000001",
+            "range": {
+              "start": 6,
+              "end": 12
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 13
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 16,
+          "end": 17
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 17
+      }
+    }
+  },
+  {
+    "formula": "{Name} * 2",
+    "stored": "{00000000-0000-7000-8000-000000000001} * 2",
+    "display": "{Name} * 2",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "\"*\" needs numbers, but this is text (use VALUE to read a number from text)",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      }
+    ],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000001",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 9,
+          "end": 10
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "ROUND({Price} * (1 - {Discount}), 2)",
+    "stored": "ROUND({00000000-0000-7000-8000-000000000003} * (1 - {00000000-0000-7000-8000-000000000006}), 2)",
+    "display": "ROUND({Price} * (1 - {Discount}), 2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ROUND",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "*",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 6,
+              "end": 13
+            }
+          },
+          "right": {
+            "type": "binary",
+            "operator": "-",
+            "left": {
+              "type": "number",
+              "value": 1,
+              "range": {
+                "start": 17,
+                "end": 18
+              }
+            },
+            "right": {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000006",
+              "range": {
+                "start": 21,
+                "end": 31
+              }
+            },
+            "range": {
+              "start": 17,
+              "end": 31
+            }
+          },
+          "range": {
+            "start": 6,
+            "end": 31
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 34,
+            "end": 35
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 36
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "ROUND(SUM({Price}, {Qty}) / 2, 1)",
+    "stored": "ROUND(SUM({00000000-0000-7000-8000-000000000003}, {00000000-0000-7000-8000-000000000004}) / 2, 1)",
+    "display": "ROUND(SUM({Price}, {Qty}) / 2, 1)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ROUND",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "/",
+          "left": {
+            "type": "call",
+            "name": "SUM",
+            "args": [
+              {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000003",
+                "range": {
+                  "start": 10,
+                  "end": 17
+                }
+              },
+              {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000004",
+                "range": {
+                  "start": 19,
+                  "end": 24
+                }
+              }
+            ],
+            "range": {
+              "start": 6,
+              "end": 25
+            },
+            "nameRange": {
+              "start": 6,
+              "end": 9
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 2,
+            "range": {
+              "start": 28,
+              "end": 29
+            }
+          },
+          "range": {
+            "start": 6,
+            "end": 29
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 31,
+            "end": 32
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 33
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "MAX(0, {Price} - {Qty})",
+    "stored": "MAX(0, {00000000-0000-7000-8000-000000000003} - {00000000-0000-7000-8000-000000000004})",
+    "display": "MAX(0, {Price} - {Qty})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "MAX",
+      "args": [
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        {
+          "type": "binary",
+          "operator": "-",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 7,
+              "end": 14
+            }
+          },
+          "right": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000004",
+            "range": {
+              "start": 17,
+              "end": 22
+            }
+          },
+          "range": {
+            "start": 7,
+            "end": 22
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 23
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "ABS({Due})",
+    "stored": "ABS({00000000-0000-7000-8000-000000000008})",
+    "display": "ABS({Due})",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "ABS needs a number for argument 1, but this is a date",
+        "range": {
+          "start": 4,
+          "end": 9
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ABS",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000008",
+          "range": {
+            "start": 4,
+            "end": 9
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 10
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "SUM({Price}, {Due})",
+    "stored": "SUM({00000000-0000-7000-8000-000000000003}, {00000000-0000-7000-8000-000000000008})",
+    "display": "SUM({Price}, {Due})",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "SUM needs numbers for argument 2, but this is a date",
+        "range": {
+          "start": 13,
+          "end": 18
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 4,
+            "end": 11
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000008",
+          "range": {
+            "start": 13,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "ROUND({Duration} / 60)",
+    "stored": "ROUND({00000000-0000-7000-8000-000000000010} / 60)",
+    "display": "ROUND({Duration} / 60)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ROUND",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "/",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000010",
+            "range": {
+              "start": 6,
+              "end": 16
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 60,
+            "range": {
+              "start": 19,
+              "end": 21
+            }
+          },
+          "range": {
+            "start": 6,
+            "end": 21
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 22
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "{Score} * 2",
+    "stored": "{00000000-0000-7000-8000-000000000027} * 2",
+    "display": "{Score} * 2",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000027",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 10,
+          "end": 11
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "{Label} * 2",
+    "stored": "{00000000-0000-7000-8000-000000000028} * 2",
+    "display": "{Label} * 2",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "\"*\" needs numbers, but this is text (use VALUE to read a number from text)",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      }
+    ],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000028",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 10,
+          "end": 11
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "{Mystery} * 2",
+    "stored": "{00000000-0000-7000-8000-000000000030} * 2",
+    "display": "{Mystery} * 2",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000030",
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 12,
+          "end": 13
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "{Mystery} & \"\"",
+    "stored": "{00000000-0000-7000-8000-000000000030} & \"\"",
+    "display": "{Mystery} & \"\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000030",
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "",
+        "range": {
+          "start": 12,
+          "end": 14
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 14
+      }
+    }
+  }
+]

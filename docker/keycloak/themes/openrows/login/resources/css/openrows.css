@@ -1,0 +1,113 @@
+/*
+ * The OpenRows sign-in pages (docs/design/DESIGN.md): warm paper, the rose mark, Inter, and
+ * the rose (#E22651) only for the primary button, focus and the card's top bar. Errors are
+ * vermilion, so the brand rose never reads as an error. Dark mode (keycloak.v2's
+ * `pf-v5-theme-dark` class on <html>, from prefers-color-scheme) is warm charcoal.
+ */
+@font-face {
+  font-family: "Inter Variable";
+  src: url("../fonts/inter-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --keycloak-logo-url: url("../img/logo.svg");
+  --keycloak-bg-logo-url: none;
+  --keycloak-card-top-color: #e22651;
+
+  --or-bg: #faf7f5;
+  --or-surface: #ffffff;
+  --or-border: #e8e2dd;
+  --or-text: #1c1719;
+  --or-text-2: #6e6468;
+  --or-brand: #e22651;
+  --or-brand-hover: #c91143;
+  --or-link: #c91143;
+  --or-danger: #bd3d00;
+  --or-success: #0e6b4c;
+}
+
+:root.pf-v5-theme-dark {
+  --or-bg: #17131a;
+  --or-surface: #211b24;
+  --or-border: #362e39;
+  --or-text: #eee8ea;
+  --or-text-2: #a89ea5;
+  --or-link: #ff6b7d;
+  --or-danger: #f6946d;
+  --or-success: #65b693;
+}
+
+:root,
+:root.pf-v5-theme-dark {
+  --pf-v5-global--FontFamily--text: "Inter Variable", system-ui, sans-serif;
+  --pf-v5-global--FontFamily--heading: "Inter Variable", system-ui, sans-serif;
+  --pf-v5-global--primary-color--100: var(--or-brand);
+  --pf-v5-global--primary-color--200: var(--or-brand-hover);
+  --pf-v5-global--active-color--100: var(--or-brand);
+  --pf-v5-global--link--Color: var(--or-link);
+  --pf-v5-global--link--Color--hover: var(--or-link);
+  --pf-v5-global--danger-color--100: var(--or-danger);
+  --pf-v5-global--success-color--100: var(--or-success);
+  --pf-v5-global--BackgroundColor--100: var(--or-surface);
+  --pf-v5-global--Color--100: var(--or-text);
+  --pf-v5-global--Color--200: var(--or-text-2);
+  --pf-v5-global--BorderColor--100: var(--or-border);
+}
+
+.login-pf body {
+  background: var(--or-bg);
+  color: var(--or-text);
+  font-family: var(--pf-v5-global--FontFamily--text);
+}
+
+.pf-v5-c-login__main {
+  background-color: var(--or-surface);
+  border: 1px solid var(--or-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* The mark and the wordmark, lowercase Inter Bold (DESIGN.md §2), on the page, not on a dark band. */
+#kc-header-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 28px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  /* keycloak.v2 sets the header's colour with !important. */
+  /* biome-ignore lint/complexity/noImportantStyles: overrides the parent theme's !important */
+  color: var(--or-text) !important;
+}
+#kc-header-wrapper::before {
+  content: "";
+  flex: none;
+  width: 36px;
+  height: 36px;
+  background: var(--keycloak-logo-url) center / contain no-repeat;
+}
+
+.pf-v5-c-button.pf-m-primary {
+  --pf-v5-c-button--m-primary--BackgroundColor: var(--or-brand);
+  --pf-v5-c-button--m-primary--Color: #ffffff;
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: var(--or-brand-hover);
+  --pf-v5-c-button--m-primary--hover--Color: #ffffff;
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: var(--or-brand-hover);
+  --pf-v5-c-button--m-primary--focus--Color: #ffffff;
+  --pf-v5-c-button--m-primary--active--BackgroundColor: var(--or-brand-hover);
+  --pf-v5-c-button--m-primary--active--Color: #ffffff;
+}
+
+/* Focus is always visible: the rose ring of the app. */
+:focus-visible {
+  outline: 2px solid var(--or-brand);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--or-link);
+}

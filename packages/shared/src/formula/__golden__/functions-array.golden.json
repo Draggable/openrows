@@ -1,0 +1,1072 @@
+[
+  {
+    "formula": "ARRAYCOMPACT({Tags})",
+    "stored": "ARRAYCOMPACT({00000000-0000-7000-8000-000000000013})",
+    "display": "ARRAYCOMPACT({Tags})",
+    "type": "array",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYCOMPACT",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 13,
+            "end": 19
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 20
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "ARRAYFLATTEN({Lookup Prices})",
+    "stored": "ARRAYFLATTEN({00000000-0000-7000-8000-000000000029})",
+    "display": "ARRAYFLATTEN({Lookup Prices})",
+    "type": "array",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYFLATTEN",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000029",
+          "range": {
+            "start": 13,
+            "end": 28
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 29
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "ARRAYUNIQUE({Tags})",
+    "stored": "ARRAYUNIQUE({00000000-0000-7000-8000-000000000013})",
+    "display": "ARRAYUNIQUE({Tags})",
+    "type": "array",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYUNIQUE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 12,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "ARRAYSLICE({Tags}, 1, 2)",
+    "stored": "ARRAYSLICE({00000000-0000-7000-8000-000000000013}, 1, 2)",
+    "display": "ARRAYSLICE({Tags}, 1, 2)",
+    "type": "array",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYSLICE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 11,
+            "end": 17
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 19,
+            "end": 20
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 22,
+            "end": 23
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 24
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "ARRAYSLICE({Tags}, 1)",
+    "stored": "ARRAYSLICE({00000000-0000-7000-8000-000000000013}, 1)",
+    "display": "ARRAYSLICE({Tags}, 1)",
+    "type": "array",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYSLICE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 11,
+            "end": 17
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 19,
+            "end": 20
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 21
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "ARRAYSLICE({Tags})",
+    "stored": "ARRAYSLICE({00000000-0000-7000-8000-000000000013})",
+    "display": "ARRAYSLICE({Tags})",
+    "type": "array",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "ARRAYSLICE takes 2 to 3 arguments, got 1",
+        "range": {
+          "start": 0,
+          "end": 18
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYSLICE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 11,
+            "end": 17
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 18
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "ARRAYCOMPACT({Name})",
+    "stored": "ARRAYCOMPACT({00000000-0000-7000-8000-000000000001})",
+    "display": "ARRAYCOMPACT({Name})",
+    "type": "array",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "ARRAYCOMPACT needs a list for argument 1, but this is text",
+        "range": {
+          "start": 13,
+          "end": 19
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYCOMPACT",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 13,
+            "end": 19
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 20
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "ARRAYUNIQUE({Price})",
+    "stored": "ARRAYUNIQUE({00000000-0000-7000-8000-000000000003})",
+    "display": "ARRAYUNIQUE({Price})",
+    "type": "array",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "ARRAYUNIQUE needs a list for argument 1, but this is a number",
+        "range": {
+          "start": 12,
+          "end": 19
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYUNIQUE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 12,
+            "end": 19
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 20
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "ARRAYJOIN(ARRAYUNIQUE(ARRAYCOMPACT({Tags})), \", \")",
+    "stored": "ARRAYJOIN(ARRAYUNIQUE(ARRAYCOMPACT({00000000-0000-7000-8000-000000000013})), \", \")",
+    "display": "ARRAYJOIN(ARRAYUNIQUE(ARRAYCOMPACT({Tags})), \", \")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYJOIN",
+      "args": [
+        {
+          "type": "call",
+          "name": "ARRAYUNIQUE",
+          "args": [
+            {
+              "type": "call",
+              "name": "ARRAYCOMPACT",
+              "args": [
+                {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000013",
+                  "range": {
+                    "start": 35,
+                    "end": 41
+                  }
+                }
+              ],
+              "range": {
+                "start": 22,
+                "end": 42
+              },
+              "nameRange": {
+                "start": 22,
+                "end": 34
+              }
+            }
+          ],
+          "range": {
+            "start": 10,
+            "end": 43
+          },
+          "nameRange": {
+            "start": 10,
+            "end": 21
+          }
+        },
+        {
+          "type": "string",
+          "value": ", ",
+          "range": {
+            "start": 45,
+            "end": 49
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 50
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "ARRAYJOIN(ARRAYSLICE({Files}, 1, 3))",
+    "stored": "ARRAYJOIN(ARRAYSLICE({00000000-0000-7000-8000-000000000017}, 1, 3))",
+    "display": "ARRAYJOIN(ARRAYSLICE({Files}, 1, 3))",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYJOIN",
+      "args": [
+        {
+          "type": "call",
+          "name": "ARRAYSLICE",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000017",
+              "range": {
+                "start": 21,
+                "end": 28
+              }
+            },
+            {
+              "type": "number",
+              "value": 1,
+              "range": {
+                "start": 30,
+                "end": 31
+              }
+            },
+            {
+              "type": "number",
+              "value": 3,
+              "range": {
+                "start": 33,
+                "end": 34
+              }
+            }
+          ],
+          "range": {
+            "start": 10,
+            "end": 35
+          },
+          "nameRange": {
+            "start": 10,
+            "end": 20
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 36
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "LEN(ARRAYJOIN({Tags}))",
+    "stored": "LEN(ARRAYJOIN({00000000-0000-7000-8000-000000000013}))",
+    "display": "LEN(ARRAYJOIN({Tags}))",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "LEN",
+      "args": [
+        {
+          "type": "call",
+          "name": "ARRAYJOIN",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000013",
+              "range": {
+                "start": 14,
+                "end": 20
+              }
+            }
+          ],
+          "range": {
+            "start": 4,
+            "end": 21
+          },
+          "nameRange": {
+            "start": 4,
+            "end": 13
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 22
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "COUNTALL(ARRAYUNIQUE({Tags}))",
+    "stored": "COUNTALL(ARRAYUNIQUE({00000000-0000-7000-8000-000000000013}))",
+    "display": "COUNTALL(ARRAYUNIQUE({Tags}))",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "COUNTALL",
+      "args": [
+        {
+          "type": "call",
+          "name": "ARRAYUNIQUE",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000013",
+              "range": {
+                "start": 21,
+                "end": 27
+              }
+            }
+          ],
+          "range": {
+            "start": 9,
+            "end": 28
+          },
+          "nameRange": {
+            "start": 9,
+            "end": 20
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 29
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 8
+      }
+    }
+  },
+  {
+    "formula": "SUM(ARRAYCOMPACT({Lookup Prices}))",
+    "stored": "SUM(ARRAYCOMPACT({00000000-0000-7000-8000-000000000029}))",
+    "display": "SUM(ARRAYCOMPACT({Lookup Prices}))",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [
+        {
+          "type": "call",
+          "name": "ARRAYCOMPACT",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000029",
+              "range": {
+                "start": 17,
+                "end": 32
+              }
+            }
+          ],
+          "range": {
+            "start": 4,
+            "end": 33
+          },
+          "nameRange": {
+            "start": 4,
+            "end": 16
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 34
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "ARRAYUNIQUE()",
+    "stored": "ARRAYUNIQUE()",
+    "display": "ARRAYUNIQUE()",
+    "type": "array",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "ARRAYUNIQUE takes 1 argument, got 0",
+        "range": {
+          "start": 0,
+          "end": 13
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYUNIQUE",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 13
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "ARRAYFLATTEN({Tags}, {Files})",
+    "stored": "ARRAYFLATTEN({00000000-0000-7000-8000-000000000013}, {00000000-0000-7000-8000-000000000017})",
+    "display": "ARRAYFLATTEN({Tags}, {Files})",
+    "type": "array",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "ARRAYFLATTEN takes 1 argument, got 2",
+        "range": {
+          "start": 0,
+          "end": 29
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYFLATTEN",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 13,
+            "end": 19
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000017",
+          "range": {
+            "start": 21,
+            "end": 28
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 29
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "RECORD_ID()",
+    "stored": "RECORD_ID()",
+    "display": "RECORD_ID()",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "RECORD_ID",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 11
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "RECORD_ID(1)",
+    "stored": "RECORD_ID(1)",
+    "display": "RECORD_ID(1)",
+    "type": "text",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "RECORD_ID takes 0 arguments, got 1",
+        "range": {
+          "start": 0,
+          "end": 12
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "RECORD_ID",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 10,
+            "end": 11
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 12
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "\"rec:\" & RECORD_ID()",
+    "stored": "\"rec:\" & RECORD_ID()",
+    "display": "\"rec:\" & RECORD_ID()",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "string",
+        "value": "rec:",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "RECORD_ID",
+        "args": [],
+        "range": {
+          "start": 9,
+          "end": 20
+        },
+        "nameRange": {
+          "start": 9,
+          "end": 18
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 20
+      }
+    }
+  },
+  {
+    "formula": "NOSUCHFUNCTION()",
+    "stored": "NOSUCHFUNCTION()",
+    "display": "NOSUCHFUNCTION()",
+    "type": "any",
+    "errors": [
+      {
+        "code": "unknownFunction",
+        "message": "Unknown function NOSUCHFUNCTION",
+        "range": {
+          "start": 0,
+          "end": 14
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "NOSUCHFUNCTION",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 16
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 14
+      }
+    }
+  },
+  {
+    "formula": "NoSuchFunction(1, 2)",
+    "stored": "NOSUCHFUNCTION(1, 2)",
+    "display": "NOSUCHFUNCTION(1, 2)",
+    "type": "any",
+    "errors": [
+      {
+        "code": "unknownFunction",
+        "message": "Unknown function NOSUCHFUNCTION",
+        "range": {
+          "start": 0,
+          "end": 14
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "NOSUCHFUNCTION",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 15,
+            "end": 16
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 18,
+            "end": 19
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 20
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 14
+      }
+    }
+  },
+  {
+    "formula": "VLOOKUP(1, 2)",
+    "stored": "VLOOKUP(1, 2)",
+    "display": "VLOOKUP(1, 2)",
+    "type": "any",
+    "errors": [
+      {
+        "code": "unknownFunction",
+        "message": "Unknown function VLOOKUP",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "VLOOKUP",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 8,
+            "end": 9
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 11,
+            "end": 12
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 13
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "SUM(NOSUCH(1), 2)",
+    "stored": "SUM(NOSUCH(1), 2)",
+    "display": "SUM(NOSUCH(1), 2)",
+    "type": "number",
+    "errors": [
+      {
+        "code": "unknownFunction",
+        "message": "Unknown function NOSUCH",
+        "range": {
+          "start": 4,
+          "end": 10
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "SUM",
+      "args": [
+        {
+          "type": "call",
+          "name": "NOSUCH",
+          "args": [
+            {
+              "type": "number",
+              "value": 1,
+              "range": {
+                "start": 11,
+                "end": 12
+              }
+            }
+          ],
+          "range": {
+            "start": 4,
+            "end": 13
+          },
+          "nameRange": {
+            "start": 4,
+            "end": 10
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 15,
+            "end": 16
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 17
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "IF(NOSUCH(), 1, 2)",
+    "stored": "IF(NOSUCH(), 1, 2)",
+    "display": "IF(NOSUCH(), 1, 2)",
+    "type": "number",
+    "errors": [
+      {
+        "code": "unknownFunction",
+        "message": "Unknown function NOSUCH",
+        "range": {
+          "start": 3,
+          "end": 9
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "NOSUCH",
+          "args": [],
+          "range": {
+            "start": 3,
+            "end": 11
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 13,
+            "end": 14
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 16,
+            "end": 17
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 18
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "hasOwnProperty()",
+    "stored": "HASOWNPROPERTY()",
+    "display": "HASOWNPROPERTY()",
+    "type": "any",
+    "errors": [
+      {
+        "code": "unknownFunction",
+        "message": "Unknown function HASOWNPROPERTY",
+        "range": {
+          "start": 0,
+          "end": 14
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "HASOWNPROPERTY",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 16
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 14
+      }
+    }
+  },
+  {
+    "formula": "constructor()",
+    "stored": "CONSTRUCTOR()",
+    "display": "CONSTRUCTOR()",
+    "type": "any",
+    "errors": [
+      {
+        "code": "unknownFunction",
+        "message": "Unknown function CONSTRUCTOR",
+        "range": {
+          "start": 0,
+          "end": 11
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "CONSTRUCTOR",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 13
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "__proto__()",
+    "stored": "__PROTO__()",
+    "display": "__PROTO__()",
+    "type": "any",
+    "errors": [
+      {
+        "code": "unknownFunction",
+        "message": "Unknown function __PROTO__",
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "__PROTO__",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 11
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "toString(1)",
+    "stored": "TOSTRING(1)",
+    "display": "TOSTRING(1)",
+    "type": "any",
+    "errors": [
+      {
+        "code": "unknownFunction",
+        "message": "Unknown function TOSTRING",
+        "range": {
+          "start": 0,
+          "end": 8
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "TOSTRING",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 9,
+            "end": 10
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 11
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 8
+      }
+    }
+  }
+]

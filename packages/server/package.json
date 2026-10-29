@@ -1,0 +1,78 @@
+{
+  "name": "@openrows/server",
+  "version": "0.1.0",
+  "description": "OpenRows API server",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./edition": {
+      "types": "./dist/edition/index.d.ts",
+      "default": "./dist/edition/index.js"
+    },
+    "./openapi": {
+      "types": "./dist/openapi.d.ts",
+      "default": "./dist/openapi.js"
+    },
+    "./main": {
+      "types": "./dist/main.d.ts",
+      "default": "./dist/main.js"
+    },
+    "./worker-main": {
+      "types": "./dist/worker-main.d.ts",
+      "default": "./dist/worker-main.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "build": "tsc -b tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:coverage": "vitest run --coverage",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "node scripts/check-migration-drift.js",
+    "db:migrate": "tsx src/migrate.ts",
+    "db:seed": "tsx src/seed/cli.ts",
+    "eval:ai": "tsx src/ai/assistant/eval-cli.ts",
+    "db:studio": "drizzle-kit studio",
+    "openapi:lint": "tsx scripts/lint-openapi.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@node-rs/argon2": "^2.2.2",
+    "@openrows/mcp-server": "^0.1.0",
+    "@openrows/sdk": "^0.1.0",
+    "@openrows/shared": "*",
+    "aws4fetch": "^1.0.20",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.14",
+    "nodemailer": "^10.2.1",
+    "openid-client": "^6.8.8",
+    "pg": "^8.23.1",
+    "pg-boss": "^12.38.0",
+    "pino": "^10.4.0",
+    "sharp": "^0.35.5",
+    "uuidv7": "^1.2.1",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@openrows/n8n-nodes-openrows": "*",
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/node": "^22.20.5",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2",
+    "airtable": "^0.12.2",
+    "drizzle-kit": "^0.31.11",
+    "fast-check": "^4.10.2",
+    "oauth2-mock-server": "^9.3.0",
+    "testcontainers": "^12.2.1",
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.5"
+  }
+}

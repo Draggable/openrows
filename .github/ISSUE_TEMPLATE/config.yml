@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Features and documentation
+    url: https://github.com/Draggable/openrows/blob/main/README.md
+    about: What OpenRows does today, and the guides, before you file an issue.
+  - name: Contributing guide
+    url: https://github.com/Draggable/openrows/blob/main/CONTRIBUTING.md
+    about: Setup, commands, commit conventions and how to report security issues privately.

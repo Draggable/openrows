@@ -1,0 +1,2117 @@
+[
+  {
+    "formula": "IF({Done}, \"Yes\", \"No\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000007}, \"Yes\", \"No\")",
+    "display": "IF({Done}, \"Yes\", \"No\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "string",
+          "value": "Yes",
+          "range": {
+            "start": 11,
+            "end": 16
+          }
+        },
+        {
+          "type": "string",
+          "value": "No",
+          "range": {
+            "start": 18,
+            "end": 22
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 23
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Done}, \"Yes\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000007}, \"Yes\")",
+    "display": "IF({Done}, \"Yes\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "string",
+          "value": "Yes",
+          "range": {
+            "start": 11,
+            "end": 16
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 17
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Price} > 100, \"High\", \"Low\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000003} > 100, \"High\", \"Low\")",
+    "display": "IF({Price} > 100, \"High\", \"Low\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": ">",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 3,
+              "end": 10
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 100,
+            "range": {
+              "start": 13,
+              "end": 16
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 16
+          }
+        },
+        {
+          "type": "string",
+          "value": "High",
+          "range": {
+            "start": 18,
+            "end": 24
+          }
+        },
+        {
+          "type": "string",
+          "value": "Low",
+          "range": {
+            "start": 26,
+            "end": 31
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 32
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Price} > 100, {Price}, 0)",
+    "stored": "IF({00000000-0000-7000-8000-000000000003} > 100, {00000000-0000-7000-8000-000000000003}, 0)",
+    "display": "IF({Price} > 100, {Price}, 0)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": ">",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 3,
+              "end": 10
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 100,
+            "range": {
+              "start": 13,
+              "end": 16
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 16
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 18,
+            "end": 25
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 27,
+            "end": 28
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 29
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Price} > 100, {Price}, \"n/a\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000003} > 100, {00000000-0000-7000-8000-000000000003}, \"n/a\")",
+    "display": "IF({Price} > 100, {Price}, \"n/a\")",
+    "type": "any",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": ">",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 3,
+              "end": 10
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 100,
+            "range": {
+              "start": 13,
+              "end": 16
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 16
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 18,
+            "end": 25
+          }
+        },
+        {
+          "type": "string",
+          "value": "n/a",
+          "range": {
+            "start": 27,
+            "end": 32
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 33
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Price} > 100, {Price}, BLANK())",
+    "stored": "IF({00000000-0000-7000-8000-000000000003} > 100, {00000000-0000-7000-8000-000000000003}, BLANK())",
+    "display": "IF({Price} > 100, {Price}, BLANK())",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": ">",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 3,
+              "end": 10
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 100,
+            "range": {
+              "start": 13,
+              "end": 16
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 16
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 18,
+            "end": 25
+          }
+        },
+        {
+          "type": "call",
+          "name": "BLANK",
+          "args": [],
+          "range": {
+            "start": 27,
+            "end": 34
+          },
+          "nameRange": {
+            "start": 27,
+            "end": 32
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 35
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Price} > 100, BLANK(), {Price})",
+    "stored": "IF({00000000-0000-7000-8000-000000000003} > 100, BLANK(), {00000000-0000-7000-8000-000000000003})",
+    "display": "IF({Price} > 100, BLANK(), {Price})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": ">",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 3,
+              "end": 10
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 100,
+            "range": {
+              "start": 13,
+              "end": 16
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 16
+          }
+        },
+        {
+          "type": "call",
+          "name": "BLANK",
+          "args": [],
+          "range": {
+            "start": 18,
+            "end": 25
+          },
+          "nameRange": {
+            "start": 18,
+            "end": 23
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 27,
+            "end": 34
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 35
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Due}, {Due}, TODAY())",
+    "stored": "IF({00000000-0000-7000-8000-000000000008}, {00000000-0000-7000-8000-000000000008}, TODAY())",
+    "display": "IF({Due}, {Due}, TODAY())",
+    "type": "date",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000008",
+          "range": {
+            "start": 3,
+            "end": 8
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000008",
+          "range": {
+            "start": 10,
+            "end": 15
+          }
+        },
+        {
+          "type": "call",
+          "name": "TODAY",
+          "args": [],
+          "range": {
+            "start": 17,
+            "end": 24
+          },
+          "nameRange": {
+            "start": 17,
+            "end": 22
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 25
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Name}, {Name}, \"Untitled\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000001}, {00000000-0000-7000-8000-000000000001}, \"Untitled\")",
+    "display": "IF({Name}, {Name}, \"Untitled\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 11,
+            "end": 17
+          }
+        },
+        {
+          "type": "string",
+          "value": "Untitled",
+          "range": {
+            "start": 19,
+            "end": 29
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 30
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(1)",
+    "stored": "IF(1)",
+    "display": "IF(1)",
+    "type": "any",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "IF takes 2 to 3 arguments, got 1",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 3,
+            "end": 4
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 5
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF()",
+    "stored": "IF()",
+    "display": "IF()",
+    "type": "any",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "IF takes 2 to 3 arguments, got 0",
+        "range": {
+          "start": 0,
+          "end": 4
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 4
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(1, 2, 3, 4)",
+    "stored": "IF(1, 2, 3, 4)",
+    "display": "IF(1, 2, 3, 4)",
+    "type": "any",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "IF takes 2 to 3 arguments, got 4",
+        "range": {
+          "start": 0,
+          "end": 14
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 3,
+            "end": 4
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 6,
+            "end": 7
+          }
+        },
+        {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 9,
+            "end": 10
+          }
+        },
+        {
+          "type": "number",
+          "value": 4,
+          "range": {
+            "start": 12,
+            "end": 13
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 14
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Done}, IF({Price} > 0, \"paid\", \"free\"), \"open\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000007}, IF({00000000-0000-7000-8000-000000000003} > 0, \"paid\", \"free\"), \"open\")",
+    "display": "IF({Done}, IF({Price} > 0, \"paid\", \"free\"), \"open\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "call",
+          "name": "IF",
+          "args": [
+            {
+              "type": "binary",
+              "operator": ">",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000003",
+                "range": {
+                  "start": 14,
+                  "end": 21
+                }
+              },
+              "right": {
+                "type": "number",
+                "value": 0,
+                "range": {
+                  "start": 24,
+                  "end": 25
+                }
+              },
+              "range": {
+                "start": 14,
+                "end": 25
+              }
+            },
+            {
+              "type": "string",
+              "value": "paid",
+              "range": {
+                "start": 27,
+                "end": 33
+              }
+            },
+            {
+              "type": "string",
+              "value": "free",
+              "range": {
+                "start": 35,
+                "end": 41
+              }
+            }
+          ],
+          "range": {
+            "start": 11,
+            "end": 42
+          },
+          "nameRange": {
+            "start": 11,
+            "end": 13
+          }
+        },
+        {
+          "type": "string",
+          "value": "open",
+          "range": {
+            "start": 44,
+            "end": 50
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 51
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(AND({Done}, {Price} > 0), \"ok\", \"check\")",
+    "stored": "IF(AND({00000000-0000-7000-8000-000000000007}, {00000000-0000-7000-8000-000000000003} > 0), \"ok\", \"check\")",
+    "display": "IF(AND({Done}, {Price} > 0), \"ok\", \"check\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "AND",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000007",
+              "range": {
+                "start": 7,
+                "end": 13
+              }
+            },
+            {
+              "type": "binary",
+              "operator": ">",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000003",
+                "range": {
+                  "start": 15,
+                  "end": 22
+                }
+              },
+              "right": {
+                "type": "number",
+                "value": 0,
+                "range": {
+                  "start": 25,
+                  "end": 26
+                }
+              },
+              "range": {
+                "start": 15,
+                "end": 26
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 27
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 6
+          }
+        },
+        {
+          "type": "string",
+          "value": "ok",
+          "range": {
+            "start": 29,
+            "end": 33
+          }
+        },
+        {
+          "type": "string",
+          "value": "check",
+          "range": {
+            "start": 35,
+            "end": 42
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 43
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(OR({Status} = \"A\", {Status} = \"B\"), 1, 0)",
+    "stored": "IF(OR({00000000-0000-7000-8000-000000000012} = \"A\", {00000000-0000-7000-8000-000000000012} = \"B\"), 1, 0)",
+    "display": "IF(OR({Status} = \"A\", {Status} = \"B\"), 1, 0)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "OR",
+          "args": [
+            {
+              "type": "binary",
+              "operator": "=",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000012",
+                "range": {
+                  "start": 6,
+                  "end": 14
+                }
+              },
+              "right": {
+                "type": "string",
+                "value": "A",
+                "range": {
+                  "start": 17,
+                  "end": 20
+                }
+              },
+              "range": {
+                "start": 6,
+                "end": 20
+              }
+            },
+            {
+              "type": "binary",
+              "operator": "=",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000012",
+                "range": {
+                  "start": 22,
+                  "end": 30
+                }
+              },
+              "right": {
+                "type": "string",
+                "value": "B",
+                "range": {
+                  "start": 33,
+                  "end": 36
+                }
+              },
+              "range": {
+                "start": 22,
+                "end": 36
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 37
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 5
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 39,
+            "end": 40
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 42,
+            "end": 43
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 44
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(NOT({Done}), \"todo\")",
+    "stored": "IF(NOT({00000000-0000-7000-8000-000000000007}), \"todo\")",
+    "display": "IF(NOT({Done}), \"todo\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "NOT",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000007",
+              "range": {
+                "start": 7,
+                "end": 13
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 14
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 6
+          }
+        },
+        {
+          "type": "string",
+          "value": "todo",
+          "range": {
+            "start": 16,
+            "end": 22
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 23
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "AND(TRUE, FALSE)",
+    "stored": "AND(TRUE, FALSE)",
+    "display": "AND(TRUE, FALSE)",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "AND",
+      "args": [
+        {
+          "type": "boolean",
+          "value": true,
+          "range": {
+            "start": 4,
+            "end": 8
+          }
+        },
+        {
+          "type": "boolean",
+          "value": false,
+          "range": {
+            "start": 10,
+            "end": 15
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 16
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "AND({Done})",
+    "stored": "AND({00000000-0000-7000-8000-000000000007})",
+    "display": "AND({Done})",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "AND",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 4,
+            "end": 10
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 11
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "AND()",
+    "stored": "AND()",
+    "display": "AND()",
+    "type": "boolean",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "AND takes at least 1 argument, got 0",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "AND",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 5
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "AND({Done}, {Price}, {Name})",
+    "stored": "AND({00000000-0000-7000-8000-000000000007}, {00000000-0000-7000-8000-000000000003}, {00000000-0000-7000-8000-000000000001})",
+    "display": "AND({Done}, {Price}, {Name})",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "AND",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 4,
+            "end": 10
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 12,
+            "end": 19
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 21,
+            "end": 27
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 28
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "OR({Done}, {Price} > 10)",
+    "stored": "OR({00000000-0000-7000-8000-000000000007}, {00000000-0000-7000-8000-000000000003} > 10)",
+    "display": "OR({Done}, {Price} > 10)",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "OR",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "binary",
+          "operator": ">",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 11,
+              "end": 18
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 10,
+            "range": {
+              "start": 21,
+              "end": 23
+            }
+          },
+          "range": {
+            "start": 11,
+            "end": 23
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 24
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "OR()",
+    "stored": "OR()",
+    "display": "OR()",
+    "type": "boolean",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "OR takes at least 1 argument, got 0",
+        "range": {
+          "start": 0,
+          "end": 4
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "OR",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 4
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "XOR(TRUE, FALSE, TRUE)",
+    "stored": "XOR(TRUE, FALSE, TRUE)",
+    "display": "XOR(TRUE, FALSE, TRUE)",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "XOR",
+      "args": [
+        {
+          "type": "boolean",
+          "value": true,
+          "range": {
+            "start": 4,
+            "end": 8
+          }
+        },
+        {
+          "type": "boolean",
+          "value": false,
+          "range": {
+            "start": 10,
+            "end": 15
+          }
+        },
+        {
+          "type": "boolean",
+          "value": true,
+          "range": {
+            "start": 17,
+            "end": 21
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 22
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "NOT({Done})",
+    "stored": "NOT({00000000-0000-7000-8000-000000000007})",
+    "display": "NOT({Done})",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "NOT",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 4,
+            "end": 10
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 11
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "NOT()",
+    "stored": "NOT()",
+    "display": "NOT()",
+    "type": "boolean",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "NOT takes 1 argument, got 0",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "NOT",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 5
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "NOT(TRUE, FALSE)",
+    "stored": "NOT(TRUE, FALSE)",
+    "display": "NOT(TRUE, FALSE)",
+    "type": "boolean",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "NOT takes 1 argument, got 2",
+        "range": {
+          "start": 0,
+          "end": 16
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "NOT",
+      "args": [
+        {
+          "type": "boolean",
+          "value": true,
+          "range": {
+            "start": 4,
+            "end": 8
+          }
+        },
+        {
+          "type": "boolean",
+          "value": false,
+          "range": {
+            "start": 10,
+            "end": 15
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 16
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "SWITCH({Status}, \"A\", 1, \"B\", 2, 0)",
+    "stored": "SWITCH({00000000-0000-7000-8000-000000000012}, \"A\", 1, \"B\", 2, 0)",
+    "display": "SWITCH({Status}, \"A\", 1, \"B\", 2, 0)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SWITCH",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000012",
+          "range": {
+            "start": 7,
+            "end": 15
+          }
+        },
+        {
+          "type": "string",
+          "value": "A",
+          "range": {
+            "start": 17,
+            "end": 20
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 22,
+            "end": 23
+          }
+        },
+        {
+          "type": "string",
+          "value": "B",
+          "range": {
+            "start": 25,
+            "end": 28
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 30,
+            "end": 31
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 33,
+            "end": 34
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 35
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "SWITCH({Status}, \"A\", 1, \"B\", 2)",
+    "stored": "SWITCH({00000000-0000-7000-8000-000000000012}, \"A\", 1, \"B\", 2)",
+    "display": "SWITCH({Status}, \"A\", 1, \"B\", 2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SWITCH",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000012",
+          "range": {
+            "start": 7,
+            "end": 15
+          }
+        },
+        {
+          "type": "string",
+          "value": "A",
+          "range": {
+            "start": 17,
+            "end": 20
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 22,
+            "end": 23
+          }
+        },
+        {
+          "type": "string",
+          "value": "B",
+          "range": {
+            "start": 25,
+            "end": 28
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 30,
+            "end": 31
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 32
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "SWITCH({Status}, \"A\", \"one\", \"B\", 2)",
+    "stored": "SWITCH({00000000-0000-7000-8000-000000000012}, \"A\", \"one\", \"B\", 2)",
+    "display": "SWITCH({Status}, \"A\", \"one\", \"B\", 2)",
+    "type": "any",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SWITCH",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000012",
+          "range": {
+            "start": 7,
+            "end": 15
+          }
+        },
+        {
+          "type": "string",
+          "value": "A",
+          "range": {
+            "start": 17,
+            "end": 20
+          }
+        },
+        {
+          "type": "string",
+          "value": "one",
+          "range": {
+            "start": 22,
+            "end": 27
+          }
+        },
+        {
+          "type": "string",
+          "value": "B",
+          "range": {
+            "start": 29,
+            "end": 32
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 34,
+            "end": 35
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 36
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "SWITCH({Status}, \"fallback\")",
+    "stored": "SWITCH({00000000-0000-7000-8000-000000000012}, \"fallback\")",
+    "display": "SWITCH({Status}, \"fallback\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SWITCH",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000012",
+          "range": {
+            "start": 7,
+            "end": 15
+          }
+        },
+        {
+          "type": "string",
+          "value": "fallback",
+          "range": {
+            "start": 17,
+            "end": 27
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 28
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "SWITCH({Status})",
+    "stored": "SWITCH({00000000-0000-7000-8000-000000000012})",
+    "display": "SWITCH({Status})",
+    "type": "any",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "SWITCH takes at least 2 arguments, got 1",
+        "range": {
+          "start": 0,
+          "end": 16
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "SWITCH",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000012",
+          "range": {
+            "start": 7,
+            "end": 15
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 16
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "SWITCH({Rating}, 1, \"bad\", 5, \"great\", \"ok\")",
+    "stored": "SWITCH({00000000-0000-7000-8000-000000000011}, 1, \"bad\", 5, \"great\", \"ok\")",
+    "display": "SWITCH({Rating}, 1, \"bad\", 5, \"great\", \"ok\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SWITCH",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000011",
+          "range": {
+            "start": 7,
+            "end": 15
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 17,
+            "end": 18
+          }
+        },
+        {
+          "type": "string",
+          "value": "bad",
+          "range": {
+            "start": 20,
+            "end": 25
+          }
+        },
+        {
+          "type": "number",
+          "value": 5,
+          "range": {
+            "start": 27,
+            "end": 28
+          }
+        },
+        {
+          "type": "string",
+          "value": "great",
+          "range": {
+            "start": 30,
+            "end": 37
+          }
+        },
+        {
+          "type": "string",
+          "value": "ok",
+          "range": {
+            "start": 39,
+            "end": 43
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 44
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "BLANK()",
+    "stored": "BLANK()",
+    "display": "BLANK()",
+    "type": "null",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "BLANK",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 7
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "BLANK(1)",
+    "stored": "BLANK(1)",
+    "display": "BLANK(1)",
+    "type": "null",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "BLANK takes 0 arguments, got 1",
+        "range": {
+          "start": 0,
+          "end": 8
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "BLANK",
+      "args": [
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 6,
+            "end": 7
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 8
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "ERROR()",
+    "stored": "ERROR()",
+    "display": "ERROR()",
+    "type": "any",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ERROR",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 7
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "ISERROR({Price} / 0)",
+    "stored": "ISERROR({00000000-0000-7000-8000-000000000003} / 0)",
+    "display": "ISERROR({Price} / 0)",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ISERROR",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "/",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 8,
+              "end": 15
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 0,
+            "range": {
+              "start": 18,
+              "end": 19
+            }
+          },
+          "range": {
+            "start": 8,
+            "end": 19
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 20
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "ISERROR()",
+    "stored": "ISERROR()",
+    "display": "ISERROR()",
+    "type": "boolean",
+    "errors": [
+      {
+        "code": "wrongArgumentCount",
+        "message": "ISERROR takes 1 argument, got 0",
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      }
+    ],
+    "ast": {
+      "type": "call",
+      "name": "ISERROR",
+      "args": [],
+      "range": {
+        "start": 0,
+        "end": 9
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "IF(ISERROR({Price} / {Qty}), 0, {Price} / {Qty})",
+    "stored": "IF(ISERROR({00000000-0000-7000-8000-000000000003} / {00000000-0000-7000-8000-000000000004}), 0, {00000000-0000-7000-8000-000000000003} / {00000000-0000-7000-8000-000000000004})",
+    "display": "IF(ISERROR({Price} / {Qty}), 0, {Price} / {Qty})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "ISERROR",
+          "args": [
+            {
+              "type": "binary",
+              "operator": "/",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000003",
+                "range": {
+                  "start": 11,
+                  "end": 18
+                }
+              },
+              "right": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000004",
+                "range": {
+                  "start": 21,
+                  "end": 26
+                }
+              },
+              "range": {
+                "start": 11,
+                "end": 26
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 27
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 10
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 29,
+            "end": 30
+          }
+        },
+        {
+          "type": "binary",
+          "operator": "/",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 32,
+              "end": 39
+            }
+          },
+          "right": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000004",
+            "range": {
+              "start": 42,
+              "end": 47
+            }
+          },
+          "range": {
+            "start": 32,
+            "end": 47
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 48
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Price} = BLANK(), \"missing\", {Price})",
+    "stored": "IF({00000000-0000-7000-8000-000000000003} = BLANK(), \"missing\", {00000000-0000-7000-8000-000000000003})",
+    "display": "IF({Price} = BLANK(), \"missing\", {Price})",
+    "type": "any",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "=",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 3,
+              "end": 10
+            }
+          },
+          "right": {
+            "type": "call",
+            "name": "BLANK",
+            "args": [],
+            "range": {
+              "start": 13,
+              "end": 20
+            },
+            "nameRange": {
+              "start": 13,
+              "end": 18
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 20
+          }
+        },
+        {
+          "type": "string",
+          "value": "missing",
+          "range": {
+            "start": 22,
+            "end": 31
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 33,
+            "end": 40
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 41
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Tags}, ARRAYJOIN({Tags}), \"none\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000013}, ARRAYJOIN({00000000-0000-7000-8000-000000000013}), \"none\")",
+    "display": "IF({Tags}, ARRAYJOIN({Tags}), \"none\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "call",
+          "name": "ARRAYJOIN",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000013",
+              "range": {
+                "start": 21,
+                "end": 27
+              }
+            }
+          ],
+          "range": {
+            "start": 11,
+            "end": 28
+          },
+          "nameRange": {
+            "start": 11,
+            "end": 20
+          }
+        },
+        {
+          "type": "string",
+          "value": "none",
+          "range": {
+            "start": 30,
+            "end": 36
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 37
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "TRUE() = TRUE",
+    "stored": "TRUE() = TRUE",
+    "display": "TRUE() = TRUE",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "call",
+        "name": "TRUE",
+        "args": [],
+        "range": {
+          "start": 0,
+          "end": 6
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 4
+        }
+      },
+      "right": {
+        "type": "boolean",
+        "value": true,
+        "range": {
+          "start": 9,
+          "end": 13
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "IF(TRUE(), FALSE(), TRUE())",
+    "stored": "IF(TRUE(), FALSE(), TRUE())",
+    "display": "IF(TRUE(), FALSE(), TRUE())",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "TRUE",
+          "args": [],
+          "range": {
+            "start": 3,
+            "end": 9
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 7
+          }
+        },
+        {
+          "type": "call",
+          "name": "FALSE",
+          "args": [],
+          "range": {
+            "start": 11,
+            "end": 18
+          },
+          "nameRange": {
+            "start": 11,
+            "end": 16
+          }
+        },
+        {
+          "type": "call",
+          "name": "TRUE",
+          "args": [],
+          "range": {
+            "start": 20,
+            "end": 26
+          },
+          "nameRange": {
+            "start": 20,
+            "end": 24
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 27
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  }
+]

@@ -1,0 +1,264 @@
+# Base stack for every environment. ALWAYS combine it with an overlay: dev.yml (and ci.yml)
+# through docker/compose.sh, which also picks the project name (openrows-<env>) and the env file,
+# or selfhost.yml for a production stack of your own (docs/guide/self-hosting.md):
+#   docker/compose.sh dev up -d --wait
+#   docker compose -p openrows -f docker/compose.yml -f docker/selfhost.yml --env-file <file> up -d --wait
+#
+# Services:
+# - postgres: on the Compose network only. dev.yml publishes a loopback port; production never does.
+# - migrate: one-shot that applies packages/server/drizzle before api and worker start (an
+#   advisory lock keeps two runners apart). It connects as the Postgres superuser (PG_USER) and
+#   gives the openrows_app role its password (docs/deploy/database.md).
+# - api and worker: the SAME image, a different command (ADR-004). Both connect as openrows_app,
+#   which row-level security applies to (ADR-002). The api also serves the built client.
+# - valkey: optional (`COMPOSE_PROFILES=valkey`), off by default. Set REDIS_URL in the env file
+#   when it's on; /ready then checks it.
+#
+# Hostnames are the service names (postgres, valkey, s3, ...) in every environment. In dev they
+# resolve to 127.0.0.1, because dev.yml runs the stack in one shared network namespace
+# (docker/README.md "Networking"); in production they are ordinary Compose DNS names.
+#
+# Every third-party image is pinned by digest (`tag@sha256:…`, the multi-arch index): the tag is
+# for humans, the digest is what is pulled (docker/README.md "Image pins"; the compose tests
+# refuse an unpinned image). Every service logs through json-file with rotation (x-logging): at
+# most 10 files of 20 MB per container, rotated files compressed. The hosted service also limits their age to
+# 90 days.
+# Secrets and per-env values come from the env file; nothing here is a secret.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "10"
+    compress: "true"
+
+services:
+  postgres:
+    image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_DB: ${PG_DB:?set PG_DB in the env file}
+      POSTGRES_USER: ${PG_USER:?set PG_USER in the env file}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD in the env file}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    image: ${IMAGE:-openrows:local}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["node", "dist/migrate.js"]
+    restart: "no"
+    logging: *logging
+    environment:
+      # Production refuses a default or placeholder OPENROWS_APP_DB_PASSWORD.
+      NODE_ENV: production
+      MIGRATION_DATABASE_URL: postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/${PG_DB}
+      OPENROWS_APP_DB_PASSWORD: ${OPENROWS_APP_DB_PASSWORD:?set OPENROWS_APP_DB_PASSWORD in the env file}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: ${IMAGE:-openrows:local}
+    command: ["node", "dist/index.js"]
+    restart: unless-stopped
+    logging: *logging
+    # The shutdown handler closes the HTTP server (in-flight requests finish) and the pool.
+    stop_grace_period: 15s
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # GET /metrics for Prometheus: request counters by method and status, open sockets,
+      # memory. Never published (a Prometheus on the Compose network scrapes it).
+      METRICS_PORT: "9464"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # The browser-facing origin; OIDC redirects to ${APP_URL}/auth/callback.
+      APP_URL: ${APP_URL:?set APP_URL in the env file}
+      # Only behind a reverse proxy (e.g. Cloudflare + a host nginx = 2 hops). Never on a port
+      # the internet reaches directly: X-Forwarded-For would let clients pick their IP.
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-30}
+      # The API's token buckets: per base on /api/v1, per token or user; shared in Postgres.
+      API_RATE_LIMIT_BASE: ${API_RATE_LIMIT_BASE:-5}
+      API_RATE_LIMIT_BASE_BURST: ${API_RATE_LIMIT_BASE_BURST:-10}
+      API_RATE_LIMIT_TOKEN: ${API_RATE_LIMIT_TOKEN:-50}
+      API_RATE_LIMIT_TOKEN_BURST: ${API_RATE_LIMIT_TOKEN_BURST:-100}
+      DATABASE_URL: postgresql://openrows_app:${OPENROWS_APP_DB_PASSWORD}@postgres:5432/${PG_DB}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the env file}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?set OIDC_ISSUER_URL in the env file}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-openrows-app}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET in the env file}
+      # The hosted edition's Keycloak service account for workspaces' single sign-on (
+      # manage-identity-providers only). Unset: single sign-on can't be set up.
+      OIDC_SSO_CLIENT_ID: ${OIDC_SSO_CLIENT_ID:-}
+      OIDC_SSO_CLIENT_SECRET: ${OIDC_SSO_CLIENT_SECRET:-}
+      # Social sign-in buttons: identity-provider aliases in the realm, e.g. github,google.
+      AUTH_PROVIDERS: ${AUTH_PROVIDERS:-}
+      # The instance's public status page, linked from the sign-in page and the help menu.
+      STATUS_PAGE_URL: ${STATUS_PAGE_URL:-}
+      # Who may install third-party extension bundles: creators, owners or off. Unset:
+      # owners with EDITION=cloud, else creators.
+      EXTENSIONS_CUSTOM_BUNDLES: ${EXTENSIONS_CUSTOM_BUNDLES:-}
+      # System admins (ADR-002): comma-separated emails, applied at each verified sign-in.
+      OPENROWS_SYSTEM_ADMINS: ${OPENROWS_SYSTEM_ADMINS:-}
+      # Cloudflare Turnstile for public forms and password-protected links: both
+      # or neither. Production without them refuses to publish public forms or take submissions.
+      # The site key reaches the browser through the api's public form payload.
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:?set S3_ENDPOINT in the env file}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET in the env file}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in the env file}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in the env file}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
+      # Empty = unset (config.ts): no Redis check, mail is logged instead of sent.
+      REDIS_URL: ${REDIS_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-OpenRows <noreply@openrows.io>}
+      # Outbound requests to user URLs (webhooks, automations): https, ports 80/443 and
+      # public addresses only, unless these allow more (e.g. an n8n on the LAN).
+      OUTBOUND_HTTP_ALLOW_HTTP: ${OUTBOUND_HTTP_ALLOW_HTTP:-false}
+      OUTBOUND_HTTP_PORTS: ${OUTBOUND_HTTP_PORTS:-}
+      OUTBOUND_HTTP_ALLOW: ${OUTBOUND_HTTP_ALLOW:-}
+      OUTBOUND_HTTP_DENY: ${OUTBOUND_HTTP_DENY:-}
+      # AI providers: the instance's OpenAI-compatible provider (AI on in every workspace
+      # when AI_MODEL is set; AI_API_KEY may be empty for Ollama), and the hosts workspaces' own
+      # keys may use (empty: any public host).
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_ALLOWED_HOSTS: ${AI_ALLOWED_HOSTS:-}
+      # Automation emails per workspace and UTC day; the builder's test runs and retries
+      # run in the api and share the worker's count.
+      AUTOMATION_EMAIL_DAILY_LIMIT: ${AUTOMATION_EMAIL_DAILY_LIMIT:-100}
+      # Per-workspace outbound limits in the worker: requests per minute (0: off), burst,
+      # and webhook deliveries / automation runs active at once. Over them, work waits.
+      OUTBOUND_WORKSPACE_RATE_PER_MINUTE: ${OUTBOUND_WORKSPACE_RATE_PER_MINUTE:-600}
+      OUTBOUND_WORKSPACE_BURST: ${OUTBOUND_WORKSPACE_BURST:-100}
+      OUTBOUND_WORKSPACE_CONCURRENCY: ${OUTBOUND_WORKSPACE_CONCURRENCY:-4}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # node:slim has no curl. /ready = Postgres, S3 (and Redis when set) answer.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  worker:
+    # Background jobs on pg-boss (ADR-004), in the `pgboss` schema the migrate one-shot
+    # installs: the outbox relay (every minute and on each outbox notify), webhook deliveries
+    # , and hourly cron jobs: the outbox, revision
+    # , notification and rate limit prunes, notification emails and their
+    # hourly/daily digests (SMTP_* below) and base snapshots (the daily
+    # automatic ones and the prune past retention, in the S3 bucket under snapshots/), CSV imports
+    # and snapshot restores the api sends, and the attachment GC. Cron runs
+    # once per occurrence across workers, so `--scale worker=N` is safe. SIGTERM lets running
+    # jobs finish (up to 15 s); pg-boss retries anything cut off.
+    image: ${IMAGE:-openrows:local}
+    command: ["node", "dist/worker.js"]
+    restart: unless-stopped
+    logging: *logging
+    stop_grace_period: 20s
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # pg-boss and the jobs connect as openrows_app; tenant jobs set app.workspace_id (ADR-002).
+      DATABASE_URL: postgresql://openrows_app:${OPENROWS_APP_DB_PASSWORD}@postgres:5432/${PG_DB}
+      # Field indexes for saved views: CREATE INDEX CONCURRENTLY needs the record tables'
+      # owner and can't run inside a SECURITY DEFINER function, so the job runs only the
+      # statements those functions check and answer on this connection (src/indexes/sync.ts).
+      INDEX_DATABASE_URL: postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/${PG_DB}
+      # GET /health (the healthcheck) and GET /metrics (Prometheus). Never published.
+      WORKER_PORT: "3001"
+      # Webhooks: secrets are encrypted with the api's key, links in mail use APP_URL, and
+      # a webhook turned off after failures is mailed to its creator.
+      APP_URL: ${APP_URL:?set APP_URL in the env file}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in the env file}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-OpenRows <noreply@openrows.io>}
+      S3_ENDPOINT: ${S3_ENDPOINT:?set S3_ENDPOINT in the env file}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET in the env file}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in the env file}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in the env file}
+      # Outbound requests to user URLs (webhooks, automations): https, ports 80/443 and
+      # public addresses only, unless these allow more (e.g. an n8n on the LAN).
+      OUTBOUND_HTTP_ALLOW_HTTP: ${OUTBOUND_HTTP_ALLOW_HTTP:-false}
+      OUTBOUND_HTTP_PORTS: ${OUTBOUND_HTTP_PORTS:-}
+      OUTBOUND_HTTP_ALLOW: ${OUTBOUND_HTTP_ALLOW:-}
+      OUTBOUND_HTTP_DENY: ${OUTBOUND_HTTP_DENY:-}
+      # AI providers: the instance's OpenAI-compatible provider (AI on in every workspace
+      # when AI_MODEL is set; AI_API_KEY may be empty for Ollama), and the hosts workspaces' own
+      # keys may use (empty: any public host).
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_ALLOWED_HOSTS: ${AI_ALLOWED_HOSTS:-}
+      # Stored files no row names: `dry-run` only counts them (logs, /metrics), `on`
+      # deletes them, `off` skips the job.
+      ATTACHMENT_GC: ${ATTACHMENT_GC:-dry-run}
+      # Automation emails per workspace and UTC day, one per recipient.
+      AUTOMATION_EMAIL_DAILY_LIMIT: ${AUTOMATION_EMAIL_DAILY_LIMIT:-100}
+      # Per-workspace outbound limits in the worker: requests per minute (0: off), burst,
+      # and webhook deliveries / automation runs active at once. Over them, work waits.
+      OUTBOUND_WORKSPACE_RATE_PER_MINUTE: ${OUTBOUND_WORKSPACE_RATE_PER_MINUTE:-600}
+      OUTBOUND_WORKSPACE_BURST: ${OUTBOUND_WORKSPACE_BURST:-100}
+      OUTBOUND_WORKSPACE_CONCURRENCY: ${OUTBOUND_WORKSPACE_CONCURRENCY:-4}
+      # Deleted accounts: the worker deletes their user at Keycloak through a service
+      # account with realm-management's manage-users (docs/deploy/keycloak.md). Unset: the
+      # account's OpenRows data is still purged, its Keycloak user isn't.
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_ADMIN_CLIENT_ID: ${OIDC_ADMIN_CLIENT_ID:-}
+      OIDC_ADMIN_CLIENT_SECRET: ${OIDC_ADMIN_CLIENT_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # /health = pg-boss runs and Postgres answers.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  valkey:
+    profiles: ["valkey"]
+    image: valkey/valkey:8.1.10-alpine@sha256:081c2f5cb575efc901aa80ff9cdbd1ec6a301682fd35e1ebb4b0990a4a4a8507
+    restart: unless-stopped
+    logging: *logging
+    # A password when VALKEY_PASSWORD is set (then REDIS_URL=redis://:<password>@valkey:6379).
+    command: ["sh", "-c", "exec valkey-server --appendonly yes $${VALKEY_PASSWORD:+--requirepass \"$$VALKEY_PASSWORD\"}"]
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
+    volumes:
+      - valkeydata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli --no-auth-warning $${VALKEY_PASSWORD:+-a \"$$VALKEY_PASSWORD\"} ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  pgdata:
+  valkeydata:

@@ -1,0 +1,35 @@
+{{- if .Values.ingress.enabled }}
+{{- $in := .Values.ingress -}}
+{{- $host := default (regexReplaceAll "^https://([^/:]+).*$" .Values.appUrl "${1}") $in.host -}}
+# One host, everything to the api: the web client, /api, /auth, /mcp and the realtime WebSocket
+# at /ws (an HTTP upgrade on the same path; see the timeouts in values.yaml).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "openrows.fullname" . }}
+  labels:
+    {{- include "openrows.labels" (dict "root" . "component" "api") | nindent 4 }}
+  {{- with $in.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $in.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with $in.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "openrows.fullname" . }}
+                port:
+                  name: http
+{{- end }}

@@ -1,0 +1,43 @@
+# An S3 server for /ready: Versity S3 Gateway, the image docker/dev.yml pins.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: s3 }
+  template:
+    metadata:
+      labels: { app: s3 }
+    spec:
+      containers:
+        - name: s3
+          image: versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316
+          command: ["sh", "-c", "mkdir -p \"/data/$S3_BUCKET\" && exec versitygw --port :9000 --quiet posix --nometa /data"]
+          env:
+            - name: S3_BUCKET
+              value: {{ .Values.bucket | quote }}
+            - name: ROOT_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.secretName }}, key: S3_ACCESS_KEY } }
+            - name: ROOT_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.secretName }}, key: S3_SECRET_KEY } }
+          ports:
+            - containerPort: 9000
+          readinessProbe:
+            tcpSocket: { port: 9000 }
+            periodSeconds: 3
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - { name: data, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3
+spec:
+  selector: { app: s3 }
+  ports:
+    - port: 9000
+      targetPort: 9000

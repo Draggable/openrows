@@ -1,0 +1,1241 @@
+{
+  "startedAt": "2026-10-25T16:16:26.163Z",
+  "durationSeconds": 436.323,
+  "machine": {
+    "cpu": "Intel(R) Xeon(R) Processor",
+    "vcpus": 8,
+    "memoryGiB": 16,
+    "os": "Linux 6.12.94+",
+    "node": "v22.23.4",
+    "docker": "26.1.5+dfsg1",
+    "postgresImage": "postgres:16-alpine"
+  },
+  "postgres": {
+    "version": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "settings": [
+      {
+        "name": "effective_cache_size",
+        "setting": "1048576",
+        "unit": "8kB"
+      },
+      {
+        "name": "jit",
+        "setting": "off",
+        "unit": null
+      },
+      {
+        "name": "maintenance_work_mem",
+        "setting": "524288",
+        "unit": "kB"
+      },
+      {
+        "name": "max_parallel_workers_per_gather",
+        "setting": "2",
+        "unit": null
+      },
+      {
+        "name": "max_wal_size",
+        "setting": "8192",
+        "unit": "MB"
+      },
+      {
+        "name": "random_page_cost",
+        "setting": "1.1",
+        "unit": null
+      },
+      {
+        "name": "shared_buffers",
+        "setting": "262144",
+        "unit": "8kB"
+      },
+      {
+        "name": "work_mem",
+        "setting": "32768",
+        "unit": "kB"
+      }
+    ]
+  },
+  "config": {
+    "rows": 500000,
+    "fields": 30,
+    "companies": 10000,
+    "iterations": 7,
+    "concurrency": 16,
+    "writeSeconds": 8,
+    "catalogTables": 5000,
+    "suites": [
+      "reads",
+      "links",
+      "rls",
+      "backup",
+      "writes",
+      "ddl",
+      "catalog"
+    ]
+  },
+  "load": {
+    "aLoadMs": 44857.946756,
+    "aIndexMs": 2525.178359999998,
+    "bLoadMs": 28998.831858999998,
+    "bIndexMs": 3615.274173999991,
+    "vacuumMs": 1681.5281780000078,
+    "junctionRows": 749954
+  },
+  "storage": {
+    "aTableBytes": 334757888,
+    "aIndexBytes": 66166784,
+    "aJunctionBytes": 80568320,
+    "bTableBytes": 820043776,
+    "bIndexBytes": 94208000,
+    "aAvgRowBytes": 628,
+    "bAvgRowBytes": 1473
+  },
+  "reads": [
+    {
+      "suite": "reads",
+      "name": "Page of 100 rows, all fields (ORDER BY id)",
+      "a": {
+        "n": 7,
+        "min": 1.534243999994942,
+        "median": 2.23158200000762,
+        "p95": 4.226594000007026,
+        "p99": 4.226594000007026,
+        "max": 4.226594000007026,
+        "mean": 2.4985508571449566
+      },
+      "b": {
+        "n": 7,
+        "min": 0.8384320000041043,
+        "median": 1.2696089999953983,
+        "p95": 1.9664150000025984,
+        "p99": 1.9664150000025984,
+        "max": 1.9664150000025984,
+        "mean": 1.2716081428578556
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=0.42..10.37 rows=100 width=583)\n  ->  Index Scan using tasks_pkey on tasks  (cost=0.42..49742.54 rows=500041 width=583)",
+      "bPlan": "Limit  (cost=0.42..22.52 rows=100 width=1372)\n  ->  Index Scan using records_pkey on records  (cost=0.42..110538.13 rows=500190 width=1372)\n        Filter: (table_id = '00000000-0000-4000-8000-000000000002'::uuid)"
+    },
+    {
+      "suite": "reads",
+      "name": "Count all rows",
+      "a": {
+        "n": 7,
+        "min": 12.622174999996787,
+        "median": 12.85549699999683,
+        "p95": 15.173266999991029,
+        "p99": 15.173266999991029,
+        "max": 15.173266999991029,
+        "mean": 13.368686285709762
+      },
+      "b": {
+        "n": 7,
+        "min": 12.493711999995867,
+        "median": 13.210905999992974,
+        "p95": 14.046375000005355,
+        "p99": 14.046375000005355,
+        "max": 14.046375000005355,
+        "mean": 13.215670428569345
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Finalize Aggregate  (cost=6581.52..6581.53 rows=1 width=8)\n  ->  Gather  (cost=6581.31..6581.52 rows=2 width=8)\n        Workers Planned: 2\n        ->  Partial Aggregate  (cost=5581.31..5581.32 rows=1 width=8)\n              ->  Parallel Index Only Scan using tasks_s01 on tasks  (cost=0.42..5060.43 rows=208350 width=0)",
+      "bPlan": "Finalize Aggregate  (cost=6583.04..6583.05 rows=1 width=8)\n  ->  Gather  (cost=6582.83..6583.04 rows=2 width=8)\n        Workers Planned: 2\n        ->  Partial Aggregate  (cost=5582.83..5582.84 rows=1 width=8)\n              ->  Parallel Index Only Scan using records_s01 on records  (cost=0.42..5061.80 rows=208412 width=0)"
+    },
+    {
+      "suite": "reads",
+      "name": "Text contains, trigram index: page",
+      "a": {
+        "n": 7,
+        "min": 2.3700899999967078,
+        "median": 2.5155999999988126,
+        "p95": 3.393249000000651,
+        "p99": 3.393249000000651,
+        "max": 3.393249000000651,
+        "mean": 2.697651714286102
+      },
+      "b": {
+        "n": 7,
+        "min": 111.08754100000078,
+        "median": 124.14393700000073,
+        "p95": 130.56944399999338,
+        "p99": 130.56944399999338,
+        "max": 130.56944399999338,
+        "mean": 122.27676114285714
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=62.59..62.72 rows=50 width=583)\n  ->  Sort  (cost=62.59..62.72 rows=50 width=583)\n        Sort Key: id\n        ->  Bitmap Heap Scan on tasks  (cost=5.73..61.18 rows=50 width=583)\n              Recheck Cond: (t01 ~~* '%abc%'::text)\n              ->  Bitmap Index Scan on tasks_t01_trgm  (cost=0.00..5.72 rows=50 width=0)\n                    Index Cond: (t01 ~~* '%abc%'::text)",
+      "bPlan": "Limit  (cost=0.42..565.63 rows=100 width=1372)\n  ->  Index Scan using records_pkey on records  (cost=0.42..113088.12 rows=20008 width=1372)\n        Filter: ((table_id = '00000000-0000-4000-8000-000000000002'::uuid) AND ((data ->> 'fldt01Q7xK2mP9wZ4'::text) ~~* '%abc%'::text))"
+    },
+    {
+      "suite": "reads",
+      "name": "Text contains, trigram index: count",
+      "a": {
+        "n": 7,
+        "min": 0.7027070000040112,
+        "median": 1.0003230000002077,
+        "p95": 1.1155299999954877,
+        "p99": 1.1155299999954877,
+        "max": 1.1155299999954877,
+        "mean": 0.9089098571421346
+      },
+      "b": {
+        "n": 7,
+        "min": 0.6487329999945359,
+        "median": 0.7443090000015218,
+        "p95": 1.6668399999907706,
+        "p99": 1.6668399999907706,
+        "max": 1.6668399999907706,
+        "mean": 0.8642010000018802
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Aggregate  (cost=61.30..61.31 rows=1 width=8)\n  ->  Bitmap Heap Scan on tasks  (cost=5.73..61.18 rows=50 width=0)\n        Recheck Cond: (t01 ~~* '%abc%'::text)\n        ->  Bitmap Index Scan on tasks_t01_trgm  (cost=0.00..5.72 rows=50 width=0)\n              Index Cond: (t01 ~~* '%abc%'::text)",
+      "bPlan": "Aggregate  (cost=19750.80..19750.81 rows=1 width=8)\n  ->  Bitmap Heap Scan on records  (cost=117.16..19700.78 rows=20008 width=0)\n        Recheck Cond: (((data ->> 'fldt01Q7xK2mP9wZ4'::text) ~~* '%abc%'::text) AND (table_id = '00000000-0000-4000-8000-000000000002'::uuid))\n        ->  Bitmap Index Scan on records_t01_trgm  (cost=0.00..112.16 rows=20008 width=0)\n              Index Cond: ((data ->> 'fldt01Q7xK2mP9wZ4'::text) ~~* '%abc%'::text)"
+    },
+    {
+      "suite": "reads",
+      "name": "Text contains, no index: count",
+      "a": {
+        "n": 7,
+        "min": 87.03820399999677,
+        "median": 90.20315099999425,
+        "p95": 95.20374700000684,
+        "p99": 95.20374700000684,
+        "max": 95.20374700000684,
+        "mean": 90.82893014285739
+      },
+      "b": {
+        "n": 7,
+        "min": 171.22125600000436,
+        "median": 173.89055300000473,
+        "p95": 182.36466600000858,
+        "p99": 182.36466600000858,
+        "max": 182.36466600000858,
+        "mean": 175.82321114285983
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Finalize Aggregate  (cost=44334.65..44334.66 rows=1 width=8)\n  ->  Gather  (cost=44334.43..44334.64 rows=2 width=8)\n        Workers Planned: 2\n        ->  Partial Aggregate  (cost=43334.43..43334.44 rows=1 width=8)\n              ->  Parallel Seq Scan on tasks  (cost=0.00..43334.38 rows=21 width=0)\n                    Filter: (t02 ~~* '%abcd%'::text)",
+      "bPlan": "Finalize Aggregate  (cost=104794.13..104794.14 rows=1 width=8)\n  ->  Gather  (cost=104793.91..104794.12 rows=2 width=8)\n        Workers Planned: 2\n        ->  Partial Aggregate  (cost=103793.91..103793.92 rows=1 width=8)\n              ->  Parallel Seq Scan on records  (cost=0.00..103789.74 rows=1668 width=0)\n                    Filter: ((table_id = '00000000-0000-4000-8000-000000000002'::uuid) AND ((data ->> 'fldt02Q7xK2mP9wZ4'::text) ~~* '%abcd%'::text))"
+    },
+    {
+      "suite": "reads",
+      "name": "Number range (1%), btree: page",
+      "a": {
+        "n": 7,
+        "min": 2.512813000008464,
+        "median": 2.8513380000076722,
+        "p95": 4.641854999994393,
+        "p99": 4.641854999994393,
+        "max": 4.641854999994393,
+        "mean": 3.083524571430254
+      },
+      "b": {
+        "n": 7,
+        "min": 4.820642999999109,
+        "median": 5.099985000008019,
+        "p95": 8.77440999999817,
+        "p99": 8.77440999999817,
+        "max": 8.77440999999817,
+        "mean": 6.15225057142795
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=0.42..1047.99 rows=100 width=583)\n  ->  Index Scan using tasks_pkey on tasks  (cost=0.42..52242.74 rows=4987 width=583)\n        Filter: ((n01 >= '400000'::numeric) AND (n01 <= '410000'::numeric))",
+      "bPlan": "Limit  (cost=2875.11..2875.36 rows=100 width=1372)\n  ->  Sort  (cost=2875.11..2881.36 rows=2501 width=1372)\n        Sort Key: id\n        ->  Index Scan using records_n01 on records  (cost=0.42..2779.52 rows=2501 width=1372)\n              Index Cond: ((((data ->> 'fldn01Q7xK2mP9wZ4'::text))::numeric >= '400000'::numeric) AND (((data ->> 'fldn01Q7xK2mP9wZ4'::text))::numeric <= '410000'::numeric))"
+    },
+    {
+      "suite": "reads",
+      "name": "Number range (1%), btree: count",
+      "a": {
+        "n": 7,
+        "min": 0.7354990000021644,
+        "median": 1.034060000005411,
+        "p95": 1.5632869999972172,
+        "p99": 1.5632869999972172,
+        "max": 1.5632869999972172,
+        "mean": 1.0560921428571288
+      },
+      "b": {
+        "n": 7,
+        "min": 2.6675469999900088,
+        "median": 2.855260999989696,
+        "p95": 3.7647569999971893,
+        "p99": 3.7647569999971893,
+        "max": 3.7647569999971893,
+        "mean": 3.0232940000007926
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Aggregate  (cost=134.63..134.64 rows=1 width=8)\n  ->  Index Only Scan using tasks_n01 on tasks  (cost=0.42..122.16 rows=4987 width=0)\n        Index Cond: ((n01 >= '400000'::numeric) AND (n01 <= '410000'::numeric))",
+      "bPlan": "Aggregate  (cost=2785.78..2785.79 rows=1 width=8)\n  ->  Index Scan using records_n01 on records  (cost=0.42..2779.52 rows=2501 width=0)\n        Index Cond: ((((data ->> 'fldn01Q7xK2mP9wZ4'::text))::numeric >= '400000'::numeric) AND (((data ->> 'fldn01Q7xK2mP9wZ4'::text))::numeric <= '410000'::numeric))"
+    },
+    {
+      "suite": "reads",
+      "name": "Number range (11%), no index: count",
+      "a": {
+        "n": 7,
+        "min": 69.2324149999913,
+        "median": 71.95221400000446,
+        "p95": 75.66378299999633,
+        "p99": 75.66378299999633,
+        "max": 75.66378299999633,
+        "mean": 71.84398599999466
+      },
+      "b": {
+        "n": 7,
+        "min": 162.8813450000016,
+        "median": 172.17523399999482,
+        "p95": 212.278959999996,
+        "p99": 212.278959999996,
+        "max": 212.278959999996,
+        "mean": 177.93398928571384
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Finalize Aggregate  (cost=44913.45..44913.46 rows=1 width=8)\n  ->  Gather  (cost=44913.23..44913.44 rows=2 width=8)\n        Workers Planned: 2\n        ->  Partial Aggregate  (cost=43913.23..43913.24 rows=1 width=8)\n              ->  Parallel Seq Scan on tasks  (cost=0.00..43855.26 rows=23190 width=0)\n                    Filter: ((n03 >= '10'::numeric) AND (n03 <= '20'::numeric))",
+      "bPlan": "Finalize Aggregate  (cost=107980.06..107980.07 rows=1 width=8)\n  ->  Gather  (cost=107979.84..107980.05 rows=2 width=8)\n        Workers Planned: 2\n        ->  Partial Aggregate  (cost=106979.84..106979.85 rows=1 width=8)\n              ->  Parallel Seq Scan on records  (cost=0.00..106977.24 rows=1042 width=0)\n                    Filter: ((table_id = '00000000-0000-4000-8000-000000000002'::uuid) AND (((data ->> 'fldn03Q7xK2mP9wZ4'::text))::numeric >= '10'::numeric) AND (((data ->> 'fldn03Q7xK2mP9wZ4'::text))::numeric <= '20'::numeric))"
+    },
+    {
+      "suite": "reads",
+      "name": "Select IN (2 of 8 options), btree: page",
+      "a": {
+        "n": 7,
+        "min": 1.483126999999513,
+        "median": 1.6798859999980778,
+        "p95": 2.023994999995921,
+        "p99": 2.023994999995921,
+        "max": 2.023994999995921,
+        "mean": 1.7280264285696572
+      },
+      "b": {
+        "n": 7,
+        "min": 0.9726660000014817,
+        "median": 1.1454459999949904,
+        "p95": 1.7924479999928735,
+        "p99": 1.7924479999928735,
+        "max": 1.7924479999928735,
+        "mean": 1.2092248571425444
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=0.42..41.14 rows=100 width=583)\n  ->  Index Scan using tasks_pkey on tasks  (cost=0.42..50992.64 rows=125244 width=583)\n        Filter: (s01 = ANY ('{\"Option 2\",\"Option 5\"}'::text[]))",
+      "bPlan": "Limit  (cost=0.42..2261.27 rows=100 width=1372)\n  ->  Index Scan using records_pkey on records  (cost=0.42..113088.12 rows=5002 width=1372)\n        Filter: ((table_id = '00000000-0000-4000-8000-000000000002'::uuid) AND ((data ->> 'flds01Q7xK2mP9wZ4'::text) = ANY ('{\"Option 2\",\"Option 5\"}'::text[])))"
+    },
+    {
+      "suite": "reads",
+      "name": "Select IN (2 of 8 options), btree: count",
+      "a": {
+        "n": 7,
+        "min": 4.715515999996569,
+        "median": 5.161137999995844,
+        "p95": 5.667702000006102,
+        "p99": 5.667702000006102,
+        "max": 5.667702000006102,
+        "mean": 5.106789571430584
+      },
+      "b": {
+        "n": 7,
+        "min": 80.24405399999523,
+        "median": 82.13467800000217,
+        "p95": 86.84368199999153,
+        "p99": 86.84368199999153,
+        "max": 86.84368199999153,
+        "mean": 82.56292557142817
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Aggregate  (cost=2613.53..2613.54 rows=1 width=8)\n  ->  Index Only Scan using tasks_s01 on tasks  (cost=0.42..2300.42 rows=125244 width=0)\n        Index Cond: (s01 = ANY ('{\"Option 2\",\"Option 5\"}'::text[]))",
+      "bPlan": "Aggregate  (cost=5410.04..5410.05 rows=1 width=8)\n  ->  Index Scan using records_s01 on records  (cost=0.42..5397.53 rows=5002 width=0)\n        Index Cond: ((data ->> 'flds01Q7xK2mP9wZ4'::text) = ANY ('{\"Option 2\",\"Option 5\"}'::text[]))"
+    },
+    {
+      "suite": "reads",
+      "name": "Multi-select has any of, no index: count",
+      "a": {
+        "n": 7,
+        "min": 90.37390799999412,
+        "median": 94.55863900000986,
+        "p95": 96.26569899999595,
+        "p99": 96.26569899999595,
+        "max": 96.26569899999595,
+        "mean": 93.61448685714069
+      },
+      "b": {
+        "n": 7,
+        "min": 132.09800199999881,
+        "median": 136.80636500001128,
+        "p95": 150.4947930000053,
+        "p99": 150.4947930000053,
+        "max": 150.4947930000053,
+        "mean": 138.10526800000142
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Finalize Aggregate  (cost=44592.41..44592.42 rows=1 width=8)\n  ->  Gather  (cost=44592.20..44592.41 rows=2 width=8)\n        Workers Planned: 2\n        ->  Partial Aggregate  (cost=43592.20..43592.21 rows=1 width=8)\n              ->  Parallel Seq Scan on tasks  (cost=0.00..43334.38 rows=103127 width=0)\n                    Filter: (m01 && '{Green}'::text[])",
+      "bPlan": "Finalize Aggregate  (cost=104795.17..104795.18 rows=1 width=8)\n  ->  Gather  (cost=104794.95..104795.16 rows=2 width=8)\n        Workers Planned: 2\n        ->  Partial Aggregate  (cost=103794.95..103794.96 rows=1 width=8)\n              ->  Parallel Seq Scan on records  (cost=0.00..103789.74 rows=2084 width=0)\n                    Filter: ((table_id = '00000000-0000-4000-8000-000000000002'::uuid) AND ((data -> 'fldm01Q7xK2mP9wZ4'::text) ?| '{Green}'::text[]))"
+    },
+    {
+      "suite": "reads",
+      "name": "Compound AND (contains + number + checkbox): count",
+      "a": {
+        "n": 7,
+        "min": 474.34013799999957,
+        "median": 479.7806500000006,
+        "p95": 501.8113219999941,
+        "p99": 501.8113219999941,
+        "max": 501.8113219999941,
+        "mean": 483.8643875714271
+      },
+      "b": {
+        "n": 7,
+        "min": 671.5908780000027,
+        "median": 687.4638609999965,
+        "p95": 767.9182770000043,
+        "p99": 767.9182770000043,
+        "max": 767.9182770000043,
+        "mean": 703.1636452857159
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Aggregate  (cost=37622.15..37622.16 rows=1 width=8)\n  ->  Bitmap Heap Scan on tasks  (cost=24046.29..37612.65 rows=3797 width=0)\n        Recheck Cond: (t01 ~~* '%ab%'::text)\n        Filter: (c01 AND (n02 > '5000'::numeric))\n        ->  Bitmap Index Scan on tasks_t01_trgm  (cost=0.00..24045.34 rows=15153 width=0)\n              Index Cond: (t01 ~~* '%ab%'::text)",
+      "bPlan": "Finalize Aggregate  (cost=95116.45..95116.46 rows=1 width=8)\n  ->  Gather  (cost=95116.23..95116.44 rows=2 width=8)\n        Workers Planned: 2\n        ->  Partial Aggregate  (cost=94116.23..94116.24 rows=1 width=8)\n              ->  Parallel Bitmap Heap Scan on records  (cost=24715.44..94098.86 rows=6947 width=0)\n                    Recheck Cond: (((data ->> 'fldt01Q7xK2mP9wZ4'::text) ~~* '%ab%'::text) AND (table_id = '00000000-0000-4000-8000-000000000002'::uuid))\n                    Filter: (((data ->> 'fldc01Q7xK2mP9wZ4'::text))::boolean AND (((data ->> 'fldn02Q7xK2mP9wZ4'::text))::numeric > '5000'::numeric))\n                    ->  Bitmap Index Scan on records_t01_trgm  (cost=0.00..24711.27 rows=100038 width=0)\n                          Index Cond: ((data ->> 'fldt01Q7xK2mP9wZ4'::text) ~~* '%ab%'::text)"
+    },
+    {
+      "suite": "reads",
+      "name": "Sort by 3 typed keys (select, number desc, datetime), no index: top 100",
+      "a": {
+        "n": 7,
+        "min": 59.925296000001254,
+        "median": 63.36967200000072,
+        "p95": 67.17118499999924,
+        "p99": 67.17118499999924,
+        "max": 67.17118499999924,
+        "mean": 63.30658499999845
+      },
+      "b": {
+        "n": 7,
+        "min": 437.62677899999835,
+        "median": 455.7142140000069,
+        "p95": 480.5576519999886,
+        "p99": 480.5576519999886,
+        "max": 480.5576519999886,
+        "mean": 454.5687181428574
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=51776.52..51788.18 rows=100 width=583)\n  ->  Gather Merge  (cost=51776.52..100394.91 rows=416700 width=583)\n        Workers Planned: 2\n        ->  Sort  (cost=50776.49..51297.37 rows=208350 width=583)\n              Sort Key: s02, n02 DESC, d02, id\n              ->  Parallel Seq Scan on tasks  (cost=0.00..42813.50 rows=208350 width=583)",
+      "bPlan": "Limit  (cost=166400.78..166412.44 rows=100 width=1444)\n  ->  Gather Merge  (cost=166400.78..215033.64 rows=416824 width=1444)\n        Workers Planned: 2\n        ->  Sort  (cost=165400.75..165921.78 rows=208412 width=1444)\n              Sort Key: ((data ->> 'flds02Q7xK2mP9wZ4'::text)), (((data ->> 'fldn02Q7xK2mP9wZ4'::text))::numeric) DESC, (bench_b.to_ts((data ->> 'fldd02Q7xK2mP9wZ4'::text))), id\n              ->  Parallel Seq Scan on records  (cost=0.00..157435.39 rows=208412 width=1444)\n                    Filter: (table_id = '00000000-0000-4000-8000-000000000002'::uuid)"
+    },
+    {
+      "suite": "reads",
+      "name": "Filter (select =) + sort by 2 keys (datetime desc, text): top 100",
+      "a": {
+        "n": 7,
+        "min": 47.05526799999643,
+        "median": 48.6190479999932,
+        "p95": 50.97649000000092,
+        "p99": 50.97649000000092,
+        "max": 50.97649000000092,
+        "mean": 48.92657414285558
+      },
+      "b": {
+        "n": 7,
+        "min": 161.65098900000157,
+        "median": 163.47752100000798,
+        "p95": 173.69318399998883,
+        "p99": 173.69318399998883,
+        "max": 173.69318399998883,
+        "mean": 165.84082314285584
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=39239.57..39251.24 rows=100 width=583)\n  ->  Gather Merge  (cost=39239.57..45540.48 rows=54004 width=583)\n        Workers Planned: 2\n        ->  Sort  (cost=38239.55..38307.05 rows=27002 width=583)\n              Sort Key: d02 DESC, t01, id\n              ->  Parallel Bitmap Heap Scan on tasks  (cost=565.36..37207.55 rows=27002 width=583)\n                    Recheck Cond: (s01 = 'Option 3'::text)\n                    ->  Bitmap Index Scan on tasks_s01  (cost=0.00..549.16 rows=64805 width=0)\n                          Index Cond: (s01 = 'Option 3'::text)",
+      "bPlan": "Limit  (cost=3465.15..3465.40 rows=100 width=1412)\n  ->  Sort  (cost=3465.15..3471.40 rows=2501 width=1412)\n        Sort Key: (bench_b.to_ts((data ->> 'fldd02Q7xK2mP9wZ4'::text))) DESC, ((data ->> 'fldt01Q7xK2mP9wZ4'::text)), id\n        ->  Index Scan using records_s01 on records  (cost=0.42..3369.56 rows=2501 width=1412)\n              Index Cond: ((data ->> 'flds01Q7xK2mP9wZ4'::text) = 'Option 3'::text)"
+    },
+    {
+      "suite": "reads",
+      "name": "Group by select: count, sum, avg",
+      "a": {
+        "n": 7,
+        "min": 88.0184309999895,
+        "median": 91.47344899999734,
+        "p95": 100.75788400000602,
+        "p99": 100.75788400000602,
+        "max": 100.75788400000602,
+        "mean": 93.28232685714362
+      },
+      "b": {
+        "n": 7,
+        "min": 796.0088709999982,
+        "median": 807.5486329999985,
+        "p95": 816.6570229999925,
+        "p99": 816.6570229999925,
+        "max": 816.6570229999925,
+        "mean": 806.5361647142854
+      },
+      "aRows": 8,
+      "match": true,
+      "aPlan": "Finalize GroupAggregate  (cost=45897.27..45899.51 rows=8 width=81)\n  Group Key: s01\n  ->  Gather Merge  (cost=45897.27..45899.13 rows=16 width=81)\n        Workers Planned: 2\n        ->  Sort  (cost=44897.24..44897.26 rows=8 width=81)\n              Sort Key: s01\n              ->  Partial HashAggregate  (cost=44897.00..44897.12 rows=8 width=81)\n                    Group Key: s01\n                    ->  Parallel Seq Scan on tasks  (cost=0.00..42813.50 rows=208350 width=19)",
+      "bPlan": "GroupAggregate  (cost=0.42..141635.72 rows=500190 width=104)\n  Group Key: (data ->> 'flds01Q7xK2mP9wZ4'::text)\n  ->  Index Scan using records_s01 on records  (cost=0.42..119127.17 rows=500190 width=1392)"
+    },
+    {
+      "suite": "reads",
+      "name": "Group by 2 fields (select, select): count, sum",
+      "a": {
+        "n": 7,
+        "min": 91.72440700000152,
+        "median": 94.94129699999758,
+        "p95": 107.78117499999644,
+        "p99": 107.78117499999644,
+        "max": 107.78117499999644,
+        "mean": 98.20218014285534
+      },
+      "b": {
+        "n": 7,
+        "min": 2250.3886359999888,
+        "median": 2391.5458519999956,
+        "p95": 2459.231988000014,
+        "p99": 2459.231988000014,
+        "max": 2459.231988000014,
+        "mean": 2349.1448654285696
+      },
+      "aRows": 40,
+      "match": true,
+      "aPlan": "Finalize GroupAggregate  (cost=45898.59..45909.43 rows=40 width=54)\n  Group Key: s01, s03\n  ->  Gather Merge  (cost=45898.59..45907.93 rows=80 width=54)\n        Workers Planned: 2\n        ->  Sort  (cost=44898.57..44898.67 rows=40 width=54)\n              Sort Key: s01, s03\n              ->  Partial HashAggregate  (cost=44897.00..44897.50 rows=40 width=54)\n                    Group Key: s01, s03\n                    ->  Parallel Seq Scan on tasks  (cost=0.00..42813.50 rows=208350 width=20)",
+      "bPlan": "GroupAggregate  (cost=0.67..160392.84 rows=500190 width=104)\n  Group Key: ((data ->> 'flds01Q7xK2mP9wZ4'::text)), ((data ->> 'flds03Q7xK2mP9wZ4'::text))\n  ->  Incremental Sort  (cost=0.67..142886.19 rows=500190 width=1424)\n        Sort Key: ((data ->> 'flds01Q7xK2mP9wZ4'::text)), ((data ->> 'flds03Q7xK2mP9wZ4'::text))\n        Presorted Key: ((data ->> 'flds01Q7xK2mP9wZ4'::text))\n        ->  Index Scan using records_s01 on records  (cost=0.42..120377.64 rows=500190 width=1424)"
+    },
+    {
+      "suite": "reads",
+      "name": "Keyset page at the middle, indexed sort (number, id)",
+      "a": {
+        "n": 7,
+        "min": 1.2066059999924619,
+        "median": 1.9271479999879375,
+        "p95": 2.959902999980841,
+        "p99": 2.959902999980841,
+        "max": 2.959902999980841,
+        "mean": 1.980855285709757
+      },
+      "b": {
+        "n": 7,
+        "min": 0.9495800000149757,
+        "median": 1.0983150000101887,
+        "p95": 1.5591549999953713,
+        "p99": 1.5591549999953713,
+        "max": 1.5591549999953713,
+        "mean": 1.1697522857159908
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=0.42..22.43 rows=100 width=583)\n  ->  Index Scan using tasks_n01 on tasks  (cost=0.42..49715.36 rows=225935 width=583)\n        Index Cond: (ROW(n01, id) > ROW('550511'::numeric, 345720))",
+      "bPlan": "Limit  (cost=0.42..63.36 rows=100 width=1404)\n  ->  Index Scan using records_n01 on records  (cost=0.42..104928.09 rows=166730 width=1404)\n        Index Cond: (ROW(((data ->> 'fldn01Q7xK2mP9wZ4'::text))::numeric, id) > ROW('550511'::numeric, 345720))"
+    },
+    {
+      "suite": "reads",
+      "name": "Keyset page at the middle, unindexed sort (datetime, id)",
+      "a": {
+        "n": 7,
+        "min": 86.02494000000297,
+        "median": 87.69942099999753,
+        "p95": 104.3786170000094,
+        "p99": 104.3786170000094,
+        "max": 104.3786170000094,
+        "mean": 90.60903757143284
+      },
+      "b": {
+        "n": 7,
+        "min": 485.6268970000092,
+        "median": 500.2925110000069,
+        "p95": 508.92020299998694,
+        "p99": 508.92020299998694,
+        "max": 508.92020299998694,
+        "mean": 498.1723314285752
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=48847.55..48859.22 rows=100 width=583)\n  ->  Gather Merge  (cost=48847.55..73222.55 rows=208914 width=583)\n        Workers Planned: 2\n        ->  Sort  (cost=47847.53..48108.67 rows=104457 width=583)\n              Sort Key: d03, id\n              ->  Parallel Seq Scan on tasks  (cost=0.00..43855.26 rows=104457 width=583)\n                    Filter: (ROW(d03, id) > ROW('2022-09-28 15:19:02.06627+00'::timestamp with time zone, 227971))",
+      "bPlan": "Limit  (cost=178642.47..178654.14 rows=100 width=1380)\n  ->  Gather Merge  (cost=178642.47..194853.50 rows=138942 width=1380)\n        Workers Planned: 2\n        ->  Sort  (cost=177642.45..177816.12 rows=69471 width=1380)\n              Sort Key: (bench_b.to_ts((data ->> 'fldd03Q7xK2mP9wZ4'::text))), id\n              ->  Parallel Seq Scan on records  (cost=0.00..174987.32 rows=69471 width=1380)\n                    Filter: ((table_id = '00000000-0000-4000-8000-000000000002'::uuid) AND (ROW(bench_b.to_ts((data ->> 'fldd03Q7xK2mP9wZ4'::text)), id) > ROW('2022-09-28 15:19:02.06627+00'::timestamp with time zone, 227971)))"
+    },
+    {
+      "suite": "reads",
+      "name": "OFFSET page at the middle (ORDER BY id), for contrast",
+      "a": {
+        "n": 7,
+        "min": 43.401973,
+        "median": 44.52373499999521,
+        "p95": 50.22354800000903,
+        "p99": 50.22354800000903,
+        "max": 50.22354800000903,
+        "mean": 45.5048897142863
+      },
+      "b": {
+        "n": 7,
+        "min": 71.65843899999163,
+        "median": 72.68328599998495,
+        "p95": 85.3126709999924,
+        "p99": 85.3126709999924,
+        "max": 85.3126709999924,
+        "mean": 74.55817871428528
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=24869.44..24879.39 rows=100 width=583)\n  ->  Index Scan using tasks_pkey on tasks  (cost=0.42..49742.54 rows=500041 width=583)",
+      "bPlan": "Limit  (cost=55248.28..55270.38 rows=100 width=1372)\n  ->  Index Scan using records_pkey on records  (cost=0.42..110538.13 rows=500190 width=1372)\n        Filter: (table_id = '00000000-0000-4000-8000-000000000002'::uuid)"
+    }
+  ],
+  "links": [
+    {
+      "suite": "links",
+      "name": "Page of 100 rows with linked record names",
+      "a": {
+        "n": 7,
+        "min": 1.2752160000090953,
+        "median": 1.3999190000176895,
+        "p95": 1.8849329999939073,
+        "p99": 1.8849329999939073,
+        "max": 1.8849329999939073,
+        "mean": 1.4904890000013569
+      },
+      "b": {
+        "n": 7,
+        "min": 0.9995539999799803,
+        "median": 1.481216999993194,
+        "p95": 1.8675849999999627,
+        "p99": 1.8675849999999627,
+        "max": 1.8675849999999627,
+        "mean": 1.4044882857124321
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=0.42..659.02 rows=100 width=40)\n  ->  Index Only Scan using tasks_pkey on tasks t  (cost=0.42..1640012.17 rows=249016 width=40)\n        Index Cond: (id > 250000)\n        SubPlan 1\n          ->  Nested Loop  (cost=0.71..6.57 rows=2 width=20)\n                ->  Index Only Scan using l_k01_pkey on l_k01 l  (cost=0.42..1.56 rows=2 width=8)\n                      Index Cond: (from_id = t.id)\n                ->  Index Scan using companies_pkey on companies c  (cost=0.29..2.50 rows=1 width=20)\n                      Index Cond: (id = l.to_id)",
+      "bPlan": "Limit  (cost=0.42..26625.47 rows=100 width=40)\n  ->  Index Scan using records_pkey on records r  (cost=0.42..67552808.95 rows=253719 width=40)\n        Index Cond: (id > 250000)\n        Filter: (table_id = '00000000-0000-4000-8000-000000000002'::uuid)\n        SubPlan 1\n          ->  Sort  (cost=265.78..266.03 rows=100 width=40)\n                Sort Key: c.id\n                ->  Nested Loop  (cost=0.43..262.46 rows=100 width=40)\n                      ->  Function Scan on jsonb_array_elements_text e  (cost=0.01..1.00 rows=100 width=32)\n                      ->  Index Scan using records_pkey on records c  (cost=0.43..2.61 rows=1 width=1368)\n                            Index Cond: (id = (e.v)::bigint)"
+    },
+    {
+      "suite": "links",
+      "name": "Backlinks: count rows linking to one record",
+      "a": {
+        "n": 7,
+        "min": 0.10788200001115911,
+        "median": 0.14924400000018068,
+        "p95": 0.4873270000098273,
+        "p99": 0.4873270000098273,
+        "max": 0.4873270000098273,
+        "mean": 0.23748700000162767
+      },
+      "b": {
+        "n": 7,
+        "min": 0.1774089999962598,
+        "median": 0.21871400001691654,
+        "p95": 0.57645500000217,
+        "p99": 0.57645500000217,
+        "max": 0.57645500000217,
+        "mean": 0.2729984285709049
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Aggregate  (cost=3.03..3.04 rows=1 width=8)\n  ->  Index Only Scan using l_k01_to on l_k01  (cost=0.42..2.84 rows=75 width=0)\n        Index Cond: (to_id = 42)",
+      "bPlan": "Aggregate  (cost=5393.82..5393.83 rows=1 width=8)\n  ->  Bitmap Heap Scan on records  (cost=32.48..5381.31 rows=5002 width=0)\n        Recheck Cond: (((data -> 'fldk01Q7xK2mP9wZ4'::text) @> '[1000000042]'::jsonb) AND (table_id = '00000000-0000-4000-8000-000000000002'::uuid))\n        ->  Bitmap Index Scan on records_k01  (cost=0.00..31.23 rows=5002 width=0)\n              Index Cond: ((data -> 'fldk01Q7xK2mP9wZ4'::text) @> '[1000000042]'::jsonb)"
+    },
+    {
+      "suite": "links",
+      "name": "Rollup sum(linked revenue) for a page of 100 rows",
+      "a": {
+        "n": 7,
+        "min": 0.7052689999982249,
+        "median": 0.8504940000129864,
+        "p95": 1.3157920000085142,
+        "p99": 1.3157920000085142,
+        "max": 1.3157920000085142,
+        "mean": 0.9531134285664719
+      },
+      "b": {
+        "n": 7,
+        "min": 0.8587910000060219,
+        "median": 1.0539949999947567,
+        "p95": 1.2902119999926072,
+        "p99": 1.2902119999926072,
+        "max": 1.2902119999926072,
+        "mean": 1.036968999995484
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "Limit  (cost=0.42..660.77 rows=100 width=40)\n  ->  Index Only Scan using tasks_pkey on tasks t  (cost=0.42..1644369.95 rows=249016 width=40)\n        Index Cond: (id > 250000)\n        SubPlan 1\n          ->  Aggregate  (cost=6.57..6.58 rows=1 width=32)\n                ->  Nested Loop  (cost=0.71..6.57 rows=2 width=8)\n                      ->  Index Only Scan using l_k01_pkey on l_k01 l  (cost=0.42..1.56 rows=2 width=8)\n                            Index Cond: (from_id = t.id)\n                      ->  Index Scan using companies_pkey on companies c  (cost=0.29..2.50 rows=1 width=16)\n                            Index Cond: (id = l.to_id)",
+      "bPlan": "Limit  (cost=0.42..26344.53 rows=100 width=40)\n  ->  Index Scan using records_pkey on records r  (cost=0.42..66840003.66 rows=253719 width=40)\n        Index Cond: (id > 250000)\n        Filter: (table_id = '00000000-0000-4000-8000-000000000002'::uuid)\n        SubPlan 1\n          ->  Aggregate  (cost=263.21..263.22 rows=1 width=32)\n                ->  Nested Loop  (cost=0.43..262.21 rows=100 width=1360)\n                      ->  Function Scan on jsonb_array_elements_text e  (cost=0.01..1.00 rows=100 width=32)\n                      ->  Index Scan using records_pkey on records c  (cost=0.43..2.61 rows=1 width=1368)\n                            Index Cond: (id = (e.v)::bigint)"
+    },
+    {
+      "suite": "links",
+      "name": "Reverse rollup: 100 linked-to rows with count + sum of linking rows",
+      "a": {
+        "n": 7,
+        "min": 15.174357999989297,
+        "median": 16.880617000017082,
+        "p95": 20.84419400000479,
+        "p99": 20.84419400000479,
+        "max": 20.84419400000479,
+        "mean": 17.592632714288943
+      },
+      "b": {
+        "n": 7,
+        "min": 12.137027999997372,
+        "median": 12.729369000007864,
+        "p95": 18.22724500001641,
+        "p99": 18.22724500001641,
+        "max": 18.22724500001641,
+        "mean": 13.618704142863862
+      },
+      "aRows": 100,
+      "match": true,
+      "aPlan": "GroupAggregate  (cost=1.13..4180.69 rows=100 width=48)\n  Group Key: companies.id\n  ->  Nested Loop Left Join  (cost=1.13..4122.94 rows=7534 width=22)\n        ->  Limit  (cost=0.29..2.12 rows=100 width=8)\n              ->  Index Only Scan using companies_pkey on companies  (cost=0.29..183.28 rows=10000 width=8)\n        ->  Nested Loop Left Join  (cost=0.85..40.46 rows=75 width=22)\n              ->  Index Only Scan using l_k01_to on l_k01 l  (cost=0.42..2.83 rows=75 width=16)\n                    Index Cond: (to_id = companies.id)\n              ->  Index Scan using tasks_pkey on tasks t  (cost=0.42..0.50 rows=1 width=14)\n                    Index Cond: (id = l.from_id)",
+      "bPlan": "Nested Loop  (cost=5456.77..545639.87 rows=100 width=56)\n  ->  Limit  (cost=0.42..2.72 rows=100 width=8)\n        ->  Index Only Scan using records_table on records  (cost=0.42..225.98 rows=9809 width=8)\n              Index Cond: (table_id = '00000000-0000-4000-8000-000000000003'::uuid)\n  ->  Aggregate  (cost=5456.35..5456.36 rows=1 width=40)\n        ->  Bitmap Heap Scan on records t  (cost=32.48..5393.82 rows=5002 width=1360)\n              Recheck Cond: (((data -> 'fldk01Q7xK2mP9wZ4'::text) @> jsonb_build_array(records.id)) AND (table_id = '00000000-0000-4000-8000-000000000002'::uuid))\n              ->  Bitmap Index Scan on records_k01  (cost=0.00..31.23 rows=5002 width=0)\n                    Index Cond: ((data -> 'fldk01Q7xK2mP9wZ4'::text) @> jsonb_build_array(records.id))"
+    },
+    {
+      "suite": "links",
+      "name": "Filter on a rollup over all rows (linked revenue > 1M): count",
+      "a": {
+        "n": 7,
+        "min": 335.6816239999898,
+        "median": 386.3077630000189,
+        "p95": 421.17464199999813,
+        "p99": 421.17464199999813,
+        "max": 421.17464199999813,
+        "mean": 380.76322300000385
+      },
+      "b": {
+        "n": 7,
+        "min": 545.6140000000014,
+        "median": 593.7860130000045,
+        "p95": 626.9029999999912,
+        "p99": 626.9029999999912,
+        "max": 626.9029999999912,
+        "mean": 596.1663618571432
+      },
+      "aRows": 1,
+      "match": true,
+      "aPlan": "Aggregate  (cost=46190.36..46190.37 rows=1 width=8)\n  ->  GroupAggregate  (cost=0.72..44830.56 rows=108784 width=8)\n        Group Key: l.from_id\n        Filter: (sum(c.revenue) > '1000000'::numeric)\n        ->  Nested Loop  (cost=0.72..36185.51 rows=749954 width=16)\n              ->  Index Only Scan using l_k01_pkey on l_k01 l  (cost=0.42..14424.33 rows=749954 width=16)\n              ->  Memoize  (cost=0.30..0.31 rows=1 width=16)\n                    Cache Key: l.to_id\n                    Cache Mode: logical\n                    ->  Index Scan using companies_pkey on companies c  (cost=0.29..0.30 rows=1 width=16)\n                          Index Cond: (id = l.to_id)",
+      "bPlan": "Aggregate  (cost=1445264.36..1445264.37 rows=1 width=8)\n  ->  Finalize GroupAggregate  (cost=1000.89..1443180.23 rows=166730 width=8)\n        Group Key: r.id\n        Filter: (sum(((c.data ->> 'fldrevQ7xK2mP9wZ4'::text))::numeric) > '1000000'::numeric)\n        ->  Gather Merge  (cost=1000.89..1428174.53 rows=1000380 width=40)\n              Workers Planned: 2\n              ->  Partial GroupAggregate  (cost=0.86..1311705.83 rows=500190 width=40)\n                    Group Key: r.id\n                    ->  Nested Loop  (cost=0.86..1044937.83 rows=20841250 width=1368)\n                          ->  Nested Loop  (cost=0.43..523643.39 rows=20841250 width=40)\n                                ->  Parallel Index Scan using records_pkey on records r  (cost=0.42..106819.39 rows=208412 width=1368)\n                                      Filter: (table_id = '00000000-0000-4000-8000-000000000002'::uuid)\n                                ->  Function Scan on jsonb_array_elements_text e  (cost=0.01..1.00 rows=100 width=32)\n                          ->  Memoize  (cost=0.44..2.62 rows=1 width=1368)\n                                Cache Key: (e.v)::bigint\n                                Cache Mode: logical\n                                ->  Index Scan using records_pkey on records c  (cost=0.43..2.61 rows=1 width=1368)\n                                      Index Cond: (id = (e.v)::bigint)"
+    }
+  ],
+  "rls": {
+    "cases": [
+      {
+        "name": "Count all rows",
+        "aPlain": {
+          "n": 7,
+          "min": 11.505997000000207,
+          "median": 12.31718699997873,
+          "p95": 13.516445000015665,
+          "p99": 13.516445000015665,
+          "max": 13.516445000015665,
+          "mean": 12.511231142852921
+        },
+        "aRls": {
+          "n": 7,
+          "min": 17.665964999992866,
+          "median": 18.399978999979794,
+          "p95": 19.55582300000242,
+          "p99": 19.55582300000242,
+          "max": 19.55582300000242,
+          "mean": 18.384813714277698
+        },
+        "bPlain": {
+          "n": 7,
+          "min": 11.583520000014687,
+          "median": 13.562292999995407,
+          "p95": 14.882641000003787,
+          "p99": 14.882641000003787,
+          "max": 14.882641000003787,
+          "mean": 13.489600428575484
+        },
+        "bRls": {
+          "n": 7,
+          "min": 67.5380020000157,
+          "median": 69.55306799997925,
+          "p95": 72.15775399998529,
+          "p99": 72.15775399998529,
+          "max": 72.15775399998529,
+          "mean": 69.74085714285528
+        }
+      },
+      {
+        "name": "Select = (leakproof text equality), btree: page",
+        "aPlain": {
+          "n": 7,
+          "min": 1.1545630000182427,
+          "median": 1.5068980000214651,
+          "p95": 1.785436000005575,
+          "p99": 1.785436000005575,
+          "max": 1.785436000005575,
+          "mean": 1.4844735714349164
+        },
+        "aRls": {
+          "n": 7,
+          "min": 6.46620600001188,
+          "median": 6.97253999998793,
+          "p95": 7.745834000001196,
+          "p99": 7.745834000001196,
+          "max": 7.745834000001196,
+          "mean": 7.064528999995673
+        },
+        "bPlain": {
+          "n": 7,
+          "min": 62.33450999998604,
+          "median": 64.05352700001094,
+          "p95": 64.94321000002674,
+          "p99": 64.94321000002674,
+          "max": 64.94321000002674,
+          "mean": 63.91233557142966
+        },
+        "bRls": {
+          "n": 7,
+          "min": 1.1217059999762569,
+          "median": 1.5515080000041053,
+          "p95": 1.7538470000145026,
+          "p99": 1.7538470000145026,
+          "max": 1.7538470000145026,
+          "mean": 1.453538571430337
+        }
+      },
+      {
+        "name": "Number range (1%), btree: page",
+        "aPlain": {
+          "n": 7,
+          "min": 2.3029199999873526,
+          "median": 2.7170489999989513,
+          "p95": 4.2720589999808,
+          "p99": 4.2720589999808,
+          "max": 4.2720589999808,
+          "mean": 2.9794887142862927
+        },
+        "aRls": {
+          "n": 7,
+          "min": 74.52542900000117,
+          "median": 75.15751099999761,
+          "p95": 82.48614399999497,
+          "p99": 82.48614399999497,
+          "max": 82.48614399999497,
+          "mean": 76.74229342856727
+        },
+        "bPlain": {
+          "n": 7,
+          "min": 6.9496369999833405,
+          "median": 8.583118000009563,
+          "p95": 11.955159999983152,
+          "p99": 11.955159999983152,
+          "max": 11.955159999983152,
+          "mean": 9.14222842856959
+        },
+        "bRls": {
+          "n": 7,
+          "min": 5.958764999988489,
+          "median": 6.823446000023978,
+          "p95": 13.143205000000307,
+          "p99": 13.143205000000307,
+          "max": 13.143205000000307,
+          "mean": 8.14996642857607
+        }
+      },
+      {
+        "name": "Text contains, trigram index: count",
+        "aPlain": {
+          "n": 7,
+          "min": 0.6987860000226647,
+          "median": 0.7927939999790397,
+          "p95": 1.0119100000010803,
+          "p99": 1.0119100000010803,
+          "max": 1.0119100000010803,
+          "mean": 0.80449757142508
+        },
+        "aRls": {
+          "n": 7,
+          "min": 90.33707300000242,
+          "median": 92.90323100000387,
+          "p95": 99.01035600001342,
+          "p99": 99.01035600001342,
+          "max": 99.01035600001342,
+          "mean": 93.63295371429247
+        },
+        "bPlain": {
+          "n": 7,
+          "min": 0.6393459999817424,
+          "median": 0.8984170000185259,
+          "p95": 1.2005089999875054,
+          "p99": 1.2005089999875054,
+          "max": 1.2005089999875054,
+          "mean": 0.9099348571409271
+        },
+        "bRls": {
+          "n": 7,
+          "min": 170.56928100000368,
+          "median": 180.38266000000294,
+          "p95": 183.81333299999824,
+          "p99": 183.81333299999824,
+          "max": 183.81333299999824,
+          "mean": 178.37696885714624
+        }
+      },
+      {
+        "name": "Group by select: count, sum",
+        "aPlain": {
+          "n": 7,
+          "min": 83.25006500000018,
+          "median": 85.54700900000171,
+          "p95": 91.49892800001544,
+          "p99": 91.49892800001544,
+          "max": 91.49892800001544,
+          "mean": 86.02614900000377
+        },
+        "aRls": {
+          "n": 7,
+          "min": 128.33005799999228,
+          "median": 131.7743199999968,
+          "p95": 160.88207699998748,
+          "p99": 160.88207699998748,
+          "max": 160.88207699998748,
+          "mean": 137.43879099998907
+        },
+        "bPlain": {
+          "n": 7,
+          "min": 699.6274489999923,
+          "median": 710.4910769999842,
+          "p95": 721.713791999995,
+          "p99": 721.713791999995,
+          "max": 721.713791999995,
+          "mean": 709.8960672857107
+        },
+        "bRls": {
+          "n": 7,
+          "min": 713.7072660000122,
+          "median": 747.1355789999943,
+          "p95": 805.534765999997,
+          "p99": 805.534765999997,
+          "max": 805.534765999997,
+          "mean": 745.418240571432
+        }
+      }
+    ],
+    "isolation": {
+      "aOther": 0,
+      "bOther": 0,
+      "aUnset": 0,
+      "bUnset": 0
+    }
+  },
+  "backup": [
+    {
+      "approach": "A",
+      "dumpSeconds": 10.777779542000005,
+      "dumpBytes": 148065949,
+      "restoreSeconds": 6.434865457000007,
+      "restoredRows": 500000
+    },
+    {
+      "approach": "B",
+      "dumpSeconds": 12.433102050999995,
+      "dumpBytes": 166428251,
+      "restoreSeconds": 11.212191496000013,
+      "restoredRows": 510000
+    }
+  ],
+  "writes": {
+    "cells": [
+      {
+        "name": "Random rows, unindexed number field (16 clients)",
+        "approach": "A",
+        "workers": 16,
+        "writes": 188462,
+        "perSecond": 23558,
+        "latency": {
+          "n": 188462,
+          "min": 0.15029900000081398,
+          "median": 0.6068889999878593,
+          "p95": 1.1568849999748636,
+          "p99": 1.7750509999750648,
+          "max": 87.59576000002562,
+          "mean": 0.6744113368902132
+        },
+        "walBytesPerWrite": 2775,
+        "hotPercent": 70.6,
+        "lostUpdates": null
+      },
+      {
+        "name": "Random rows, indexed number field (16 clients)",
+        "approach": "A",
+        "workers": 16,
+        "writes": 157572,
+        "perSecond": 19697,
+        "latency": {
+          "n": 157572,
+          "min": 0.15145899998606183,
+          "median": 0.7107109999924432,
+          "p95": 1.3322400000179186,
+          "p99": 1.9529760000004899,
+          "max": 334.795409000013,
+          "mean": 0.8124387734496092
+        },
+        "walBytesPerWrite": 4064,
+        "hotPercent": 13.9,
+        "lostUpdates": null
+      },
+      {
+        "name": "Random rows, unindexed number field (16 clients)",
+        "approach": "B",
+        "workers": 16,
+        "writes": 119917,
+        "perSecond": 14990,
+        "latency": {
+          "n": 119917,
+          "min": 0.2388349999964703,
+          "median": 0.9622479999961797,
+          "p95": 1.6748329999973066,
+          "p99": 2.291904000012437,
+          "max": 297.32706900002086,
+          "mean": 1.0664805337191716
+        },
+        "walBytesPerWrite": 7957,
+        "hotPercent": 0.3,
+        "lostUpdates": null
+      },
+      {
+        "name": "Random rows, indexed number field (16 clients)",
+        "approach": "B",
+        "workers": 16,
+        "writes": 120162,
+        "perSecond": 15020,
+        "latency": {
+          "n": 120162,
+          "min": 0.25378500000806525,
+          "median": 0.9659410000022035,
+          "p95": 1.6903150000143796,
+          "p99": 2.327554000017699,
+          "max": 377.92502000002423,
+          "mean": 1.0644247311962183
+        },
+        "walBytesPerWrite": 7659,
+        "hotPercent": 0.1,
+        "lostUpdates": null
+      },
+      {
+        "name": "Contention: 8 clients, 8 hot rows, one field each",
+        "approach": "A",
+        "workers": 8,
+        "writes": 167925,
+        "perSecond": 20991,
+        "latency": {
+          "n": 167925,
+          "min": 0.12365200000931509,
+          "median": 0.33437599998433143,
+          "p95": 0.6213489999936428,
+          "p99": 1.012828000006266,
+          "max": 28.746306999993976,
+          "mean": 0.3803345592555772
+        },
+        "walBytesPerWrite": 247,
+        "hotPercent": 97.9,
+        "lostUpdates": 0
+      },
+      {
+        "name": "Contention: 8 clients, 8 hot rows, one field each",
+        "approach": "B",
+        "workers": 8,
+        "writes": 94658,
+        "perSecond": 11832,
+        "latency": {
+          "n": 94658,
+          "min": 0.1849439999787137,
+          "median": 0.5453289999859408,
+          "p95": 1.1373419999727048,
+          "p99": 1.686344999994617,
+          "max": 281.30504700000165,
+          "mean": 0.6751146615183491
+        },
+        "walBytesPerWrite": 2791,
+        "hotPercent": 0,
+        "lostUpdates": 0
+      },
+      {
+        "name": "Contention: 8 clients, 8 hot rows, one field each",
+        "approach": "B-rmw",
+        "workers": 8,
+        "writes": 69367,
+        "perSecond": 8671,
+        "latency": {
+          "n": 69367,
+          "min": 0.33236400003079325,
+          "median": 0.8521179999806918,
+          "p95": 1.4209450000198558,
+          "p99": 1.9293269999907352,
+          "max": 28.765474000014365,
+          "mean": 0.9215706669309777
+        },
+        "walBytesPerWrite": 6517,
+        "hotPercent": 0,
+        "lostUpdates": 27
+      }
+    ],
+    "bulk": [
+      {
+        "approach": "A",
+        "rowsPerCall": 1000,
+        "latency": {
+          "n": 5,
+          "min": 34.75734999997076,
+          "median": 37.68973199999891,
+          "p95": 54.70358099997975,
+          "p99": 54.70358099997975,
+          "max": 54.70358099997975,
+          "mean": 40.63690739999292
+        }
+      },
+      {
+        "approach": "B",
+        "rowsPerCall": 1000,
+        "latency": {
+          "n": 5,
+          "min": 45.22731699998258,
+          "median": 48.08237600000575,
+          "p95": 64.80300399998669,
+          "p99": 64.80300399998669,
+          "max": 64.80300399998669,
+          "mean": 51.06679219999351
+        }
+      }
+    ]
+  },
+  "ddl": {
+    "ops": [
+      {
+        "name": "Add field (nullable column)",
+        "approach": "A",
+        "opMs": 8.100825999979861,
+        "writerMaxMs": 3.3326400000369176,
+        "writerP99Ms": 0.9015209999633953,
+        "writes": 8150
+      },
+      {
+        "name": "Add field with default (checkbox NOT NULL DEFAULT false)",
+        "approach": "A",
+        "opMs": 3.3847030000179075,
+        "writerMaxMs": 37.633863000024576,
+        "writerP99Ms": 0.8067559999763034,
+        "writes": 7842
+      },
+      {
+        "name": "Add field",
+        "approach": "B",
+        "opMs": 0.08081499999389052,
+        "writerMaxMs": 23.08741799998097,
+        "writerP99Ms": 0.9992469999706373,
+        "writes": 5815,
+        "note": "metadata only, no DDL"
+      },
+      {
+        "name": "Index a text field (CREATE INDEX CONCURRENTLY)",
+        "approach": "A",
+        "opMs": 404.2208780000219,
+        "writerMaxMs": 9.737428999971598,
+        "writerP99Ms": 0.9521930000046268,
+        "writes": 12380
+      },
+      {
+        "name": "Index a text field (CREATE INDEX CONCURRENTLY)",
+        "approach": "B",
+        "opMs": 615.8736419999623,
+        "writerMaxMs": 337.07202900003176,
+        "writerP99Ms": 1.2891190000227652,
+        "writes": 9371
+      },
+      {
+        "name": "Change type text -> number, in place (ALTER COLUMN TYPE, table rewrite)",
+        "approach": "A",
+        "opMs": 4693.248976000003,
+        "writerMaxMs": 4610.184565000003,
+        "writerP99Ms": 1.0064260000362992,
+        "writes": 8439,
+        "note": "ACCESS EXCLUSIVE for the whole rewrite, including every index"
+      },
+      {
+        "name": "Change type text -> number, one UPDATE (jsonb_set every row)",
+        "approach": "B",
+        "opMs": 19337.44625800004,
+        "writerMaxMs": 19304.035826999985,
+        "writerP99Ms": 0.9848200000124052,
+        "writes": 6277,
+        "note": "row locks on every row until commit"
+      },
+      {
+        "name": "Change type number -> text, online (new column, trigger, batched backfill, swap)",
+        "approach": "A",
+        "opMs": 15803.858842000016,
+        "writerMaxMs": 1006.0206539999926,
+        "writerP99Ms": 1.3638240000000224,
+        "writes": 57020,
+        "note": "batches of 10,000 rows; leaves dead tuples for autovacuum"
+      },
+      {
+        "name": "Change type number -> text, batched UPDATEs",
+        "approach": "B",
+        "opMs": 26562.015610000002,
+        "writerMaxMs": 647.6301390000153,
+        "writerP99Ms": 3.0775550000253133,
+        "writes": 52130,
+        "note": "batches of 10,000 rows"
+      },
+      {
+        "name": "Delete field (DROP COLUMN)",
+        "approach": "A",
+        "opMs": 2.9478620000299998,
+        "writerMaxMs": 19.416251999966335,
+        "writerP99Ms": 1.0314359999611042,
+        "writes": 7027
+      },
+      {
+        "name": "Delete field (strip the key, batched UPDATEs)",
+        "approach": "B",
+        "opMs": 26205.520699999994,
+        "writerMaxMs": 650.1826110000256,
+        "writerP99Ms": 3.0445569999865256,
+        "writes": 57593,
+        "note": "or leave the key behind and filter it on read"
+      }
+    ],
+    "safety": {
+      "transactionalRollback": true,
+      "lockTimeoutSetting": "1s",
+      "ddlFailedAfterMs": 1002.0256260000169,
+      "ddlErrorCode": "55P03",
+      "readerWaitedMs": 902.2071640000213,
+      "retryAfterReleaseMs": 1.2339369999826886
+    }
+  },
+  "catalog": {
+    "tables": 5000,
+    "schemas": 200,
+    "createMs": {
+      "n": 5000,
+      "min": 3.234178000013344,
+      "median": 4.978376000013668,
+      "p95": 7.59992800001055,
+      "p99": 15.146704000013415,
+      "max": 92.3233439999749,
+      "mean": 5.594070598800096
+    },
+    "totalCreateSeconds": 28.088004085999973,
+    "relationsAdded": 30000,
+    "catalogBytesAdded": 96174080,
+    "catalogBytesPerTable": 19235,
+    "coldFirstQueryMs": {
+      "n": 20,
+      "min": 1.4832190000452101,
+      "median": 1.7023339999723248,
+      "p95": 3.034501999965869,
+      "p99": 3.034501999965869,
+      "max": 3.034501999965869,
+      "mean": 1.8543556500051637
+    },
+    "schemaDumpSeconds": 2.855188586999953,
+    "dropSeconds": 13.513470510000014
+  }
+}

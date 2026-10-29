@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "notification_frequency" text DEFAULT 'immediately' NOT NULL;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_notification_frequency_check" CHECK ("users"."notification_frequency" IN ('immediately', 'hourly', 'daily'));

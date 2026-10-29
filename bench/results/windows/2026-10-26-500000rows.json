@@ -1,0 +1,402 @@
+{
+  "startedAt": "2026-10-26T22:09:49.195Z",
+  "durationSeconds": 174.21,
+  "machine": {
+    "cpu": "Intel(R) Xeon(R) Processor",
+    "vcpus": 8,
+    "memoryGiB": 16,
+    "os": "Linux 6.12.94+",
+    "node": "v22.23.3",
+    "docker": "26.1.5+dfsg1",
+    "postgresImage": "postgres:16-alpine"
+  },
+  "postgres": {
+    "version": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "settings": [
+      {
+        "name": "effective_cache_size",
+        "setting": "1048576",
+        "unit": "8kB"
+      },
+      {
+        "name": "jit",
+        "setting": "off",
+        "unit": null
+      },
+      {
+        "name": "maintenance_work_mem",
+        "setting": "524288",
+        "unit": "kB"
+      },
+      {
+        "name": "max_parallel_workers_per_gather",
+        "setting": "2",
+        "unit": null
+      },
+      {
+        "name": "max_wal_size",
+        "setting": "8192",
+        "unit": "MB"
+      },
+      {
+        "name": "random_page_cost",
+        "setting": "1.1",
+        "unit": null
+      },
+      {
+        "name": "shared_buffers",
+        "setting": "262144",
+        "unit": "8kB"
+      },
+      {
+        "name": "work_mem",
+        "setting": "32768",
+        "unit": "kB"
+      }
+    ]
+  },
+  "config": {
+    "rows": 500000,
+    "fields": 30,
+    "companies": 10000,
+    "iterations": 7,
+    "concurrency": 16,
+    "writeSeconds": 8,
+    "catalogTables": 5000,
+    "suites": [
+      "windows"
+    ]
+  },
+  "load": {
+    "aLoadMs": 41877.136993,
+    "aIndexMs": 2341.457524999998,
+    "bLoadMs": 23858.968273000006,
+    "bIndexMs": 3199.6709449999908,
+    "vacuumMs": 1276.2970410000125,
+    "junctionRows": 749954
+  },
+  "storage": {
+    "aTableBytes": 334757888,
+    "aIndexBytes": 66166784,
+    "aJunctionBytes": 80568320,
+    "bTableBytes": 820043776,
+    "bIndexBytes": 94208000,
+    "aAvgRowBytes": 628,
+    "bAvgRowBytes": 1473
+  },
+  "windows": {
+    "builds": [
+      {
+        "name": "i_text_sort",
+        "ms": 531.86337799998
+      },
+      {
+        "name": "i_number_sort",
+        "ms": 355.9337859999796
+      },
+      {
+        "name": "i_composite",
+        "ms": 379.0013029999973
+      },
+      {
+        "name": "i_text_trgm",
+        "ms": 1140.7191800000146
+      },
+      {
+        "name": "i_number_filter",
+        "ms": 297.9898739999917
+      }
+    ],
+    "cases": [
+      {
+        "name": "Text sort, first window",
+        "target": 50,
+        "before": {
+          "n": 21,
+          "min": 186.17581000000064,
+          "median": 190.99681400001282,
+          "p95": 217.49180099999649,
+          "p99": 230.3138309999922,
+          "max": 230.3138309999922,
+          "mean": 194.8769566666673
+        },
+        "after": {
+          "n": 21,
+          "min": 0.9406080000044312,
+          "median": 1.140666000021156,
+          "p95": 1.3590550000080839,
+          "p99": 1.6593090000096709,
+          "max": 1.6593090000096709,
+          "mean": 1.170868142861374
+        },
+        "pass": true,
+        "plan": "Limit  (cost=0.42..11.80 rows=100 width=615)\n  ->  Index Scan using i_text_sort on tasks r  (cost=0.42..56891.77 rows=500012 width=615)"
+      },
+      {
+        "name": "Text sort, window at row 10,000",
+        "target": 50,
+        "before": {
+          "n": 21,
+          "min": 263.5894769999868,
+          "median": 271.30959799999255,
+          "p95": 337.6043869999994,
+          "p99": 340.8280369999993,
+          "max": 340.8280369999993,
+          "mean": 280.3099902380934
+        },
+        "after": {
+          "n": 21,
+          "min": 7.870358999993186,
+          "median": 8.541946000012103,
+          "p95": 9.574018999992404,
+          "p99": 14.78060599998571,
+          "max": 14.78060599998571,
+          "mean": 8.910695571427434
+        },
+        "pass": true,
+        "plan": "Limit  (cost=1138.22..1149.60 rows=100 width=615)\n  ->  Index Scan using i_text_sort on tasks r  (cost=0.42..56891.77 rows=500012 width=615)"
+      },
+      {
+        "name": "Text sort, window at the middle",
+        "target": 150,
+        "before": {
+          "n": 21,
+          "min": 624.3378439999942,
+          "median": 657.0985090000031,
+          "p95": 726.2317509999993,
+          "p99": 742.6998420000018,
+          "max": 742.6998420000018,
+          "mean": 662.4933088095243
+        },
+        "after": {
+          "n": 21,
+          "min": 290.433223,
+          "median": 307.628595999995,
+          "p95": 333.4896519999893,
+          "p99": 343.4334660000168,
+          "max": 343.4334660000168,
+          "mean": 310.97510204761613
+        },
+        "pass": false,
+        "plan": "Limit  (cost=28445.41..28456.79 rows=100 width=615)\n  ->  Index Scan using i_text_sort on tasks r  (cost=0.42..56891.77 rows=500012 width=615)"
+      },
+      {
+        "name": "Text sort, last window",
+        "target": 150,
+        "before": {
+          "n": 21,
+          "min": 774.3909370000038,
+          "median": 819.4954409999918,
+          "p95": 853.2738929999905,
+          "p99": 895.5742239999963,
+          "max": 895.5742239999963,
+          "mean": 818.8541293809506
+        },
+        "after": {
+          "n": 21,
+          "min": 589.3575010000204,
+          "median": 614.6822669999965,
+          "p95": 659.3345130000089,
+          "p99": 685.1220319999848,
+          "max": 685.1220319999848,
+          "mean": 622.4141508095199
+        },
+        "pass": false,
+        "plan": "Limit  (cost=56879.02..56890.40 rows=100 width=615)\n  ->  Index Scan using i_text_sort on tasks r  (cost=0.42..56891.77 rows=500012 width=615)"
+      },
+      {
+        "name": "Number sort (desc), first window",
+        "target": 50,
+        "before": {
+          "n": 21,
+          "min": 46.02429899999697,
+          "median": 47.257047999999486,
+          "p95": 48.07339900000079,
+          "p99": 52.0356380000012,
+          "max": 52.0356380000012,
+          "mean": 47.40168880952323
+        },
+        "after": {
+          "n": 21,
+          "min": 1.0209470000118017,
+          "median": 1.3472339999862015,
+          "p95": 1.671143999992637,
+          "p99": 1.6901320000179112,
+          "max": 1.6901320000179112,
+          "mean": 1.3229795238127866
+        },
+        "pass": true,
+        "plan": "Limit  (cost=0.59..14.84 rows=100 width=583)\n  ->  Incremental Sort  (cost=0.59..71217.63 rows=500012 width=583)\n        Sort Key: n02 DESC NULLS LAST, id\n        Presorted Key: n02\n        ->  Index Scan Backward using i_number_sort on tasks r  (cost=0.42..54422.09 rows=500012 width=583)"
+      },
+      {
+        "name": "Number sort (desc), window at the middle",
+        "target": 150,
+        "before": {
+          "n": 21,
+          "min": 416.9577189999982,
+          "median": 431.17909400000644,
+          "p95": 455.1394370000053,
+          "p99": 461.5910509999958,
+          "max": 461.5910509999958,
+          "mean": 433.86146328571584
+        },
+        "after": {
+          "n": 21,
+          "min": 315.5133210000058,
+          "median": 335.84295999997994,
+          "p95": 350.9048100000073,
+          "p99": 376.3575739999942,
+          "max": 376.3575739999942,
+          "mean": 338.07599490475593
+        },
+        "pass": false,
+        "plan": "Limit  (cost=35608.26..35622.50 rows=100 width=583)\n  ->  Incremental Sort  (cost=0.59..71217.63 rows=500012 width=583)\n        Sort Key: n02 DESC NULLS LAST, id\n        Presorted Key: n02\n        ->  Index Scan Backward using i_number_sort on tasks r  (cost=0.42..54422.09 rows=500012 width=583)"
+      },
+      {
+        "name": "Date desc + text sort, first window",
+        "target": 50,
+        "before": {
+          "n": 21,
+          "min": 171.38808200000494,
+          "median": 179.10950399999274,
+          "p95": 188.04077099999995,
+          "p99": 200.35967299999902,
+          "max": 200.35967299999902,
+          "mean": 179.05353028571352
+        },
+        "after": {
+          "n": 21,
+          "min": 0.9367330000095535,
+          "median": 1.1262360000109766,
+          "p95": 1.8186550000100397,
+          "p99": 1.9601590000092983,
+          "max": 1.9601590000092983,
+          "mean": 1.2940763333393814
+        },
+        "pass": true,
+        "plan": "Limit  (cost=0.42..11.92 rows=100 width=615)\n  ->  Index Scan using i_composite on tasks r  (cost=0.42..57499.15 rows=500012 width=615)"
+      },
+      {
+        "name": "Date desc + text sort, window at row 10,000",
+        "target": 50,
+        "before": {
+          "n": 21,
+          "min": 204.7912559999968,
+          "median": 213.2388440000068,
+          "p95": 232.73255600000266,
+          "p99": 233.40892700001132,
+          "max": 233.40892700001132,
+          "mean": 215.24379671428497
+        },
+        "after": {
+          "n": 21,
+          "min": 8.425316000008024,
+          "median": 8.997847000020556,
+          "p95": 10.133876000007149,
+          "p99": 13.383173000009265,
+          "max": 13.383173000009265,
+          "mean": 9.282069904765757
+        },
+        "pass": true,
+        "plan": "Limit  (cost=1150.37..1161.87 rows=100 width=615)\n  ->  Index Scan using i_composite on tasks r  (cost=0.42..57499.15 rows=500012 width=615)"
+      },
+      {
+        "name": "Text sort, keyset page at the middle",
+        "target": 50,
+        "before": {
+          "n": 21,
+          "min": 149.016054000007,
+          "median": 154.27190600000904,
+          "p95": 168.44058200001018,
+          "p99": 200.24904599998263,
+          "max": 200.24904599998263,
+          "mean": 157.73182300000224
+        },
+        "after": {
+          "n": 21,
+          "min": 1.2751139999891166,
+          "median": 1.9540459999989253,
+          "p95": 2.5277920000080485,
+          "p99": 2.9947669999965,
+          "max": 2.9947669999965,
+          "mean": 1.879007095234036
+        },
+        "pass": true,
+        "plan": "Limit  (cost=0.42..45.32 rows=100 width=615)\n  ->  Index Scan using i_text_sort on tasks r  (cost=0.42..54105.28 rows=120499 width=615)\n        Index Cond: (lower(t02) >= '80209a482ad35761'::text)\n        Filter: ((lower(t02) > '80209a482ad35761'::text) OR ((lower(t02) = '80209a482ad35761'::text) AND (id > '290335'::bigint)))"
+      },
+      {
+        "name": "Text contains (trigram), first window",
+        "target": 50,
+        "before": {
+          "n": 21,
+          "min": 3.5744049999921117,
+          "median": 3.8531220000004396,
+          "p95": 9.832360000000335,
+          "p99": 12.224290999991354,
+          "max": 12.224290999991354,
+          "mean": 5.12368176190371
+        },
+        "after": {
+          "n": 21,
+          "min": 3.829310000000987,
+          "median": 5.153287000022829,
+          "p95": 7.309834000014234,
+          "p99": 7.557709999993676,
+          "max": 7.557709999993676,
+          "mean": 5.451151761906831
+        },
+        "pass": true,
+        "plan": "Limit  (cost=0.42..1034.95 rows=100 width=583)\n  ->  Index Scan using tasks_pkey on tasks r  (cost=0.42..50992.13 rows=4929 width=583)\n        Filter: (t03 ~~* '%note 42%'::text)"
+      },
+      {
+        "name": "Number range 1% + text sort, first window",
+        "target": 50,
+        "before": {
+          "n": 21,
+          "min": 66.25698299999931,
+          "median": 67.38828699997975,
+          "p95": 71.82507500000065,
+          "p99": 72.1621349999914,
+          "max": 72.1621349999914,
+          "mean": 68.02080076190205
+        },
+        "after": {
+          "n": 21,
+          "min": 6.798190000001341,
+          "median": 7.104002000007313,
+          "p95": 8.107657000015024,
+          "p99": 13.687689999991562,
+          "max": 13.687689999991562,
+          "mean": 7.478049523811067
+        },
+        "pass": true,
+        "plan": "Limit  (cost=0.42..1073.79 rows=100 width=615)\n  ->  Index Scan using i_text_sort on tasks r  (cost=0.42..58155.34 rows=5418 width=615)\n        Filter: ((n04 >= '1000'::numeric) AND (n04 < '1050'::numeric))"
+      },
+      {
+        "name": "Unsorted view (id order), window at row 10,000",
+        "target": 50,
+        "before": {
+          "n": 21,
+          "min": 1.6259680000075605,
+          "median": 1.8784619999933057,
+          "p95": 2.2855819999822415,
+          "p99": 2.336825000005774,
+          "max": 2.336825000005774,
+          "mean": 1.9026206666686838
+        },
+        "after": {
+          "n": 21,
+          "min": 1.6860369999776594,
+          "median": 1.8911070000031032,
+          "p95": 2.526032999972813,
+          "p99": 2.5696829999797046,
+          "max": 2.5696829999797046,
+          "mean": 1.9690944761885996
+        },
+        "pass": true,
+        "plan": "Limit  (cost=995.23..1005.18 rows=100 width=583)\n  ->  Index Scan using tasks_pkey on tasks r  (cost=0.42..49742.10 rows=500012 width=583)"
+      }
+    ],
+    "pass": false
+  }
+}

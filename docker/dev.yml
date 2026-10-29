@@ -1,0 +1,204 @@
+# dev overlay: the whole stack on loopback ports, with Keycloak (dev realm), Mailpit and an S3
+# server, so `docker/compose.sh dev up -d --wait` gives a working app at http://localhost:8180.
+#
+# Networking (docker/README.md "Networking"): every service joins the network namespace of
+# `net`, a container that only holds it open. Services reach each other on 127.0.0.1, and `net`
+# maps the service names (postgres, s3, mailpit, ...) to 127.0.0.1, so URLs read the same as in
+# prod. Some Docker hosts block traffic between containers on a bridge network (this dev
+# machine's does; DNS resolves, TCP times out), but never inside one namespace. It also gives
+# the browser and the api the same Keycloak issuer, http://localhost:8080. Only `net` publishes
+# ports (a container in another's namespace can't), all on 127.0.0.1:
+#
+#   app (api + client)  http://localhost:8180   → api 3000
+#   Keycloak            http://localhost:8080   (admin console: KC_ADMIN_USER / KC_ADMIN_PASSWORD)
+#   Mailpit             http://localhost:8025   (UI and API), SMTP localhost:1025
+#   S3 (versitygw)      http://localhost:9000   bucket `openrows`
+#   Postgres            localhost:5432          (`npm run dev` on the host uses it, see README)
+#   Valkey              localhost:6379          (only with COMPOSE_PROFILES=valkey)
+#   Webhook receiver    http://localhost:8190   (GET /requests: what webhooks delivered)
+#   Fake Airtable       http://airtable-fake:8191 inside the namespace only (the importer)
+#
+# Dev only: Keycloak runs start-dev (embedded H2, no TLS) and re-imports the realm on every new
+# container, so accounts registered in it last until `down`.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "10"
+    compress: "true"
+
+services:
+  net:
+    # Holds the shared network namespace. Any small image would do; this one is already pinned
+    # and pulled for postgres. tini (init) ends `sleep` on SIGTERM.
+    image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
+    entrypoint: ["sleep", "infinity"]
+    init: true
+    restart: unless-stopped
+    logging: *logging
+    # Every container in the namespace shares this /etc/hosts.
+    extra_hosts:
+      - "postgres:127.0.0.1"
+      - "keycloak:127.0.0.1"
+      - "mailpit:127.0.0.1"
+      - "s3:127.0.0.1"
+      - "valkey:127.0.0.1"
+      - "webhook-receiver:127.0.0.1"
+      - "airtable-fake:127.0.0.1"
+    ports:
+      - "127.0.0.1:8180:3000"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:8190:8190"
+
+  postgres:
+    network_mode: service:net
+  migrate:
+    network_mode: service:net
+    environment:
+      NODE_ENV: development
+  api:
+    network_mode: service:net
+    environment:
+      # Production refuses http URLs and the dev secrets below (config.ts).
+      NODE_ENV: development
+      # Webhooks may reach the stack's receiver over http on 8190, the Airtable
+      # importer the fake Airtable on 8191, and single sign-on's OIDC discovery
+      # the dev Keycloak's customer realm on localhost:8080 (and only them).
+      OUTBOUND_HTTP_ALLOW_HTTP: "true"
+      OUTBOUND_HTTP_PORTS: "8080,8190,8191"
+      OUTBOUND_HTTP_ALLOW: webhook-receiver,airtable-fake,localhost
+      AIRTABLE_API_URL: http://airtable-fake:8191
+      AIRTABLE_ATTACHMENT_HOSTS: airtable-fake
+      # The status page link as prod has it, for the stack's e2e (shell.spec.ts).
+      STATUS_PAGE_URL: ${STATUS_PAGE_URL-https://status.openrows.io}
+    depends_on:
+      s3:
+        condition: service_healthy
+  worker:
+    network_mode: service:net
+    environment:
+      NODE_ENV: development
+      OUTBOUND_HTTP_ALLOW_HTTP: "true"
+      OUTBOUND_HTTP_PORTS: "8080,8190,8191"
+      OUTBOUND_HTTP_ALLOW: webhook-receiver,airtable-fake,localhost
+      AIRTABLE_API_URL: http://airtable-fake:8191
+      AIRTABLE_ATTACHMENT_HOSTS: airtable-fake
+  valkey:
+    network_mode: service:net
+
+  keycloak:
+    # Same version as the production Keycloak, pinned by digest.
+    image: quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab1e7afd63b5f530e1b5c0590bd7aa60b40a40463e29b2c
+    command: ["start-dev", "--import-realm"]
+    network_mode: service:net
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:?set KC_ADMIN_PASSWORD in the env file}
+      # The public URL, so the issuer is the same for the browser and the api.
+      KC_HOSTNAME: http://localhost:8080
+      KC_HEALTH_ENABLED: "true"
+      # The management port moves off 9000, which the S3 server uses in this namespace.
+      KC_HTTP_MANAGEMENT_PORT: "9990"
+      # Social sign-in is off unless you set these (docs/deploy/keycloak.md).
+      OPENROWS_GOOGLE_ENABLED: ${OPENROWS_GOOGLE_ENABLED:-false}
+      OPENROWS_GOOGLE_CLIENT_ID: ${OPENROWS_GOOGLE_CLIENT_ID:-}
+      OPENROWS_GOOGLE_CLIENT_SECRET: ${OPENROWS_GOOGLE_CLIENT_SECRET:-}
+      OPENROWS_GITHUB_ENABLED: ${OPENROWS_GITHUB_ENABLED:-false}
+      OPENROWS_GITHUB_CLIENT_ID: ${OPENROWS_GITHUB_CLIENT_ID:-}
+      OPENROWS_GITHUB_CLIENT_SECRET: ${OPENROWS_GITHUB_CLIENT_SECRET:-}
+    volumes:
+      - ./keycloak/openrows-realm.json:/opt/keycloak/data/import/openrows-realm.json:ro
+      # Dev and CI only: a second realm acting as a customer's SAML and OIDC identity
+      # provider, for workspace single sign-on (docs/deploy/keycloak.md "Single sign-on").
+      - ./keycloak/customer-realm.json:/opt/keycloak/data/import/customer-realm.json:ro
+      # The openrows sign-in pages and emails, the realm's loginTheme/emailTheme.
+      - ./keycloak/themes/openrows:/opt/keycloak/themes/openrows:ro
+    healthcheck:
+      # The image has no curl. Match the status LINE: the JSON body lists sub-checks that are
+      # "UP" while Keycloak itself is still DOWN.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9990 &&
+          printf 'GET /health/ready HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          head -1 <&3 | grep -q ' 200 '
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  mailpit:
+    # Catches Keycloak's verification and reset mail (the realm sends to 127.0.0.1:1025) and the
+    # app's own mail (SMTP_HOST=mailpit in .env.dev).
+    image: axllent/mailpit:v1.31.2@sha256:74d609a42ec279aa63c6b4622a6fa9b5408d1ad5b1d76a1c4be40a265ce0863d
+    network_mode: service:net
+    restart: unless-stopped
+    logging: *logging
+
+  s3:
+    # S3-compatible storage for dev: Versity S3 Gateway (Apache-2.0) on its posix backend, where
+    # every top-level directory is a bucket. MinIO no longer publishes images (docker/README.md).
+    image: versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316
+    network_mode: service:net
+    restart: unless-stopped
+    logging: *logging
+    entrypoint: ["sh", "-c", "mkdir -p \"/data/$$S3_BUCKET\" && exec versitygw --port :9000 --quiet posix --nometa /data"]
+    environment:
+      ROOT_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in the env file}
+      ROOT_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in the env file}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET in the env file}
+      # The browser PUTs attachments to presigned URLs on another origin. Dev only: any
+      # origin (the presigned signature is the credential); prod buckets name the app's origin.
+      VGW_CORS_ALLOW_ORIGIN: "*"
+    volumes:
+      - s3data:/data
+    healthcheck:
+      # Any HTTP answer (an anonymous request gets 403) means it's serving.
+      test: ["CMD-SHELL", "wget -S -q -O /dev/null http://127.0.0.1:9000/ 2>&1 | grep -q 'HTTP/'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  webhook-receiver:
+    # Records what webhooks deliver for the e2e spec: docker/webhook-receiver.mjs on the
+    # app image's Node. Dev and CI only.
+    image: ${IMAGE:-openrows:local}
+    command: ["node", "/receiver/webhook-receiver.mjs"]
+    network_mode: service:net
+    restart: unless-stopped
+    logging: *logging
+    volumes:
+      - ./webhook-receiver.mjs:/receiver/webhook-receiver.mjs:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8190/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  airtable-fake:
+    # A fake of Airtable's Web API and file hosts serving the importer's recorded fixture
+    # base, for the e2e spec: docker/airtable-fake.mjs on the app image's Node. Dev and CI only.
+    image: ${IMAGE:-openrows:local}
+    command: ["node", "/fake/airtable-fake.mjs"]
+    network_mode: service:net
+    restart: unless-stopped
+    logging: *logging
+    volumes:
+      - ./airtable-fake.mjs:/fake/airtable-fake.mjs:ro
+      - ../packages/server/src/airtable/__fixtures__:/fixtures:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8191/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  s3data:

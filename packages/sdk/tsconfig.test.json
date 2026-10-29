@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.test.tsbuildinfo"
+  },
+  "include": ["src/**/*.test.ts", "scripts/**/*.ts", "vitest.config.ts"],
+  "references": [{ "path": "./tsconfig.build.json" }, { "path": "../shared/tsconfig.build.json" }]
+}

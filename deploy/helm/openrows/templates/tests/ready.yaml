@@ -1,0 +1,42 @@
+# `helm test <release>`: the api's /health, /ready and web client through its Service, from
+# inside the namespace.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "openrows.fullname" . }}-test-ready
+  labels:
+    {{- include "openrows.labels" (dict "root" . "component" "test") | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: ready
+      image: {{ include "openrows.image" . }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      command:
+        - node
+        - -e
+        - |
+          const base = 'http://{{ include "openrows.fullname" . }}:{{ .Values.service.port }}';
+          (async () => {
+            for (const path of ['/health', '/ready', '/']) {
+              const res = await fetch(base + path);
+              console.log(path, res.status);
+              if (!res.ok) process.exit(1);
+            }
+            const ready = await (await fetch(base + '/ready')).json();
+            console.log(JSON.stringify(ready.checks));
+          })().catch((err) => { console.error(err); process.exit(1); });
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 128Mi

@@ -1,0 +1,3337 @@
+[
+  {
+    "formula": "1 + 2",
+    "stored": "1 + 2",
+    "display": "1 + 2",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "+",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 4,
+          "end": 5
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "1 - 2",
+    "stored": "1 - 2",
+    "display": "1 - 2",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "-",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 4,
+          "end": 5
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "2 * 3",
+    "stored": "2 * 3",
+    "display": "2 * 3",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 3,
+        "range": {
+          "start": 4,
+          "end": 5
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "6 / 3",
+    "stored": "6 / 3",
+    "display": "6 / 3",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "/",
+      "left": {
+        "type": "number",
+        "value": 6,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 3,
+        "range": {
+          "start": 4,
+          "end": 5
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "1 + 2 * 3",
+    "stored": "1 + 2 * 3",
+    "display": "1 + 2 * 3",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "+",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 8,
+            "end": 9
+          }
+        },
+        "range": {
+          "start": 4,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "(1 + 2) * 3",
+    "stored": "(1 + 2) * 3",
+    "display": "(1 + 2) * 3",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "binary",
+        "operator": "+",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 1,
+            "end": 2
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 5,
+            "end": 6
+          }
+        },
+        "range": {
+          "start": 1,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 3,
+        "range": {
+          "start": 10,
+          "end": 11
+        }
+      },
+      "range": {
+        "start": 1,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "1 * 2 + 3",
+    "stored": "1 * 2 + 3",
+    "display": "1 * 2 + 3",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "+",
+      "left": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 0,
+            "end": 1
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 3,
+        "range": {
+          "start": 8,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "1 - 2 - 3",
+    "stored": "1 - 2 - 3",
+    "display": "1 - 2 - 3",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "-",
+      "left": {
+        "type": "binary",
+        "operator": "-",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 0,
+            "end": 1
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 3,
+        "range": {
+          "start": 8,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "1 - (2 - 3)",
+    "stored": "1 - (2 - 3)",
+    "display": "1 - (2 - 3)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "-",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "-",
+        "left": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 5,
+            "end": 6
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 9,
+            "end": 10
+          }
+        },
+        "range": {
+          "start": 5,
+          "end": 10
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "8 / 4 / 2",
+    "stored": "8 / 4 / 2",
+    "display": "8 / 4 / 2",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "/",
+      "left": {
+        "type": "binary",
+        "operator": "/",
+        "left": {
+          "type": "number",
+          "value": 8,
+          "range": {
+            "start": 0,
+            "end": 1
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 4,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 8,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "8 / (4 / 2)",
+    "stored": "8 / (4 / 2)",
+    "display": "8 / (4 / 2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "/",
+      "left": {
+        "type": "number",
+        "value": 8,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "/",
+        "left": {
+          "type": "number",
+          "value": 4,
+          "range": {
+            "start": 5,
+            "end": 6
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 9,
+            "end": 10
+          }
+        },
+        "range": {
+          "start": 5,
+          "end": 10
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "1 + 2 - 3 + 4",
+    "stored": "1 + 2 - 3 + 4",
+    "display": "1 + 2 - 3 + 4",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "+",
+      "left": {
+        "type": "binary",
+        "operator": "-",
+        "left": {
+          "type": "binary",
+          "operator": "+",
+          "left": {
+            "type": "number",
+            "value": 1,
+            "range": {
+              "start": 0,
+              "end": 1
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 2,
+            "range": {
+              "start": 4,
+              "end": 5
+            }
+          },
+          "range": {
+            "start": 0,
+            "end": 5
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 8,
+            "end": 9
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 4,
+        "range": {
+          "start": 12,
+          "end": 13
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "2 * 3 / 4 * 5",
+    "stored": "2 * 3 / 4 * 5",
+    "display": "2 * 3 / 4 * 5",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "binary",
+        "operator": "/",
+        "left": {
+          "type": "binary",
+          "operator": "*",
+          "left": {
+            "type": "number",
+            "value": 2,
+            "range": {
+              "start": 0,
+              "end": 1
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 3,
+            "range": {
+              "start": 4,
+              "end": 5
+            }
+          },
+          "range": {
+            "start": 0,
+            "end": 5
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 4,
+          "range": {
+            "start": 8,
+            "end": 9
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 5,
+        "range": {
+          "start": 12,
+          "end": 13
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "1+2*3-4/5",
+    "stored": "1 + 2 * 3 - 4 / 5",
+    "display": "1 + 2 * 3 - 4 / 5",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "-",
+      "left": {
+        "type": "binary",
+        "operator": "+",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 0,
+            "end": 1
+          }
+        },
+        "right": {
+          "type": "binary",
+          "operator": "*",
+          "left": {
+            "type": "number",
+            "value": 2,
+            "range": {
+              "start": 2,
+              "end": 3
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 3,
+            "range": {
+              "start": 4,
+              "end": 5
+            }
+          },
+          "range": {
+            "start": 2,
+            "end": 5
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "/",
+        "left": {
+          "type": "number",
+          "value": 4,
+          "range": {
+            "start": 6,
+            "end": 7
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 5,
+          "range": {
+            "start": 8,
+            "end": 9
+          }
+        },
+        "range": {
+          "start": 6,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "((1 + 2) * (3 - 4)) / 5",
+    "stored": "(1 + 2) * (3 - 4) / 5",
+    "display": "(1 + 2) * (3 - 4) / 5",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "/",
+      "left": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "binary",
+          "operator": "+",
+          "left": {
+            "type": "number",
+            "value": 1,
+            "range": {
+              "start": 2,
+              "end": 3
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 2,
+            "range": {
+              "start": 6,
+              "end": 7
+            }
+          },
+          "range": {
+            "start": 2,
+            "end": 7
+          }
+        },
+        "right": {
+          "type": "binary",
+          "operator": "-",
+          "left": {
+            "type": "number",
+            "value": 3,
+            "range": {
+              "start": 12,
+              "end": 13
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 4,
+            "range": {
+              "start": 16,
+              "end": 17
+            }
+          },
+          "range": {
+            "start": 12,
+            "end": 17
+          }
+        },
+        "range": {
+          "start": 2,
+          "end": 17
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 5,
+        "range": {
+          "start": 22,
+          "end": 23
+        }
+      },
+      "range": {
+        "start": 2,
+        "end": 23
+      }
+    }
+  },
+  {
+    "formula": "-1",
+    "stored": "-1",
+    "display": "-1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "unary",
+      "operator": "-",
+      "operand": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 1,
+          "end": 2
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "+1",
+    "stored": "+1",
+    "display": "+1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "unary",
+      "operator": "+",
+      "operand": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 1,
+          "end": 2
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "-(-1)",
+    "stored": "--1",
+    "display": "--1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "unary",
+      "operator": "-",
+      "operand": {
+        "type": "unary",
+        "operator": "-",
+        "operand": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 3,
+            "end": 4
+          }
+        },
+        "range": {
+          "start": 2,
+          "end": 4
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "--1",
+    "stored": "--1",
+    "display": "--1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "unary",
+      "operator": "-",
+      "operand": {
+        "type": "unary",
+        "operator": "-",
+        "operand": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 2,
+            "end": 3
+          }
+        },
+        "range": {
+          "start": 1,
+          "end": 3
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "- - 1",
+    "stored": "--1",
+    "display": "--1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "unary",
+      "operator": "-",
+      "operand": {
+        "type": "unary",
+        "operator": "-",
+        "operand": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        "range": {
+          "start": 2,
+          "end": 5
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "-1 + 2",
+    "stored": "-1 + 2",
+    "display": "-1 + 2",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "+",
+      "left": {
+        "type": "unary",
+        "operator": "-",
+        "operand": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 1,
+            "end": 2
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 2
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 5,
+          "end": 6
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "-(1 + 2)",
+    "stored": "-(1 + 2)",
+    "display": "-(1 + 2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "unary",
+      "operator": "-",
+      "operand": {
+        "type": "binary",
+        "operator": "+",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 2,
+            "end": 3
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 6,
+            "end": 7
+          }
+        },
+        "range": {
+          "start": 2,
+          "end": 7
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "2 * -3",
+    "stored": "2 * -3",
+    "display": "2 * -3",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "unary",
+        "operator": "-",
+        "operand": {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 5,
+            "end": 6
+          }
+        },
+        "range": {
+          "start": 4,
+          "end": 6
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "2 - -3",
+    "stored": "2 - -3",
+    "display": "2 - -3",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "-",
+      "left": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "unary",
+        "operator": "-",
+        "operand": {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 5,
+            "end": 6
+          }
+        },
+        "range": {
+          "start": 4,
+          "end": 6
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "-2 * -3",
+    "stored": "-2 * -3",
+    "display": "-2 * -3",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "unary",
+        "operator": "-",
+        "operand": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 1,
+            "end": 2
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 2
+        }
+      },
+      "right": {
+        "type": "unary",
+        "operator": "-",
+        "operand": {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 6,
+            "end": 7
+          }
+        },
+        "range": {
+          "start": 5,
+          "end": 7
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "-{Price}",
+    "stored": "-{00000000-0000-7000-8000-000000000003}",
+    "display": "-{Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "unary",
+      "operator": "-",
+      "operand": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000003",
+        "range": {
+          "start": 1,
+          "end": 8
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 8
+      }
+    }
+  },
+  {
+    "formula": "+{Price}",
+    "stored": "+{00000000-0000-7000-8000-000000000003}",
+    "display": "+{Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "unary",
+      "operator": "+",
+      "operand": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000003",
+        "range": {
+          "start": 1,
+          "end": 8
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 8
+      }
+    }
+  },
+  {
+    "formula": "-{Price} * {Qty}",
+    "stored": "-{00000000-0000-7000-8000-000000000003} * {00000000-0000-7000-8000-000000000004}",
+    "display": "-{Price} * {Qty}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "unary",
+        "operator": "-",
+        "operand": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 1,
+            "end": 8
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 8
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000004",
+        "range": {
+          "start": 11,
+          "end": 16
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 16
+      }
+    }
+  },
+  {
+    "formula": "1 +",
+    "error": {
+      "code": "unexpectedEnd",
+      "message": "The formula ends too early",
+      "range": {
+        "start": 3,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "\"a\" & \"b\"",
+    "stored": "\"a\" & \"b\"",
+    "display": "\"a\" & \"b\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "string",
+        "value": "a",
+        "range": {
+          "start": 0,
+          "end": 3
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "b",
+        "range": {
+          "start": 6,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "\"a\" & \"b\" & \"c\"",
+    "stored": "\"a\" & \"b\" & \"c\"",
+    "display": "\"a\" & \"b\" & \"c\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "string",
+          "value": "a",
+          "range": {
+            "start": 0,
+            "end": 3
+          }
+        },
+        "right": {
+          "type": "string",
+          "value": "b",
+          "range": {
+            "start": 6,
+            "end": 9
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "c",
+        "range": {
+          "start": 12,
+          "end": 15
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "\"a\" & (\"b\" & \"c\")",
+    "stored": "\"a\" & (\"b\" & \"c\")",
+    "display": "\"a\" & (\"b\" & \"c\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "string",
+        "value": "a",
+        "range": {
+          "start": 0,
+          "end": 3
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "string",
+          "value": "b",
+          "range": {
+            "start": 7,
+            "end": 10
+          }
+        },
+        "right": {
+          "type": "string",
+          "value": "c",
+          "range": {
+            "start": 13,
+            "end": 16
+          }
+        },
+        "range": {
+          "start": 7,
+          "end": 16
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 16
+      }
+    }
+  },
+  {
+    "formula": "{Name} & \" (\" & {Status} & \")\"",
+    "stored": "{00000000-0000-7000-8000-000000000001} & \" (\" & {00000000-0000-7000-8000-000000000012} & \")\"",
+    "display": "{Name} & \" (\" & {Status} & \")\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "binary",
+          "operator": "&",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000001",
+            "range": {
+              "start": 0,
+              "end": 6
+            }
+          },
+          "right": {
+            "type": "string",
+            "value": " (",
+            "range": {
+              "start": 9,
+              "end": 13
+            }
+          },
+          "range": {
+            "start": 0,
+            "end": 13
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000012",
+          "range": {
+            "start": 16,
+            "end": 24
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 24
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": ")",
+        "range": {
+          "start": 27,
+          "end": 30
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 30
+      }
+    }
+  },
+  {
+    "formula": "1 & 2",
+    "stored": "1 & 2",
+    "display": "1 & 2",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 4,
+          "end": 5
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "\"Total: \" & {Price} * {Qty}",
+    "stored": "\"Total: \" & {00000000-0000-7000-8000-000000000003} * {00000000-0000-7000-8000-000000000004}",
+    "display": "\"Total: \" & {Price} * {Qty}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "string",
+        "value": "Total: ",
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 12,
+            "end": 19
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 22,
+            "end": 27
+          }
+        },
+        "range": {
+          "start": 12,
+          "end": 27
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 27
+      }
+    }
+  },
+  {
+    "formula": "\"Total: \" & ({Price} * {Qty})",
+    "stored": "\"Total: \" & {00000000-0000-7000-8000-000000000003} * {00000000-0000-7000-8000-000000000004}",
+    "display": "\"Total: \" & {Price} * {Qty}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "string",
+        "value": "Total: ",
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 13,
+            "end": 20
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 23,
+            "end": 28
+          }
+        },
+        "range": {
+          "start": 13,
+          "end": 28
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 28
+      }
+    }
+  },
+  {
+    "formula": "({Price} & \"\") * 2",
+    "stored": "({00000000-0000-7000-8000-000000000003} & \"\") * 2",
+    "display": "({Price} & \"\") * 2",
+    "type": "number",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "\"*\" needs numbers, but this is text (use VALUE to read a number from text)",
+        "range": {
+          "start": 1,
+          "end": 13
+        }
+      }
+    ],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 1,
+            "end": 8
+          }
+        },
+        "right": {
+          "type": "string",
+          "value": "",
+          "range": {
+            "start": 11,
+            "end": 13
+          }
+        },
+        "range": {
+          "start": 1,
+          "end": 13
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 17,
+          "end": 18
+        }
+      },
+      "range": {
+        "start": 1,
+        "end": 18
+      }
+    }
+  },
+  {
+    "formula": "{Name} & 1 + 2",
+    "stored": "{00000000-0000-7000-8000-000000000001} & 1 + 2",
+    "display": "{Name} & 1 + 2",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000001",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "+",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 9,
+            "end": 10
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 13,
+            "end": 14
+          }
+        },
+        "range": {
+          "start": 9,
+          "end": 14
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 14
+      }
+    }
+  },
+  {
+    "formula": "{Due} & \"\"",
+    "stored": "{00000000-0000-7000-8000-000000000008} & \"\"",
+    "display": "{Due} & \"\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000008",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "",
+        "range": {
+          "start": 8,
+          "end": 10
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "{Tags} & \"\"",
+    "stored": "{00000000-0000-7000-8000-000000000013} & \"\"",
+    "display": "{Tags} & \"\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000013",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "",
+        "range": {
+          "start": 9,
+          "end": 11
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "{Done} & \"!\"",
+    "stored": "{00000000-0000-7000-8000-000000000007} & \"!\"",
+    "display": "{Done} & \"!\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000007",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "!",
+        "range": {
+          "start": 9,
+          "end": 12
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "1 = 1",
+    "stored": "1 = 1",
+    "display": "1 = 1",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 4,
+          "end": 5
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "1 != 2",
+    "stored": "1 != 2",
+    "display": "1 != 2",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "!=",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 5,
+          "end": 6
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "1 <> 2",
+    "stored": "1 != 2",
+    "display": "1 != 2",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "!=",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 5,
+          "end": 6
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "1 < 2",
+    "stored": "1 < 2",
+    "display": "1 < 2",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "<",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 4,
+          "end": 5
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "1 <= 2",
+    "stored": "1 <= 2",
+    "display": "1 <= 2",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "<=",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 5,
+          "end": 6
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "1 > 2",
+    "stored": "1 > 2",
+    "display": "1 > 2",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": ">",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 4,
+          "end": 5
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "1 >= 2",
+    "stored": "1 >= 2",
+    "display": "1 >= 2",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": ">=",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 5,
+          "end": 6
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "\"a\" = \"a\"",
+    "stored": "\"a\" = \"a\"",
+    "display": "\"a\" = \"a\"",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "string",
+        "value": "a",
+        "range": {
+          "start": 0,
+          "end": 3
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "a",
+        "range": {
+          "start": 6,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "{Price} > 100",
+    "stored": "{00000000-0000-7000-8000-000000000003} > 100",
+    "display": "{Price} > 100",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": ">",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000003",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 100,
+        "range": {
+          "start": 10,
+          "end": 13
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "{Price} * {Qty} >= 1000",
+    "stored": "{00000000-0000-7000-8000-000000000003} * {00000000-0000-7000-8000-000000000004} >= 1000",
+    "display": "{Price} * {Qty} >= 1000",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": ">=",
+      "left": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 0,
+            "end": 7
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 10,
+            "end": 15
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 15
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 1000,
+        "range": {
+          "start": 19,
+          "end": 23
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 23
+      }
+    }
+  },
+  {
+    "formula": "{Name} = \"Widget\"",
+    "stored": "{00000000-0000-7000-8000-000000000001} = \"Widget\"",
+    "display": "{Name} = \"Widget\"",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000001",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "Widget",
+        "range": {
+          "start": 9,
+          "end": 17
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 17
+      }
+    }
+  },
+  {
+    "formula": "{Name} != \"\"",
+    "stored": "{00000000-0000-7000-8000-000000000001} != \"\"",
+    "display": "{Name} != \"\"",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "!=",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000001",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "",
+        "range": {
+          "start": 10,
+          "end": 12
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "{Status} = \"Done\"",
+    "stored": "{00000000-0000-7000-8000-000000000012} = \"Done\"",
+    "display": "{Status} = \"Done\"",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000012",
+        "range": {
+          "start": 0,
+          "end": 8
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "Done",
+        "range": {
+          "start": 11,
+          "end": 17
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 17
+      }
+    }
+  },
+  {
+    "formula": "{Done} = TRUE",
+    "stored": "{00000000-0000-7000-8000-000000000007} = TRUE",
+    "display": "{Done} = TRUE",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000007",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "boolean",
+        "value": true,
+        "range": {
+          "start": 9,
+          "end": 13
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "{Done} = 1",
+    "stored": "{00000000-0000-7000-8000-000000000007} = 1",
+    "display": "{Done} = 1",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000007",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 9,
+          "end": 10
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "{Due} > TODAY()",
+    "stored": "{00000000-0000-7000-8000-000000000008} > TODAY()",
+    "display": "{Due} > TODAY()",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": ">",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000008",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "TODAY",
+        "args": [],
+        "range": {
+          "start": 8,
+          "end": 15
+        },
+        "nameRange": {
+          "start": 8,
+          "end": 13
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "{Due} <= \"2024-12-31\"",
+    "stored": "{00000000-0000-7000-8000-000000000008} <= \"2024-12-31\"",
+    "display": "{Due} <= \"2024-12-31\"",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "<=",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000008",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "2024-12-31",
+        "range": {
+          "start": 9,
+          "end": 21
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 21
+      }
+    }
+  },
+  {
+    "formula": "{Start} < {Due}",
+    "stored": "{00000000-0000-7000-8000-000000000009} < {00000000-0000-7000-8000-000000000008}",
+    "display": "{Start} < {Due}",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "<",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000009",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000008",
+        "range": {
+          "start": 10,
+          "end": 15
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "1 = 1 = TRUE",
+    "stored": "1 = 1 = TRUE",
+    "display": "1 = 1 = TRUE",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "binary",
+        "operator": "=",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 0,
+            "end": 1
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "boolean",
+        "value": true,
+        "range": {
+          "start": 8,
+          "end": 12
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "1 < 2 = TRUE",
+    "stored": "1 < 2 = TRUE",
+    "display": "1 < 2 = TRUE",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "binary",
+        "operator": "<",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 0,
+            "end": 1
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "boolean",
+        "value": true,
+        "range": {
+          "start": 8,
+          "end": 12
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "(1 < 2) = (3 < 4)",
+    "stored": "1 < 2 = (3 < 4)",
+    "display": "1 < 2 = (3 < 4)",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "binary",
+        "operator": "<",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 1,
+            "end": 2
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 5,
+            "end": 6
+          }
+        },
+        "range": {
+          "start": 1,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "<",
+        "left": {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 11,
+            "end": 12
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 4,
+          "range": {
+            "start": 15,
+            "end": 16
+          }
+        },
+        "range": {
+          "start": 11,
+          "end": 16
+        }
+      },
+      "range": {
+        "start": 1,
+        "end": 16
+      }
+    }
+  },
+  {
+    "formula": "\"a\" & \"b\" = \"ab\"",
+    "stored": "\"a\" & \"b\" = \"ab\"",
+    "display": "\"a\" & \"b\" = \"ab\"",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "string",
+          "value": "a",
+          "range": {
+            "start": 0,
+            "end": 3
+          }
+        },
+        "right": {
+          "type": "string",
+          "value": "b",
+          "range": {
+            "start": 6,
+            "end": 9
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "ab",
+        "range": {
+          "start": 12,
+          "end": 16
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 16
+      }
+    }
+  },
+  {
+    "formula": "1 + 1 = 2",
+    "stored": "1 + 1 = 2",
+    "display": "1 + 1 = 2",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "binary",
+        "operator": "+",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 0,
+            "end": 1
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 4,
+            "end": 5
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 2,
+        "range": {
+          "start": 8,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "{Price} >= {Qty}",
+    "stored": "{00000000-0000-7000-8000-000000000003} >= {00000000-0000-7000-8000-000000000004}",
+    "display": "{Price} >= {Qty}",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": ">=",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000003",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000004",
+        "range": {
+          "start": 11,
+          "end": 16
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 16
+      }
+    }
+  },
+  {
+    "formula": "{Name} < \"M\"",
+    "stored": "{00000000-0000-7000-8000-000000000001} < \"M\"",
+    "display": "{Name} < \"M\"",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "<",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000001",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "M",
+        "range": {
+          "start": 9,
+          "end": 12
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "{Price} > {Name}",
+    "stored": "{00000000-0000-7000-8000-000000000003} > {00000000-0000-7000-8000-000000000001}",
+    "display": "{Price} > {Name}",
+    "type": "boolean",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "\">\" compares a number with text",
+        "range": {
+          "start": 0,
+          "end": 16
+        }
+      }
+    ],
+    "ast": {
+      "type": "binary",
+      "operator": ">",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000003",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000001",
+        "range": {
+          "start": 10,
+          "end": 16
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 16
+      }
+    }
+  },
+  {
+    "formula": "{Due} > 5",
+    "stored": "{00000000-0000-7000-8000-000000000008} > 5",
+    "display": "{Due} > 5",
+    "type": "boolean",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "\">\" compares a date with a number",
+        "range": {
+          "start": 0,
+          "end": 9
+        }
+      }
+    ],
+    "ast": {
+      "type": "binary",
+      "operator": ">",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000008",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 5,
+        "range": {
+          "start": 8,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "{Tags} = \"x\"",
+    "stored": "{00000000-0000-7000-8000-000000000013} = \"x\"",
+    "display": "{Tags} = \"x\"",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000013",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "x",
+        "range": {
+          "start": 9,
+          "end": 12
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "{Tags} > 1",
+    "stored": "{00000000-0000-7000-8000-000000000013} > 1",
+    "display": "{Tags} > 1",
+    "type": "boolean",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "\">\" can't compare a list",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      }
+    ],
+    "ast": {
+      "type": "binary",
+      "operator": ">",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000013",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 9,
+          "end": 10
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "\"b\" > {Tags}",
+    "stored": "\"b\" > {00000000-0000-7000-8000-000000000013}",
+    "display": "\"b\" > {Tags}",
+    "type": "boolean",
+    "errors": [
+      {
+        "code": "typeMismatch",
+        "message": "\">\" can't compare a list",
+        "range": {
+          "start": 6,
+          "end": 12
+        }
+      }
+    ],
+    "ast": {
+      "type": "binary",
+      "operator": ">",
+      "left": {
+        "type": "string",
+        "value": "b",
+        "range": {
+          "start": 0,
+          "end": 3
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000013",
+        "range": {
+          "start": 6,
+          "end": 12
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "{Price} * (1 - {Discount})",
+    "stored": "{00000000-0000-7000-8000-000000000003} * (1 - {00000000-0000-7000-8000-000000000006})",
+    "display": "{Price} * (1 - {Discount})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000003",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "-",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 11,
+            "end": 12
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000006",
+          "range": {
+            "start": 15,
+            "end": 25
+          }
+        },
+        "range": {
+          "start": 11,
+          "end": 25
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 25
+      }
+    }
+  },
+  {
+    "formula": "{Unit Price} * {Qty} * (1 + 0.2)",
+    "stored": "{00000000-0000-7000-8000-000000000005} * {00000000-0000-7000-8000-000000000004} * (1 + 0.2)",
+    "display": "{Unit Price} * {Qty} * (1 + 0.2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000005",
+          "range": {
+            "start": 0,
+            "end": 12
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 15,
+            "end": 20
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 20
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "+",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 24,
+            "end": 25
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 0.2,
+          "range": {
+            "start": 28,
+            "end": 31
+          }
+        },
+        "range": {
+          "start": 24,
+          "end": 31
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 31
+      }
+    }
+  },
+  {
+    "formula": "{Rating} / 5 * 100",
+    "stored": "{00000000-0000-7000-8000-000000000011} / 5 * 100",
+    "display": "{Rating} / 5 * 100",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "binary",
+        "operator": "/",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000011",
+          "range": {
+            "start": 0,
+            "end": 8
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 5,
+          "range": {
+            "start": 11,
+            "end": 12
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 12
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 100,
+        "range": {
+          "start": 15,
+          "end": 18
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 18
+      }
+    }
+  },
+  {
+    "formula": "{Duration} / 3600",
+    "stored": "{00000000-0000-7000-8000-000000000010} / 3600",
+    "display": "{Duration} / 3600",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "/",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000010",
+        "range": {
+          "start": 0,
+          "end": 10
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 3600,
+        "range": {
+          "start": 13,
+          "end": 17
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 17
+      }
+    }
+  },
+  {
+    "formula": "{ID} * 1000 + 1",
+    "stored": "{00000000-0000-7000-8000-000000000018} * 1000 + 1",
+    "display": "{ID} * 1000 + 1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "+",
+      "left": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000018",
+          "range": {
+            "start": 0,
+            "end": 4
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 1000,
+          "range": {
+            "start": 7,
+            "end": 11
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 11
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 14,
+          "end": 15
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "{Price} / {Qty} - {Discount} * 2",
+    "stored": "{00000000-0000-7000-8000-000000000003} / {00000000-0000-7000-8000-000000000004} - {00000000-0000-7000-8000-000000000006} * 2",
+    "display": "{Price} / {Qty} - {Discount} * 2",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "-",
+      "left": {
+        "type": "binary",
+        "operator": "/",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 0,
+            "end": 7
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 10,
+            "end": 15
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 15
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000006",
+          "range": {
+            "start": 18,
+            "end": 28
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 31,
+            "end": 32
+          }
+        },
+        "range": {
+          "start": 18,
+          "end": 32
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 32
+      }
+    }
+  },
+  {
+    "formula": "1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10",
+    "stored": "1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10",
+    "display": "1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "+",
+      "left": {
+        "type": "binary",
+        "operator": "+",
+        "left": {
+          "type": "binary",
+          "operator": "+",
+          "left": {
+            "type": "binary",
+            "operator": "+",
+            "left": {
+              "type": "binary",
+              "operator": "+",
+              "left": {
+                "type": "binary",
+                "operator": "+",
+                "left": {
+                  "type": "binary",
+                  "operator": "+",
+                  "left": {
+                    "type": "binary",
+                    "operator": "+",
+                    "left": {
+                      "type": "binary",
+                      "operator": "+",
+                      "left": {
+                        "type": "number",
+                        "value": 1,
+                        "range": {
+                          "start": 0,
+                          "end": 1
+                        }
+                      },
+                      "right": {
+                        "type": "number",
+                        "value": 2,
+                        "range": {
+                          "start": 4,
+                          "end": 5
+                        }
+                      },
+                      "range": {
+                        "start": 0,
+                        "end": 5
+                      }
+                    },
+                    "right": {
+                      "type": "number",
+                      "value": 3,
+                      "range": {
+                        "start": 8,
+                        "end": 9
+                      }
+                    },
+                    "range": {
+                      "start": 0,
+                      "end": 9
+                    }
+                  },
+                  "right": {
+                    "type": "number",
+                    "value": 4,
+                    "range": {
+                      "start": 12,
+                      "end": 13
+                    }
+                  },
+                  "range": {
+                    "start": 0,
+                    "end": 13
+                  }
+                },
+                "right": {
+                  "type": "number",
+                  "value": 5,
+                  "range": {
+                    "start": 16,
+                    "end": 17
+                  }
+                },
+                "range": {
+                  "start": 0,
+                  "end": 17
+                }
+              },
+              "right": {
+                "type": "number",
+                "value": 6,
+                "range": {
+                  "start": 20,
+                  "end": 21
+                }
+              },
+              "range": {
+                "start": 0,
+                "end": 21
+              }
+            },
+            "right": {
+              "type": "number",
+              "value": 7,
+              "range": {
+                "start": 24,
+                "end": 25
+              }
+            },
+            "range": {
+              "start": 0,
+              "end": 25
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 8,
+            "range": {
+              "start": 28,
+              "end": 29
+            }
+          },
+          "range": {
+            "start": 0,
+            "end": 29
+          }
+        },
+        "right": {
+          "type": "number",
+          "value": 9,
+          "range": {
+            "start": 32,
+            "end": 33
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 33
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 10,
+        "range": {
+          "start": 36,
+          "end": 38
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 38
+      }
+    }
+  },
+  {
+    "formula": "1 * (2 + (3 * (4 + (5 * (6 + 7)))))",
+    "stored": "1 * (2 + 3 * (4 + 5 * (6 + 7)))",
+    "display": "1 * (2 + 3 * (4 + 5 * (6 + 7)))",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 0,
+          "end": 1
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "+",
+        "left": {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 5,
+            "end": 6
+          }
+        },
+        "right": {
+          "type": "binary",
+          "operator": "*",
+          "left": {
+            "type": "number",
+            "value": 3,
+            "range": {
+              "start": 10,
+              "end": 11
+            }
+          },
+          "right": {
+            "type": "binary",
+            "operator": "+",
+            "left": {
+              "type": "number",
+              "value": 4,
+              "range": {
+                "start": 15,
+                "end": 16
+              }
+            },
+            "right": {
+              "type": "binary",
+              "operator": "*",
+              "left": {
+                "type": "number",
+                "value": 5,
+                "range": {
+                  "start": 20,
+                  "end": 21
+                }
+              },
+              "right": {
+                "type": "binary",
+                "operator": "+",
+                "left": {
+                  "type": "number",
+                  "value": 6,
+                  "range": {
+                    "start": 25,
+                    "end": 26
+                  }
+                },
+                "right": {
+                  "type": "number",
+                  "value": 7,
+                  "range": {
+                    "start": 29,
+                    "end": 30
+                  }
+                },
+                "range": {
+                  "start": 25,
+                  "end": 30
+                }
+              },
+              "range": {
+                "start": 20,
+                "end": 30
+              }
+            },
+            "range": {
+              "start": 15,
+              "end": 30
+            }
+          },
+          "range": {
+            "start": 10,
+            "end": 30
+          }
+        },
+        "range": {
+          "start": 5,
+          "end": 30
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 30
+      }
+    }
+  }
+]

@@ -1,0 +1,21 @@
+apiVersion: v2
+name: openrows
+description: OpenRows, the open-source Airtable alternative (the AGPL-3.0 core, OSS image)
+type: application
+# The chart's own version. Bump it with any change under deploy/helm/openrows.
+version: 0.1.0
+# The OpenRows release the chart was written for. The image tag is always set explicitly
+# (image.tag or image.digest): the registry has sha-<commit> tags, not versions.
+appVersion: "0.5.0"
+kubeVersion: ">=1.29.0-0"
+home: https://openrows.io
+icon: https://openrows.io/favicon.svg
+sources:
+  - https://github.com/Draggable/openrows
+keywords:
+  - airtable
+  - database
+  - spreadsheet
+  - self-hosted
+annotations:
+  licenses: AGPL-3.0-only

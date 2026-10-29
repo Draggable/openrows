@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "types": ["node"],
+    "tsBuildInfoFile": "../node_modules/.cache/tsconfig.e2e.tsbuildinfo",
+    "lib": ["ES2022", "DOM"]
+  },
+  "references": [{ "path": "../packages/shared/tsconfig.build.json" }],
+  "include": [
+    "./**/*.ts",
+    "../docker/**/*.ts",
+    "../playwright.config.ts",
+    "../playwright.auth.config.ts",
+    "../vitest.config.ts"
+  ]
+}

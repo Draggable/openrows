@@ -1,0 +1,4299 @@
+[
+  {
+    "formula": "{Price} * {Qty}",
+    "stored": "{00000000-0000-7000-8000-000000000003} * {00000000-0000-7000-8000-000000000004}",
+    "display": "{Price} * {Qty}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000003",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000004",
+        "range": {
+          "start": 10,
+          "end": 15
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "{Unit Price} * {Qty} * (1 - {Discount})",
+    "stored": "{00000000-0000-7000-8000-000000000005} * {00000000-0000-7000-8000-000000000004} * (1 - {00000000-0000-7000-8000-000000000006})",
+    "display": "{Unit Price} * {Qty} * (1 - {Discount})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000005",
+          "range": {
+            "start": 0,
+            "end": 12
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 15,
+            "end": 20
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 20
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "-",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 24,
+            "end": 25
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000006",
+          "range": {
+            "start": 28,
+            "end": 38
+          }
+        },
+        "range": {
+          "start": 24,
+          "end": 38
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 38
+      }
+    }
+  },
+  {
+    "formula": "CONCATENATE({Name}, \" - \", {Status})",
+    "stored": "CONCATENATE({00000000-0000-7000-8000-000000000001}, \" - \", {00000000-0000-7000-8000-000000000012})",
+    "display": "CONCATENATE({Name}, \" - \", {Status})",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "CONCATENATE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 12,
+            "end": 18
+          }
+        },
+        {
+          "type": "string",
+          "value": " - ",
+          "range": {
+            "start": 20,
+            "end": 25
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000012",
+          "range": {
+            "start": 27,
+            "end": 35
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 36
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "{Name} & \" - \" & {Status}",
+    "stored": "{00000000-0000-7000-8000-000000000001} & \" - \" & {00000000-0000-7000-8000-000000000012}",
+    "display": "{Name} & \" - \" & {Status}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000001",
+          "range": {
+            "start": 0,
+            "end": 6
+          }
+        },
+        "right": {
+          "type": "string",
+          "value": " - ",
+          "range": {
+            "start": 9,
+            "end": 14
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 14
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000012",
+        "range": {
+          "start": 17,
+          "end": 25
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 25
+      }
+    }
+  },
+  {
+    "formula": "IF({Due} < TODAY(), \"Overdue\", \"On time\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000008} < TODAY(), \"Overdue\", \"On time\")",
+    "display": "IF({Due} < TODAY(), \"Overdue\", \"On time\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "<",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000008",
+            "range": {
+              "start": 3,
+              "end": 8
+            }
+          },
+          "right": {
+            "type": "call",
+            "name": "TODAY",
+            "args": [],
+            "range": {
+              "start": 11,
+              "end": 18
+            },
+            "nameRange": {
+              "start": 11,
+              "end": 16
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 18
+          }
+        },
+        {
+          "type": "string",
+          "value": "Overdue",
+          "range": {
+            "start": 20,
+            "end": 29
+          }
+        },
+        {
+          "type": "string",
+          "value": "On time",
+          "range": {
+            "start": 31,
+            "end": 40
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 41
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(IS_BEFORE({Due}, TODAY()), \"Overdue\", IF(IS_SAME({Due}, TODAY(), \"day\"), \"Due today\", \"Upcoming\"))",
+    "stored": "IF(IS_BEFORE({00000000-0000-7000-8000-000000000008}, TODAY()), \"Overdue\", IF(IS_SAME({00000000-0000-7000-8000-000000000008}, TODAY(), \"day\"), \"Due today\", \"Upcoming\"))",
+    "display": "IF(IS_BEFORE({Due}, TODAY()), \"Overdue\", IF(IS_SAME({Due}, TODAY(), \"day\"), \"Due today\", \"Upcoming\"))",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "IS_BEFORE",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000008",
+              "range": {
+                "start": 13,
+                "end": 18
+              }
+            },
+            {
+              "type": "call",
+              "name": "TODAY",
+              "args": [],
+              "range": {
+                "start": 20,
+                "end": 27
+              },
+              "nameRange": {
+                "start": 20,
+                "end": 25
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 28
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 12
+          }
+        },
+        {
+          "type": "string",
+          "value": "Overdue",
+          "range": {
+            "start": 30,
+            "end": 39
+          }
+        },
+        {
+          "type": "call",
+          "name": "IF",
+          "args": [
+            {
+              "type": "call",
+              "name": "IS_SAME",
+              "args": [
+                {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000008",
+                  "range": {
+                    "start": 52,
+                    "end": 57
+                  }
+                },
+                {
+                  "type": "call",
+                  "name": "TODAY",
+                  "args": [],
+                  "range": {
+                    "start": 59,
+                    "end": 66
+                  },
+                  "nameRange": {
+                    "start": 59,
+                    "end": 64
+                  }
+                },
+                {
+                  "type": "string",
+                  "value": "day",
+                  "range": {
+                    "start": 68,
+                    "end": 73
+                  }
+                }
+              ],
+              "range": {
+                "start": 44,
+                "end": 74
+              },
+              "nameRange": {
+                "start": 44,
+                "end": 51
+              }
+            },
+            {
+              "type": "string",
+              "value": "Due today",
+              "range": {
+                "start": 76,
+                "end": 87
+              }
+            },
+            {
+              "type": "string",
+              "value": "Upcoming",
+              "range": {
+                "start": 89,
+                "end": 99
+              }
+            }
+          ],
+          "range": {
+            "start": 41,
+            "end": 100
+          },
+          "nameRange": {
+            "start": 41,
+            "end": 43
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 101
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "DATETIME_DIFF({Due}, TODAY(), \"days\")",
+    "stored": "DATETIME_DIFF({00000000-0000-7000-8000-000000000008}, TODAY(), \"days\")",
+    "display": "DATETIME_DIFF({Due}, TODAY(), \"days\")",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "DATETIME_DIFF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000008",
+          "range": {
+            "start": 14,
+            "end": 19
+          }
+        },
+        {
+          "type": "call",
+          "name": "TODAY",
+          "args": [],
+          "range": {
+            "start": 21,
+            "end": 28
+          },
+          "nameRange": {
+            "start": 21,
+            "end": 26
+          }
+        },
+        {
+          "type": "string",
+          "value": "days",
+          "range": {
+            "start": 30,
+            "end": 36
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 37
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "DATETIME_DIFF(TODAY(), {Created}, \"days\") & \" days old\"",
+    "stored": "DATETIME_DIFF(TODAY(), {00000000-0000-7000-8000-000000000019}, \"days\") & \" days old\"",
+    "display": "DATETIME_DIFF(TODAY(), {Created}, \"days\") & \" days old\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "call",
+        "name": "DATETIME_DIFF",
+        "args": [
+          {
+            "type": "call",
+            "name": "TODAY",
+            "args": [],
+            "range": {
+              "start": 14,
+              "end": 21
+            },
+            "nameRange": {
+              "start": 14,
+              "end": 19
+            }
+          },
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000019",
+            "range": {
+              "start": 23,
+              "end": 32
+            }
+          },
+          {
+            "type": "string",
+            "value": "days",
+            "range": {
+              "start": 34,
+              "end": 40
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 41
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 13
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": " days old",
+        "range": {
+          "start": 44,
+          "end": 55
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 55
+      }
+    }
+  },
+  {
+    "formula": "DATEADD({Start}, {Duration} / 86400, \"days\")",
+    "stored": "DATEADD({00000000-0000-7000-8000-000000000009}, {00000000-0000-7000-8000-000000000010} / 86400, \"days\")",
+    "display": "DATEADD({Start}, {Duration} / 86400, \"days\")",
+    "type": "date",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "DATEADD",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000009",
+          "range": {
+            "start": 8,
+            "end": 15
+          }
+        },
+        {
+          "type": "binary",
+          "operator": "/",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000010",
+            "range": {
+              "start": 17,
+              "end": 27
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 86400,
+            "range": {
+              "start": 30,
+              "end": 35
+            }
+          },
+          "range": {
+            "start": 17,
+            "end": 35
+          }
+        },
+        {
+          "type": "string",
+          "value": "days",
+          "range": {
+            "start": 37,
+            "end": 43
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 44
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "DATETIME_FORMAT({Due}, \"MMMM D, YYYY\")",
+    "stored": "DATETIME_FORMAT({00000000-0000-7000-8000-000000000008}, \"MMMM D, YYYY\")",
+    "display": "DATETIME_FORMAT({Due}, \"MMMM D, YYYY\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "DATETIME_FORMAT",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000008",
+          "range": {
+            "start": 16,
+            "end": 21
+          }
+        },
+        {
+          "type": "string",
+          "value": "MMMM D, YYYY",
+          "range": {
+            "start": 23,
+            "end": 37
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 38
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "DATETIME_FORMAT(DATEADD({Due}, -7, \"days\"), \"M/D/YYYY\")",
+    "stored": "DATETIME_FORMAT(DATEADD({00000000-0000-7000-8000-000000000008}, -7, \"days\"), \"M/D/YYYY\")",
+    "display": "DATETIME_FORMAT(DATEADD({Due}, -7, \"days\"), \"M/D/YYYY\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "DATETIME_FORMAT",
+      "args": [
+        {
+          "type": "call",
+          "name": "DATEADD",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000008",
+              "range": {
+                "start": 24,
+                "end": 29
+              }
+            },
+            {
+              "type": "unary",
+              "operator": "-",
+              "operand": {
+                "type": "number",
+                "value": 7,
+                "range": {
+                  "start": 32,
+                  "end": 33
+                }
+              },
+              "range": {
+                "start": 31,
+                "end": 33
+              }
+            },
+            {
+              "type": "string",
+              "value": "days",
+              "range": {
+                "start": 35,
+                "end": 41
+              }
+            }
+          ],
+          "range": {
+            "start": 16,
+            "end": 42
+          },
+          "nameRange": {
+            "start": 16,
+            "end": 23
+          }
+        },
+        {
+          "type": "string",
+          "value": "M/D/YYYY",
+          "range": {
+            "start": 44,
+            "end": 54
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 55
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "IF({Done}, \"✅\", \"❌\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000007}, \"✅\", \"❌\")",
+    "display": "IF({Done}, \"✅\", \"❌\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "string",
+          "value": "✅",
+          "range": {
+            "start": 11,
+            "end": 14
+          }
+        },
+        {
+          "type": "string",
+          "value": "❌",
+          "range": {
+            "start": 16,
+            "end": 19
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 20
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Done}, \"Complete\", IF({Due}, \"Scheduled\", \"Backlog\"))",
+    "stored": "IF({00000000-0000-7000-8000-000000000007}, \"Complete\", IF({00000000-0000-7000-8000-000000000008}, \"Scheduled\", \"Backlog\"))",
+    "display": "IF({Done}, \"Complete\", IF({Due}, \"Scheduled\", \"Backlog\"))",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000007",
+          "range": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "string",
+          "value": "Complete",
+          "range": {
+            "start": 11,
+            "end": 21
+          }
+        },
+        {
+          "type": "call",
+          "name": "IF",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000008",
+              "range": {
+                "start": 26,
+                "end": 31
+              }
+            },
+            {
+              "type": "string",
+              "value": "Scheduled",
+              "range": {
+                "start": 33,
+                "end": 44
+              }
+            },
+            {
+              "type": "string",
+              "value": "Backlog",
+              "range": {
+                "start": 46,
+                "end": 55
+              }
+            }
+          ],
+          "range": {
+            "start": 23,
+            "end": 56
+          },
+          "nameRange": {
+            "start": 23,
+            "end": 25
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 57
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(AND({Price} > 0, {Qty} > 0), {Price} * {Qty}, BLANK())",
+    "stored": "IF(AND({00000000-0000-7000-8000-000000000003} > 0, {00000000-0000-7000-8000-000000000004} > 0), {00000000-0000-7000-8000-000000000003} * {00000000-0000-7000-8000-000000000004}, BLANK())",
+    "display": "IF(AND({Price} > 0, {Qty} > 0), {Price} * {Qty}, BLANK())",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "AND",
+          "args": [
+            {
+              "type": "binary",
+              "operator": ">",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000003",
+                "range": {
+                  "start": 7,
+                  "end": 14
+                }
+              },
+              "right": {
+                "type": "number",
+                "value": 0,
+                "range": {
+                  "start": 17,
+                  "end": 18
+                }
+              },
+              "range": {
+                "start": 7,
+                "end": 18
+              }
+            },
+            {
+              "type": "binary",
+              "operator": ">",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000004",
+                "range": {
+                  "start": 20,
+                  "end": 25
+                }
+              },
+              "right": {
+                "type": "number",
+                "value": 0,
+                "range": {
+                  "start": 28,
+                  "end": 29
+                }
+              },
+              "range": {
+                "start": 20,
+                "end": 29
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 30
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 6
+          }
+        },
+        {
+          "type": "binary",
+          "operator": "*",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 32,
+              "end": 39
+            }
+          },
+          "right": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000004",
+            "range": {
+              "start": 42,
+              "end": 47
+            }
+          },
+          "range": {
+            "start": 32,
+            "end": 47
+          }
+        },
+        {
+          "type": "call",
+          "name": "BLANK",
+          "args": [],
+          "range": {
+            "start": 49,
+            "end": 56
+          },
+          "nameRange": {
+            "start": 49,
+            "end": 54
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 57
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(OR({Status} = \"Blocked\", {Status} = \"At risk\"), \"🚩\", \"\")",
+    "stored": "IF(OR({00000000-0000-7000-8000-000000000012} = \"Blocked\", {00000000-0000-7000-8000-000000000012} = \"At risk\"), \"🚩\", \"\")",
+    "display": "IF(OR({Status} = \"Blocked\", {Status} = \"At risk\"), \"🚩\", \"\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "OR",
+          "args": [
+            {
+              "type": "binary",
+              "operator": "=",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000012",
+                "range": {
+                  "start": 6,
+                  "end": 14
+                }
+              },
+              "right": {
+                "type": "string",
+                "value": "Blocked",
+                "range": {
+                  "start": 17,
+                  "end": 26
+                }
+              },
+              "range": {
+                "start": 6,
+                "end": 26
+              }
+            },
+            {
+              "type": "binary",
+              "operator": "=",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000012",
+                "range": {
+                  "start": 28,
+                  "end": 36
+                }
+              },
+              "right": {
+                "type": "string",
+                "value": "At risk",
+                "range": {
+                  "start": 39,
+                  "end": 48
+                }
+              },
+              "range": {
+                "start": 28,
+                "end": 48
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 49
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 5
+          }
+        },
+        {
+          "type": "string",
+          "value": "🚩",
+          "range": {
+            "start": 51,
+            "end": 55
+          }
+        },
+        {
+          "type": "string",
+          "value": "",
+          "range": {
+            "start": 57,
+            "end": 59
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 60
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "SWITCH({Status}, \"Todo\", 0, \"In progress\", 0.5, \"Done\", 1, 0)",
+    "stored": "SWITCH({00000000-0000-7000-8000-000000000012}, \"Todo\", 0, \"In progress\", 0.5, \"Done\", 1, 0)",
+    "display": "SWITCH({Status}, \"Todo\", 0, \"In progress\", 0.5, \"Done\", 1, 0)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SWITCH",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000012",
+          "range": {
+            "start": 7,
+            "end": 15
+          }
+        },
+        {
+          "type": "string",
+          "value": "Todo",
+          "range": {
+            "start": 17,
+            "end": 23
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 25,
+            "end": 26
+          }
+        },
+        {
+          "type": "string",
+          "value": "In progress",
+          "range": {
+            "start": 28,
+            "end": 41
+          }
+        },
+        {
+          "type": "number",
+          "value": 0.5,
+          "range": {
+            "start": 43,
+            "end": 46
+          }
+        },
+        {
+          "type": "string",
+          "value": "Done",
+          "range": {
+            "start": 48,
+            "end": 54
+          }
+        },
+        {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 56,
+            "end": 57
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 59,
+            "end": 60
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 61
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "SWITCH({Rating}, 5, \"★★★★★\", 4, \"★★★★\", 3, \"★★★\", \"—\")",
+    "stored": "SWITCH({00000000-0000-7000-8000-000000000011}, 5, \"★★★★★\", 4, \"★★★★\", 3, \"★★★\", \"—\")",
+    "display": "SWITCH({Rating}, 5, \"★★★★★\", 4, \"★★★★\", 3, \"★★★\", \"—\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SWITCH",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000011",
+          "range": {
+            "start": 7,
+            "end": 15
+          }
+        },
+        {
+          "type": "number",
+          "value": 5,
+          "range": {
+            "start": 17,
+            "end": 18
+          }
+        },
+        {
+          "type": "string",
+          "value": "★★★★★",
+          "range": {
+            "start": 20,
+            "end": 27
+          }
+        },
+        {
+          "type": "number",
+          "value": 4,
+          "range": {
+            "start": 29,
+            "end": 30
+          }
+        },
+        {
+          "type": "string",
+          "value": "★★★★",
+          "range": {
+            "start": 32,
+            "end": 38
+          }
+        },
+        {
+          "type": "number",
+          "value": 3,
+          "range": {
+            "start": 40,
+            "end": 41
+          }
+        },
+        {
+          "type": "string",
+          "value": "★★★",
+          "range": {
+            "start": 43,
+            "end": 48
+          }
+        },
+        {
+          "type": "string",
+          "value": "—",
+          "range": {
+            "start": 50,
+            "end": 53
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 54
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "ROUND({Price} * 1.0825, 2)",
+    "stored": "ROUND({00000000-0000-7000-8000-000000000003} * 1.0825, 2)",
+    "display": "ROUND({Price} * 1.0825, 2)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ROUND",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "*",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 6,
+              "end": 13
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 1.0825,
+            "range": {
+              "start": 16,
+              "end": 22
+            }
+          },
+          "range": {
+            "start": 6,
+            "end": 22
+          }
+        },
+        {
+          "type": "number",
+          "value": 2,
+          "range": {
+            "start": 24,
+            "end": 25
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 26
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "ROUND({Rating} / 5 * 100, 0) & \"%\"",
+    "stored": "ROUND({00000000-0000-7000-8000-000000000011} / 5 * 100, 0) & \"%\"",
+    "display": "ROUND({Rating} / 5 * 100, 0) & \"%\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "call",
+        "name": "ROUND",
+        "args": [
+          {
+            "type": "binary",
+            "operator": "*",
+            "left": {
+              "type": "binary",
+              "operator": "/",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000011",
+                "range": {
+                  "start": 6,
+                  "end": 14
+                }
+              },
+              "right": {
+                "type": "number",
+                "value": 5,
+                "range": {
+                  "start": 17,
+                  "end": 18
+                }
+              },
+              "range": {
+                "start": 6,
+                "end": 18
+              }
+            },
+            "right": {
+              "type": "number",
+              "value": 100,
+              "range": {
+                "start": 21,
+                "end": 24
+              }
+            },
+            "range": {
+              "start": 6,
+              "end": 24
+            }
+          },
+          {
+            "type": "number",
+            "value": 0,
+            "range": {
+              "start": 26,
+              "end": 27
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 28
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "%",
+        "range": {
+          "start": 31,
+          "end": 34
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 34
+      }
+    }
+  },
+  {
+    "formula": "\"$\" & ROUND({Price}, 2)",
+    "stored": "\"$\" & ROUND({00000000-0000-7000-8000-000000000003}, 2)",
+    "display": "\"$\" & ROUND({Price}, 2)",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "string",
+        "value": "$",
+        "range": {
+          "start": 0,
+          "end": 3
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "ROUND",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 12,
+              "end": 19
+            }
+          },
+          {
+            "type": "number",
+            "value": 2,
+            "range": {
+              "start": 21,
+              "end": 22
+            }
+          }
+        ],
+        "range": {
+          "start": 6,
+          "end": 23
+        },
+        "nameRange": {
+          "start": 6,
+          "end": 11
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 23
+      }
+    }
+  },
+  {
+    "formula": "UPPER(LEFT({Name}, 1)) & MID({Name}, 2, 100)",
+    "stored": "UPPER(LEFT({00000000-0000-7000-8000-000000000001}, 1)) & MID({00000000-0000-7000-8000-000000000001}, 2, 100)",
+    "display": "UPPER(LEFT({Name}, 1)) & MID({Name}, 2, 100)",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "call",
+        "name": "UPPER",
+        "args": [
+          {
+            "type": "call",
+            "name": "LEFT",
+            "args": [
+              {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000001",
+                "range": {
+                  "start": 11,
+                  "end": 17
+                }
+              },
+              {
+                "type": "number",
+                "value": 1,
+                "range": {
+                  "start": 19,
+                  "end": 20
+                }
+              }
+            ],
+            "range": {
+              "start": 6,
+              "end": 21
+            },
+            "nameRange": {
+              "start": 6,
+              "end": 10
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 22
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "MID",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000001",
+            "range": {
+              "start": 29,
+              "end": 35
+            }
+          },
+          {
+            "type": "number",
+            "value": 2,
+            "range": {
+              "start": 37,
+              "end": 38
+            }
+          },
+          {
+            "type": "number",
+            "value": 100,
+            "range": {
+              "start": 40,
+              "end": 43
+            }
+          }
+        ],
+        "range": {
+          "start": 25,
+          "end": 44
+        },
+        "nameRange": {
+          "start": 25,
+          "end": 28
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 44
+      }
+    }
+  },
+  {
+    "formula": "LEFT({Notes}, 140) & IF(LEN({Notes}) > 140, \"…\", \"\")",
+    "stored": "LEFT({00000000-0000-7000-8000-000000000002}, 140) & IF(LEN({00000000-0000-7000-8000-000000000002}) > 140, \"…\", \"\")",
+    "display": "LEFT({Notes}, 140) & IF(LEN({Notes}) > 140, \"…\", \"\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "call",
+        "name": "LEFT",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000002",
+            "range": {
+              "start": 5,
+              "end": 12
+            }
+          },
+          {
+            "type": "number",
+            "value": 140,
+            "range": {
+              "start": 14,
+              "end": 17
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 18
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 4
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "IF",
+        "args": [
+          {
+            "type": "binary",
+            "operator": ">",
+            "left": {
+              "type": "call",
+              "name": "LEN",
+              "args": [
+                {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000002",
+                  "range": {
+                    "start": 28,
+                    "end": 35
+                  }
+                }
+              ],
+              "range": {
+                "start": 24,
+                "end": 36
+              },
+              "nameRange": {
+                "start": 24,
+                "end": 27
+              }
+            },
+            "right": {
+              "type": "number",
+              "value": 140,
+              "range": {
+                "start": 39,
+                "end": 42
+              }
+            },
+            "range": {
+              "start": 24,
+              "end": 42
+            }
+          },
+          {
+            "type": "string",
+            "value": "…",
+            "range": {
+              "start": 44,
+              "end": 47
+            }
+          },
+          {
+            "type": "string",
+            "value": "",
+            "range": {
+              "start": 49,
+              "end": 51
+            }
+          }
+        ],
+        "range": {
+          "start": 21,
+          "end": 52
+        },
+        "nameRange": {
+          "start": 21,
+          "end": 23
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 52
+      }
+    }
+  },
+  {
+    "formula": "TRIM(LOWER({Email}))",
+    "stored": "TRIM(LOWER({00000000-0000-7000-8000-000000000014}))",
+    "display": "TRIM(LOWER({Email}))",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "TRIM",
+      "args": [
+        {
+          "type": "call",
+          "name": "LOWER",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000014",
+              "range": {
+                "start": 11,
+                "end": 18
+              }
+            }
+          ],
+          "range": {
+            "start": 5,
+            "end": 19
+          },
+          "nameRange": {
+            "start": 5,
+            "end": 10
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 20
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "SUBSTITUTE(LOWER({Name}), \" \", \"-\")",
+    "stored": "SUBSTITUTE(LOWER({00000000-0000-7000-8000-000000000001}), \" \", \"-\")",
+    "display": "SUBSTITUTE(LOWER({Name}), \" \", \"-\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "SUBSTITUTE",
+      "args": [
+        {
+          "type": "call",
+          "name": "LOWER",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000001",
+              "range": {
+                "start": 17,
+                "end": 23
+              }
+            }
+          ],
+          "range": {
+            "start": 11,
+            "end": 24
+          },
+          "nameRange": {
+            "start": 11,
+            "end": 16
+          }
+        },
+        {
+          "type": "string",
+          "value": " ",
+          "range": {
+            "start": 26,
+            "end": 29
+          }
+        },
+        {
+          "type": "string",
+          "value": "-",
+          "range": {
+            "start": 31,
+            "end": 34
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 35
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "REGEX_REPLACE(LOWER({Name}), \"[^a-z0-9]+\", \"-\")",
+    "stored": "REGEX_REPLACE(LOWER({00000000-0000-7000-8000-000000000001}), \"[^a-z0-9]+\", \"-\")",
+    "display": "REGEX_REPLACE(LOWER({Name}), \"[^a-z0-9]+\", \"-\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "REGEX_REPLACE",
+      "args": [
+        {
+          "type": "call",
+          "name": "LOWER",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000001",
+              "range": {
+                "start": 20,
+                "end": 26
+              }
+            }
+          ],
+          "range": {
+            "start": 14,
+            "end": 27
+          },
+          "nameRange": {
+            "start": 14,
+            "end": 19
+          }
+        },
+        {
+          "type": "string",
+          "value": "[^a-z0-9]+",
+          "range": {
+            "start": 29,
+            "end": 41
+          }
+        },
+        {
+          "type": "string",
+          "value": "-",
+          "range": {
+            "start": 43,
+            "end": 46
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 47
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "\"https://example.com/items/\" & RECORD_ID()",
+    "stored": "\"https://example.com/items/\" & RECORD_ID()",
+    "display": "\"https://example.com/items/\" & RECORD_ID()",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "string",
+        "value": "https://example.com/items/",
+        "range": {
+          "start": 0,
+          "end": 28
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "RECORD_ID",
+        "args": [],
+        "range": {
+          "start": 31,
+          "end": 42
+        },
+        "nameRange": {
+          "start": 31,
+          "end": 40
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 42
+      }
+    }
+  },
+  {
+    "formula": "\"mailto:\" & {Email} & \"?subject=\" & ENCODE_URL_COMPONENT(\"Order \" & {ID})",
+    "stored": "\"mailto:\" & {00000000-0000-7000-8000-000000000014} & \"?subject=\" & ENCODE_URL_COMPONENT(\"Order \" & {00000000-0000-7000-8000-000000000018})",
+    "display": "\"mailto:\" & {Email} & \"?subject=\" & ENCODE_URL_COMPONENT(\"Order \" & {ID})",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "binary",
+          "operator": "&",
+          "left": {
+            "type": "string",
+            "value": "mailto:",
+            "range": {
+              "start": 0,
+              "end": 9
+            }
+          },
+          "right": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000014",
+            "range": {
+              "start": 12,
+              "end": 19
+            }
+          },
+          "range": {
+            "start": 0,
+            "end": 19
+          }
+        },
+        "right": {
+          "type": "string",
+          "value": "?subject=",
+          "range": {
+            "start": 22,
+            "end": 33
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 33
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "ENCODE_URL_COMPONENT",
+        "args": [
+          {
+            "type": "binary",
+            "operator": "&",
+            "left": {
+              "type": "string",
+              "value": "Order ",
+              "range": {
+                "start": 57,
+                "end": 65
+              }
+            },
+            "right": {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000018",
+              "range": {
+                "start": 68,
+                "end": 72
+              }
+            },
+            "range": {
+              "start": 57,
+              "end": 72
+            }
+          }
+        ],
+        "range": {
+          "start": 36,
+          "end": 73
+        },
+        "nameRange": {
+          "start": 36,
+          "end": 56
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 73
+      }
+    }
+  },
+  {
+    "formula": "YEAR({Due}) & \"-Q\" & ROUNDUP(MONTH({Due}) / 3, 0)",
+    "stored": "YEAR({00000000-0000-7000-8000-000000000008}) & \"-Q\" & ROUNDUP(MONTH({00000000-0000-7000-8000-000000000008}) / 3, 0)",
+    "display": "YEAR({Due}) & \"-Q\" & ROUNDUP(MONTH({Due}) / 3, 0)",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "call",
+          "name": "YEAR",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000008",
+              "range": {
+                "start": 5,
+                "end": 10
+              }
+            }
+          ],
+          "range": {
+            "start": 0,
+            "end": 11
+          },
+          "nameRange": {
+            "start": 0,
+            "end": 4
+          }
+        },
+        "right": {
+          "type": "string",
+          "value": "-Q",
+          "range": {
+            "start": 14,
+            "end": 18
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 18
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "ROUNDUP",
+        "args": [
+          {
+            "type": "binary",
+            "operator": "/",
+            "left": {
+              "type": "call",
+              "name": "MONTH",
+              "args": [
+                {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000008",
+                  "range": {
+                    "start": 35,
+                    "end": 40
+                  }
+                }
+              ],
+              "range": {
+                "start": 29,
+                "end": 41
+              },
+              "nameRange": {
+                "start": 29,
+                "end": 34
+              }
+            },
+            "right": {
+              "type": "number",
+              "value": 3,
+              "range": {
+                "start": 44,
+                "end": 45
+              }
+            },
+            "range": {
+              "start": 29,
+              "end": 45
+            }
+          },
+          {
+            "type": "number",
+            "value": 0,
+            "range": {
+              "start": 47,
+              "end": 48
+            }
+          }
+        ],
+        "range": {
+          "start": 21,
+          "end": 49
+        },
+        "nameRange": {
+          "start": 21,
+          "end": 28
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 49
+      }
+    }
+  },
+  {
+    "formula": "\"Week \" & WEEKNUM({Due})",
+    "stored": "\"Week \" & WEEKNUM({00000000-0000-7000-8000-000000000008})",
+    "display": "\"Week \" & WEEKNUM({Due})",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "string",
+        "value": "Week ",
+        "range": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "WEEKNUM",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000008",
+            "range": {
+              "start": 18,
+              "end": 23
+            }
+          }
+        ],
+        "range": {
+          "start": 10,
+          "end": 24
+        },
+        "nameRange": {
+          "start": 10,
+          "end": 17
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 24
+      }
+    }
+  },
+  {
+    "formula": "IF(WEEKDAY({Due}) = 0, \"Sunday\", IF(WEEKDAY({Due}) = 6, \"Saturday\", \"Weekday\"))",
+    "stored": "IF(WEEKDAY({00000000-0000-7000-8000-000000000008}) = 0, \"Sunday\", IF(WEEKDAY({00000000-0000-7000-8000-000000000008}) = 6, \"Saturday\", \"Weekday\"))",
+    "display": "IF(WEEKDAY({Due}) = 0, \"Sunday\", IF(WEEKDAY({Due}) = 6, \"Saturday\", \"Weekday\"))",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "=",
+          "left": {
+            "type": "call",
+            "name": "WEEKDAY",
+            "args": [
+              {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000008",
+                "range": {
+                  "start": 11,
+                  "end": 16
+                }
+              }
+            ],
+            "range": {
+              "start": 3,
+              "end": 17
+            },
+            "nameRange": {
+              "start": 3,
+              "end": 10
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 0,
+            "range": {
+              "start": 20,
+              "end": 21
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 21
+          }
+        },
+        {
+          "type": "string",
+          "value": "Sunday",
+          "range": {
+            "start": 23,
+            "end": 31
+          }
+        },
+        {
+          "type": "call",
+          "name": "IF",
+          "args": [
+            {
+              "type": "binary",
+              "operator": "=",
+              "left": {
+                "type": "call",
+                "name": "WEEKDAY",
+                "args": [
+                  {
+                    "type": "field",
+                    "fieldId": "00000000-0000-7000-8000-000000000008",
+                    "range": {
+                      "start": 44,
+                      "end": 49
+                    }
+                  }
+                ],
+                "range": {
+                  "start": 36,
+                  "end": 50
+                },
+                "nameRange": {
+                  "start": 36,
+                  "end": 43
+                }
+              },
+              "right": {
+                "type": "number",
+                "value": 6,
+                "range": {
+                  "start": 53,
+                  "end": 54
+                }
+              },
+              "range": {
+                "start": 36,
+                "end": 54
+              }
+            },
+            {
+              "type": "string",
+              "value": "Saturday",
+              "range": {
+                "start": 56,
+                "end": 66
+              }
+            },
+            {
+              "type": "string",
+              "value": "Weekday",
+              "range": {
+                "start": 68,
+                "end": 77
+              }
+            }
+          ],
+          "range": {
+            "start": 33,
+            "end": 78
+          },
+          "nameRange": {
+            "start": 33,
+            "end": 35
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 79
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "WORKDAY_DIFF({Start}, {Due})",
+    "stored": "WORKDAY_DIFF({00000000-0000-7000-8000-000000000009}, {00000000-0000-7000-8000-000000000008})",
+    "display": "WORKDAY_DIFF({Start}, {Due})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "WORKDAY_DIFF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000009",
+          "range": {
+            "start": 13,
+            "end": 20
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000008",
+          "range": {
+            "start": 22,
+            "end": 27
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 28
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "WORKDAY({Start}, 5)",
+    "stored": "WORKDAY({00000000-0000-7000-8000-000000000009}, 5)",
+    "display": "WORKDAY({Start}, 5)",
+    "type": "date",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "WORKDAY",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000009",
+          "range": {
+            "start": 8,
+            "end": 15
+          }
+        },
+        {
+          "type": "number",
+          "value": 5,
+          "range": {
+            "start": 17,
+            "end": 18
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 19
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "DATETIME_DIFF({Due}, {Start}, \"hours\") / 24",
+    "stored": "DATETIME_DIFF({00000000-0000-7000-8000-000000000008}, {00000000-0000-7000-8000-000000000009}, \"hours\") / 24",
+    "display": "DATETIME_DIFF({Due}, {Start}, \"hours\") / 24",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "/",
+      "left": {
+        "type": "call",
+        "name": "DATETIME_DIFF",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000008",
+            "range": {
+              "start": 14,
+              "end": 19
+            }
+          },
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000009",
+            "range": {
+              "start": 21,
+              "end": 28
+            }
+          },
+          {
+            "type": "string",
+            "value": "hours",
+            "range": {
+              "start": 30,
+              "end": 37
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 38
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 13
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 24,
+        "range": {
+          "start": 41,
+          "end": 43
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 43
+      }
+    }
+  },
+  {
+    "formula": "IF(DATETIME_DIFF({Due}, TODAY(), \"days\") <= 7, \"This week\", \"Later\")",
+    "stored": "IF(DATETIME_DIFF({00000000-0000-7000-8000-000000000008}, TODAY(), \"days\") <= 7, \"This week\", \"Later\")",
+    "display": "IF(DATETIME_DIFF({Due}, TODAY(), \"days\") <= 7, \"This week\", \"Later\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "<=",
+          "left": {
+            "type": "call",
+            "name": "DATETIME_DIFF",
+            "args": [
+              {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000008",
+                "range": {
+                  "start": 17,
+                  "end": 22
+                }
+              },
+              {
+                "type": "call",
+                "name": "TODAY",
+                "args": [],
+                "range": {
+                  "start": 24,
+                  "end": 31
+                },
+                "nameRange": {
+                  "start": 24,
+                  "end": 29
+                }
+              },
+              {
+                "type": "string",
+                "value": "days",
+                "range": {
+                  "start": 33,
+                  "end": 39
+                }
+              }
+            ],
+            "range": {
+              "start": 3,
+              "end": 40
+            },
+            "nameRange": {
+              "start": 3,
+              "end": 16
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 7,
+            "range": {
+              "start": 44,
+              "end": 45
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 45
+          }
+        },
+        {
+          "type": "string",
+          "value": "This week",
+          "range": {
+            "start": 47,
+            "end": 58
+          }
+        },
+        {
+          "type": "string",
+          "value": "Later",
+          "range": {
+            "start": 60,
+            "end": 67
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 68
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Due}, DATETIME_FORMAT({Due}, \"YYYY-MM-DD\"), \"No date\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000008}, DATETIME_FORMAT({00000000-0000-7000-8000-000000000008}, \"YYYY-MM-DD\"), \"No date\")",
+    "display": "IF({Due}, DATETIME_FORMAT({Due}, \"YYYY-MM-DD\"), \"No date\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000008",
+          "range": {
+            "start": 3,
+            "end": 8
+          }
+        },
+        {
+          "type": "call",
+          "name": "DATETIME_FORMAT",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000008",
+              "range": {
+                "start": 26,
+                "end": 31
+              }
+            },
+            {
+              "type": "string",
+              "value": "YYYY-MM-DD",
+              "range": {
+                "start": 33,
+                "end": 45
+              }
+            }
+          ],
+          "range": {
+            "start": 10,
+            "end": 46
+          },
+          "nameRange": {
+            "start": 10,
+            "end": 25
+          }
+        },
+        {
+          "type": "string",
+          "value": "No date",
+          "range": {
+            "start": 48,
+            "end": 57
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 58
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "MAX({Price}, {Unit Price}, 0)",
+    "stored": "MAX({00000000-0000-7000-8000-000000000003}, {00000000-0000-7000-8000-000000000005}, 0)",
+    "display": "MAX({Price}, {Unit Price}, 0)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "MAX",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 4,
+            "end": 11
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000005",
+          "range": {
+            "start": 13,
+            "end": 25
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 27,
+            "end": 28
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 29
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "MIN({Price}, 100)",
+    "stored": "MIN({00000000-0000-7000-8000-000000000003}, 100)",
+    "display": "MIN({Price}, 100)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "MIN",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 4,
+            "end": 11
+          }
+        },
+        {
+          "type": "number",
+          "value": 100,
+          "range": {
+            "start": 13,
+            "end": 16
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 17
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "AVERAGE({Price}, {Unit Price})",
+    "stored": "AVERAGE({00000000-0000-7000-8000-000000000003}, {00000000-0000-7000-8000-000000000005})",
+    "display": "AVERAGE({Price}, {Unit Price})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "AVERAGE",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 8,
+            "end": 15
+          }
+        },
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000005",
+          "range": {
+            "start": 17,
+            "end": 29
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 30
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "SUM({Lookup Prices}) * (1 - {Discount})",
+    "stored": "SUM({00000000-0000-7000-8000-000000000029}) * (1 - {00000000-0000-7000-8000-000000000006})",
+    "display": "SUM({Lookup Prices}) * (1 - {Discount})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "call",
+        "name": "SUM",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000029",
+            "range": {
+              "start": 4,
+              "end": 19
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 20
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 3
+        }
+      },
+      "right": {
+        "type": "binary",
+        "operator": "-",
+        "left": {
+          "type": "number",
+          "value": 1,
+          "range": {
+            "start": 24,
+            "end": 25
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000006",
+          "range": {
+            "start": 28,
+            "end": 38
+          }
+        },
+        "range": {
+          "start": 24,
+          "end": 38
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 38
+      }
+    }
+  },
+  {
+    "formula": "ARRAYJOIN(ARRAYUNIQUE({Tags}), \", \")",
+    "stored": "ARRAYJOIN(ARRAYUNIQUE({00000000-0000-7000-8000-000000000013}), \", \")",
+    "display": "ARRAYJOIN(ARRAYUNIQUE({Tags}), \", \")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "ARRAYJOIN",
+      "args": [
+        {
+          "type": "call",
+          "name": "ARRAYUNIQUE",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000013",
+              "range": {
+                "start": 22,
+                "end": 28
+              }
+            }
+          ],
+          "range": {
+            "start": 10,
+            "end": 29
+          },
+          "nameRange": {
+            "start": 10,
+            "end": 21
+          }
+        },
+        {
+          "type": "string",
+          "value": ", ",
+          "range": {
+            "start": 31,
+            "end": 35
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 36
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "COUNTA({Tags})",
+    "stored": "COUNTA({00000000-0000-7000-8000-000000000013})",
+    "display": "COUNTA({Tags})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "COUNTA",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000013",
+          "range": {
+            "start": 7,
+            "end": 13
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 14
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "LEN(ARRAYJOIN({Tags}, \",\")) - LEN(SUBSTITUTE(ARRAYJOIN({Tags}, \",\"), \",\", \"\")) + 1",
+    "stored": "LEN(ARRAYJOIN({00000000-0000-7000-8000-000000000013}, \",\")) - LEN(SUBSTITUTE(ARRAYJOIN({00000000-0000-7000-8000-000000000013}, \",\"), \",\", \"\")) + 1",
+    "display": "LEN(ARRAYJOIN({Tags}, \",\")) - LEN(SUBSTITUTE(ARRAYJOIN({Tags}, \",\"), \",\", \"\")) + 1",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "+",
+      "left": {
+        "type": "binary",
+        "operator": "-",
+        "left": {
+          "type": "call",
+          "name": "LEN",
+          "args": [
+            {
+              "type": "call",
+              "name": "ARRAYJOIN",
+              "args": [
+                {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000013",
+                  "range": {
+                    "start": 14,
+                    "end": 20
+                  }
+                },
+                {
+                  "type": "string",
+                  "value": ",",
+                  "range": {
+                    "start": 22,
+                    "end": 25
+                  }
+                }
+              ],
+              "range": {
+                "start": 4,
+                "end": 26
+              },
+              "nameRange": {
+                "start": 4,
+                "end": 13
+              }
+            }
+          ],
+          "range": {
+            "start": 0,
+            "end": 27
+          },
+          "nameRange": {
+            "start": 0,
+            "end": 3
+          }
+        },
+        "right": {
+          "type": "call",
+          "name": "LEN",
+          "args": [
+            {
+              "type": "call",
+              "name": "SUBSTITUTE",
+              "args": [
+                {
+                  "type": "call",
+                  "name": "ARRAYJOIN",
+                  "args": [
+                    {
+                      "type": "field",
+                      "fieldId": "00000000-0000-7000-8000-000000000013",
+                      "range": {
+                        "start": 55,
+                        "end": 61
+                      }
+                    },
+                    {
+                      "type": "string",
+                      "value": ",",
+                      "range": {
+                        "start": 63,
+                        "end": 66
+                      }
+                    }
+                  ],
+                  "range": {
+                    "start": 45,
+                    "end": 67
+                  },
+                  "nameRange": {
+                    "start": 45,
+                    "end": 54
+                  }
+                },
+                {
+                  "type": "string",
+                  "value": ",",
+                  "range": {
+                    "start": 69,
+                    "end": 72
+                  }
+                },
+                {
+                  "type": "string",
+                  "value": "",
+                  "range": {
+                    "start": 74,
+                    "end": 76
+                  }
+                }
+              ],
+              "range": {
+                "start": 34,
+                "end": 77
+              },
+              "nameRange": {
+                "start": 34,
+                "end": 44
+              }
+            }
+          ],
+          "range": {
+            "start": 30,
+            "end": 78
+          },
+          "nameRange": {
+            "start": 30,
+            "end": 33
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 78
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 1,
+        "range": {
+          "start": 81,
+          "end": 82
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 82
+      }
+    }
+  },
+  {
+    "formula": "IF(FIND(\"urgent\", LOWER({Notes})), \"Urgent\", \"Normal\")",
+    "stored": "IF(FIND(\"urgent\", LOWER({00000000-0000-7000-8000-000000000002})), \"Urgent\", \"Normal\")",
+    "display": "IF(FIND(\"urgent\", LOWER({Notes})), \"Urgent\", \"Normal\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "FIND",
+          "args": [
+            {
+              "type": "string",
+              "value": "urgent",
+              "range": {
+                "start": 8,
+                "end": 16
+              }
+            },
+            {
+              "type": "call",
+              "name": "LOWER",
+              "args": [
+                {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000002",
+                  "range": {
+                    "start": 24,
+                    "end": 31
+                  }
+                }
+              ],
+              "range": {
+                "start": 18,
+                "end": 32
+              },
+              "nameRange": {
+                "start": 18,
+                "end": 23
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 33
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 7
+          }
+        },
+        {
+          "type": "string",
+          "value": "Urgent",
+          "range": {
+            "start": 35,
+            "end": 43
+          }
+        },
+        {
+          "type": "string",
+          "value": "Normal",
+          "range": {
+            "start": 45,
+            "end": 53
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 54
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(SEARCH(\"vip\", {Tags} & \"\"), \"VIP\")",
+    "stored": "IF(SEARCH(\"vip\", {00000000-0000-7000-8000-000000000013} & \"\"), \"VIP\")",
+    "display": "IF(SEARCH(\"vip\", {Tags} & \"\"), \"VIP\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "SEARCH",
+          "args": [
+            {
+              "type": "string",
+              "value": "vip",
+              "range": {
+                "start": 10,
+                "end": 15
+              }
+            },
+            {
+              "type": "binary",
+              "operator": "&",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000013",
+                "range": {
+                  "start": 17,
+                  "end": 23
+                }
+              },
+              "right": {
+                "type": "string",
+                "value": "",
+                "range": {
+                  "start": 26,
+                  "end": 28
+                }
+              },
+              "range": {
+                "start": 17,
+                "end": 28
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 29
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 9
+          }
+        },
+        {
+          "type": "string",
+          "value": "VIP",
+          "range": {
+            "start": 31,
+            "end": 36
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 37
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF(REGEX_MATCH({Email}, \"^[^@]+@[^@]+$\"), \"valid\", \"invalid\")",
+    "stored": "IF(REGEX_MATCH({00000000-0000-7000-8000-000000000014}, \"^[^@]+@[^@]+$\"), \"valid\", \"invalid\")",
+    "display": "IF(REGEX_MATCH({Email}, \"^[^@]+@[^@]+$\"), \"valid\", \"invalid\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "REGEX_MATCH",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000014",
+              "range": {
+                "start": 15,
+                "end": 22
+              }
+            },
+            {
+              "type": "string",
+              "value": "^[^@]+@[^@]+$",
+              "range": {
+                "start": 24,
+                "end": 39
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 40
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 14
+          }
+        },
+        {
+          "type": "string",
+          "value": "valid",
+          "range": {
+            "start": 42,
+            "end": 49
+          }
+        },
+        {
+          "type": "string",
+          "value": "invalid",
+          "range": {
+            "start": 51,
+            "end": 60
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 61
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "REGEX_EXTRACT({Website}, \"https?://([^/]+)\")",
+    "stored": "REGEX_EXTRACT({00000000-0000-7000-8000-000000000015}, \"https?://([^/]+)\")",
+    "display": "REGEX_EXTRACT({Website}, \"https?://([^/]+)\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "REGEX_EXTRACT",
+      "args": [
+        {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000015",
+          "range": {
+            "start": 14,
+            "end": 23
+          }
+        },
+        {
+          "type": "string",
+          "value": "https?://([^/]+)",
+          "range": {
+            "start": 25,
+            "end": 43
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 44
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "VALUE(SUBSTITUTE({Phone}, \"-\", \"\"))",
+    "stored": "VALUE(SUBSTITUTE({00000000-0000-7000-8000-000000000016}, \"-\", \"\"))",
+    "display": "VALUE(SUBSTITUTE({Phone}, \"-\", \"\"))",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "VALUE",
+      "args": [
+        {
+          "type": "call",
+          "name": "SUBSTITUTE",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000016",
+              "range": {
+                "start": 17,
+                "end": 24
+              }
+            },
+            {
+              "type": "string",
+              "value": "-",
+              "range": {
+                "start": 26,
+                "end": 29
+              }
+            },
+            {
+              "type": "string",
+              "value": "",
+              "range": {
+                "start": 31,
+                "end": 33
+              }
+            }
+          ],
+          "range": {
+            "start": 6,
+            "end": 34
+          },
+          "nameRange": {
+            "start": 6,
+            "end": 16
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 35
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "INT(DATETIME_DIFF(TODAY(), {Due}, \"days\") / 365)",
+    "stored": "INT(DATETIME_DIFF(TODAY(), {00000000-0000-7000-8000-000000000008}, \"days\") / 365)",
+    "display": "INT(DATETIME_DIFF(TODAY(), {Due}, \"days\") / 365)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "INT",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "/",
+          "left": {
+            "type": "call",
+            "name": "DATETIME_DIFF",
+            "args": [
+              {
+                "type": "call",
+                "name": "TODAY",
+                "args": [],
+                "range": {
+                  "start": 18,
+                  "end": 25
+                },
+                "nameRange": {
+                  "start": 18,
+                  "end": 23
+                }
+              },
+              {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000008",
+                "range": {
+                  "start": 27,
+                  "end": 32
+                }
+              },
+              {
+                "type": "string",
+                "value": "days",
+                "range": {
+                  "start": 34,
+                  "end": 40
+                }
+              }
+            ],
+            "range": {
+              "start": 4,
+              "end": 41
+            },
+            "nameRange": {
+              "start": 4,
+              "end": 17
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 365,
+            "range": {
+              "start": 44,
+              "end": 47
+            }
+          },
+          "range": {
+            "start": 4,
+            "end": 47
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 48
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "MOD(DATETIME_DIFF(TODAY(), {Created}, \"days\"), 7)",
+    "stored": "MOD(DATETIME_DIFF(TODAY(), {00000000-0000-7000-8000-000000000019}, \"days\"), 7)",
+    "display": "MOD(DATETIME_DIFF(TODAY(), {Created}, \"days\"), 7)",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "MOD",
+      "args": [
+        {
+          "type": "call",
+          "name": "DATETIME_DIFF",
+          "args": [
+            {
+              "type": "call",
+              "name": "TODAY",
+              "args": [],
+              "range": {
+                "start": 18,
+                "end": 25
+              },
+              "nameRange": {
+                "start": 18,
+                "end": 23
+              }
+            },
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000019",
+              "range": {
+                "start": 27,
+                "end": 36
+              }
+            },
+            {
+              "type": "string",
+              "value": "days",
+              "range": {
+                "start": 38,
+                "end": 44
+              }
+            }
+          ],
+          "range": {
+            "start": 4,
+            "end": 45
+          },
+          "nameRange": {
+            "start": 4,
+            "end": 17
+          }
+        },
+        {
+          "type": "number",
+          "value": 7,
+          "range": {
+            "start": 47,
+            "end": 48
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 49
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 3
+      }
+    }
+  },
+  {
+    "formula": "DATETIME_FORMAT(SET_TIMEZONE(NOW(), \"Europe/London\"), \"HH:mm\")",
+    "stored": "DATETIME_FORMAT(SET_TIMEZONE(NOW(), \"Europe/London\"), \"HH:mm\")",
+    "display": "DATETIME_FORMAT(SET_TIMEZONE(NOW(), \"Europe/London\"), \"HH:mm\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "DATETIME_FORMAT",
+      "args": [
+        {
+          "type": "call",
+          "name": "SET_TIMEZONE",
+          "args": [
+            {
+              "type": "call",
+              "name": "NOW",
+              "args": [],
+              "range": {
+                "start": 29,
+                "end": 34
+              },
+              "nameRange": {
+                "start": 29,
+                "end": 32
+              }
+            },
+            {
+              "type": "string",
+              "value": "Europe/London",
+              "range": {
+                "start": 36,
+                "end": 51
+              }
+            }
+          ],
+          "range": {
+            "start": 16,
+            "end": 52
+          },
+          "nameRange": {
+            "start": 16,
+            "end": 28
+          }
+        },
+        {
+          "type": "string",
+          "value": "HH:mm",
+          "range": {
+            "start": 54,
+            "end": 61
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 62
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "IF(ISERROR(VALUE({Name})), 0, VALUE({Name}))",
+    "stored": "IF(ISERROR(VALUE({00000000-0000-7000-8000-000000000001})), 0, VALUE({00000000-0000-7000-8000-000000000001}))",
+    "display": "IF(ISERROR(VALUE({Name})), 0, VALUE({Name}))",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "ISERROR",
+          "args": [
+            {
+              "type": "call",
+              "name": "VALUE",
+              "args": [
+                {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000001",
+                  "range": {
+                    "start": 17,
+                    "end": 23
+                  }
+                }
+              ],
+              "range": {
+                "start": 11,
+                "end": 24
+              },
+              "nameRange": {
+                "start": 11,
+                "end": 16
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 25
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 10
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 27,
+            "end": 28
+          }
+        },
+        {
+          "type": "call",
+          "name": "VALUE",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000001",
+              "range": {
+                "start": 36,
+                "end": 42
+              }
+            }
+          ],
+          "range": {
+            "start": 30,
+            "end": 43
+          },
+          "nameRange": {
+            "start": 30,
+            "end": 35
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 44
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "IF({Created By} = \"Ada Lovelace\", \"mine\", \"theirs\")",
+    "stored": "IF({00000000-0000-7000-8000-000000000021} = \"Ada Lovelace\", \"mine\", \"theirs\")",
+    "display": "IF({Created By} = \"Ada Lovelace\", \"mine\", \"theirs\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "=",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000021",
+            "range": {
+              "start": 3,
+              "end": 15
+            }
+          },
+          "right": {
+            "type": "string",
+            "value": "Ada Lovelace",
+            "range": {
+              "start": 18,
+              "end": 32
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 32
+          }
+        },
+        {
+          "type": "string",
+          "value": "mine",
+          "range": {
+            "start": 34,
+            "end": 40
+          }
+        },
+        {
+          "type": "string",
+          "value": "theirs",
+          "range": {
+            "start": 42,
+            "end": 50
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 51
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "{Created By} & \" on \" & DATESTR({Created})",
+    "stored": "{00000000-0000-7000-8000-000000000021} & \" on \" & DATESTR({00000000-0000-7000-8000-000000000019})",
+    "display": "{Created By} & \" on \" & DATESTR({Created})",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000021",
+          "range": {
+            "start": 0,
+            "end": 12
+          }
+        },
+        "right": {
+          "type": "string",
+          "value": " on ",
+          "range": {
+            "start": 15,
+            "end": 21
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 21
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "DATESTR",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000019",
+            "range": {
+              "start": 32,
+              "end": 41
+            }
+          }
+        ],
+        "range": {
+          "start": 24,
+          "end": 42
+        },
+        "nameRange": {
+          "start": 24,
+          "end": 31
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 42
+      }
+    }
+  },
+  {
+    "formula": "IF(LAST_MODIFIED_TIME() > DATEADD(NOW(), -1, \"days\"), \"Recently edited\")",
+    "stored": "IF(LAST_MODIFIED_TIME() > DATEADD(NOW(), -1, \"days\"), \"Recently edited\")",
+    "display": "IF(LAST_MODIFIED_TIME() > DATEADD(NOW(), -1, \"days\"), \"Recently edited\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": ">",
+          "left": {
+            "type": "call",
+            "name": "LAST_MODIFIED_TIME",
+            "args": [],
+            "range": {
+              "start": 3,
+              "end": 23
+            },
+            "nameRange": {
+              "start": 3,
+              "end": 21
+            }
+          },
+          "right": {
+            "type": "call",
+            "name": "DATEADD",
+            "args": [
+              {
+                "type": "call",
+                "name": "NOW",
+                "args": [],
+                "range": {
+                  "start": 34,
+                  "end": 39
+                },
+                "nameRange": {
+                  "start": 34,
+                  "end": 37
+                }
+              },
+              {
+                "type": "unary",
+                "operator": "-",
+                "operand": {
+                  "type": "number",
+                  "value": 1,
+                  "range": {
+                    "start": 42,
+                    "end": 43
+                  }
+                },
+                "range": {
+                  "start": 41,
+                  "end": 43
+                }
+              },
+              {
+                "type": "string",
+                "value": "days",
+                "range": {
+                  "start": 45,
+                  "end": 51
+                }
+              }
+            ],
+            "range": {
+              "start": 26,
+              "end": 52
+            },
+            "nameRange": {
+              "start": 26,
+              "end": 33
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 52
+          }
+        },
+        {
+          "type": "string",
+          "value": "Recently edited",
+          "range": {
+            "start": 54,
+            "end": 71
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 72
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "CONCATENATE(YEAR({Due}), \"-\", RIGHT(\"0\" & MONTH({Due}), 2))",
+    "stored": "CONCATENATE(YEAR({00000000-0000-7000-8000-000000000008}), \"-\", RIGHT(\"0\" & MONTH({00000000-0000-7000-8000-000000000008}), 2))",
+    "display": "CONCATENATE(YEAR({Due}), \"-\", RIGHT(\"0\" & MONTH({Due}), 2))",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "CONCATENATE",
+      "args": [
+        {
+          "type": "call",
+          "name": "YEAR",
+          "args": [
+            {
+              "type": "field",
+              "fieldId": "00000000-0000-7000-8000-000000000008",
+              "range": {
+                "start": 17,
+                "end": 22
+              }
+            }
+          ],
+          "range": {
+            "start": 12,
+            "end": 23
+          },
+          "nameRange": {
+            "start": 12,
+            "end": 16
+          }
+        },
+        {
+          "type": "string",
+          "value": "-",
+          "range": {
+            "start": 25,
+            "end": 28
+          }
+        },
+        {
+          "type": "call",
+          "name": "RIGHT",
+          "args": [
+            {
+              "type": "binary",
+              "operator": "&",
+              "left": {
+                "type": "string",
+                "value": "0",
+                "range": {
+                  "start": 36,
+                  "end": 39
+                }
+              },
+              "right": {
+                "type": "call",
+                "name": "MONTH",
+                "args": [
+                  {
+                    "type": "field",
+                    "fieldId": "00000000-0000-7000-8000-000000000008",
+                    "range": {
+                      "start": 48,
+                      "end": 53
+                    }
+                  }
+                ],
+                "range": {
+                  "start": 42,
+                  "end": 54
+                },
+                "nameRange": {
+                  "start": 42,
+                  "end": 47
+                }
+              },
+              "range": {
+                "start": 36,
+                "end": 54
+              }
+            },
+            {
+              "type": "number",
+              "value": 2,
+              "range": {
+                "start": 56,
+                "end": 57
+              }
+            }
+          ],
+          "range": {
+            "start": 30,
+            "end": 58
+          },
+          "nameRange": {
+            "start": 30,
+            "end": 35
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 59
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "IF({Qty} = 0, 0, {Price} / {Qty})",
+    "stored": "IF({00000000-0000-7000-8000-000000000004} = 0, 0, {00000000-0000-7000-8000-000000000003} / {00000000-0000-7000-8000-000000000004})",
+    "display": "IF({Qty} = 0, 0, {Price} / {Qty})",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "binary",
+          "operator": "=",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000004",
+            "range": {
+              "start": 3,
+              "end": 8
+            }
+          },
+          "right": {
+            "type": "number",
+            "value": 0,
+            "range": {
+              "start": 11,
+              "end": 12
+            }
+          },
+          "range": {
+            "start": 3,
+            "end": 12
+          }
+        },
+        {
+          "type": "number",
+          "value": 0,
+          "range": {
+            "start": 14,
+            "end": 15
+          }
+        },
+        {
+          "type": "binary",
+          "operator": "/",
+          "left": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000003",
+            "range": {
+              "start": 17,
+              "end": 24
+            }
+          },
+          "right": {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000004",
+            "range": {
+              "start": 27,
+              "end": 32
+            }
+          },
+          "range": {
+            "start": 17,
+            "end": 32
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 33
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "{Price} * {Qty} > 1000",
+    "stored": "{00000000-0000-7000-8000-000000000003} * {00000000-0000-7000-8000-000000000004} > 1000",
+    "display": "{Price} * {Qty} > 1000",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": ">",
+      "left": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000003",
+          "range": {
+            "start": 0,
+            "end": 7
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 10,
+            "end": 15
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 15
+        }
+      },
+      "right": {
+        "type": "number",
+        "value": 1000,
+        "range": {
+          "start": 18,
+          "end": 22
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 22
+      }
+    }
+  },
+  {
+    "formula": "NOT({Done}) = TRUE()",
+    "stored": "NOT({00000000-0000-7000-8000-000000000007}) = TRUE()",
+    "display": "NOT({Done}) = TRUE()",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "call",
+        "name": "NOT",
+        "args": [
+          {
+            "type": "field",
+            "fieldId": "00000000-0000-7000-8000-000000000007",
+            "range": {
+              "start": 4,
+              "end": 10
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 11
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 3
+        }
+      },
+      "right": {
+        "type": "call",
+        "name": "TRUE",
+        "args": [],
+        "range": {
+          "start": 14,
+          "end": 20
+        },
+        "nameRange": {
+          "start": 14,
+          "end": 18
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 20
+      }
+    }
+  },
+  {
+    "formula": "IF(AND(NOT({Done}), {Due} < TODAY()), \"Late\")",
+    "stored": "IF(AND(NOT({00000000-0000-7000-8000-000000000007}), {00000000-0000-7000-8000-000000000008} < TODAY()), \"Late\")",
+    "display": "IF(AND(NOT({Done}), {Due} < TODAY()), \"Late\")",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "call",
+      "name": "IF",
+      "args": [
+        {
+          "type": "call",
+          "name": "AND",
+          "args": [
+            {
+              "type": "call",
+              "name": "NOT",
+              "args": [
+                {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000007",
+                  "range": {
+                    "start": 11,
+                    "end": 17
+                  }
+                }
+              ],
+              "range": {
+                "start": 7,
+                "end": 18
+              },
+              "nameRange": {
+                "start": 7,
+                "end": 10
+              }
+            },
+            {
+              "type": "binary",
+              "operator": "<",
+              "left": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000008",
+                "range": {
+                  "start": 20,
+                  "end": 25
+                }
+              },
+              "right": {
+                "type": "call",
+                "name": "TODAY",
+                "args": [],
+                "range": {
+                  "start": 28,
+                  "end": 35
+                },
+                "nameRange": {
+                  "start": 28,
+                  "end": 33
+                }
+              },
+              "range": {
+                "start": 20,
+                "end": 35
+              }
+            }
+          ],
+          "range": {
+            "start": 3,
+            "end": 36
+          },
+          "nameRange": {
+            "start": 3,
+            "end": 6
+          }
+        },
+        {
+          "type": "string",
+          "value": "Late",
+          "range": {
+            "start": 38,
+            "end": 44
+          }
+        }
+      ],
+      "range": {
+        "start": 0,
+        "end": 45
+      },
+      "nameRange": {
+        "start": 0,
+        "end": 2
+      }
+    }
+  },
+  {
+    "formula": "ROUND((({Price} - {Unit Price}) / {Unit Price}) * 100, 1) & \"%\"",
+    "stored": "ROUND(({00000000-0000-7000-8000-000000000003} - {00000000-0000-7000-8000-000000000005}) / {00000000-0000-7000-8000-000000000005} * 100, 1) & \"%\"",
+    "display": "ROUND(({Price} - {Unit Price}) / {Unit Price} * 100, 1) & \"%\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "call",
+        "name": "ROUND",
+        "args": [
+          {
+            "type": "binary",
+            "operator": "*",
+            "left": {
+              "type": "binary",
+              "operator": "/",
+              "left": {
+                "type": "binary",
+                "operator": "-",
+                "left": {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000003",
+                  "range": {
+                    "start": 8,
+                    "end": 15
+                  }
+                },
+                "right": {
+                  "type": "field",
+                  "fieldId": "00000000-0000-7000-8000-000000000005",
+                  "range": {
+                    "start": 18,
+                    "end": 30
+                  }
+                },
+                "range": {
+                  "start": 8,
+                  "end": 30
+                }
+              },
+              "right": {
+                "type": "field",
+                "fieldId": "00000000-0000-7000-8000-000000000005",
+                "range": {
+                  "start": 34,
+                  "end": 46
+                }
+              },
+              "range": {
+                "start": 8,
+                "end": 46
+              }
+            },
+            "right": {
+              "type": "number",
+              "value": 100,
+              "range": {
+                "start": 50,
+                "end": 53
+              }
+            },
+            "range": {
+              "start": 8,
+              "end": 53
+            }
+          },
+          {
+            "type": "number",
+            "value": 1,
+            "range": {
+              "start": 55,
+              "end": 56
+            }
+          }
+        ],
+        "range": {
+          "start": 0,
+          "end": 57
+        },
+        "nameRange": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "%",
+        "range": {
+          "start": 60,
+          "end": 63
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 63
+      }
+    }
+  },
+  {
+    "formula": "{Score} * {Qty} + {Back\\\\slash}",
+    "stored": "{00000000-0000-7000-8000-000000000027} * {00000000-0000-7000-8000-000000000004} + {00000000-0000-7000-8000-000000000024}",
+    "display": "{Score} * {Qty} + {Back\\\\slash}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "+",
+      "left": {
+        "type": "binary",
+        "operator": "*",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000027",
+          "range": {
+            "start": 0,
+            "end": 7
+          }
+        },
+        "right": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000004",
+          "range": {
+            "start": 10,
+            "end": 15
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 15
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000024",
+        "range": {
+          "start": 18,
+          "end": 31
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 31
+      }
+    }
+  },
+  {
+    "formula": "{Label} & \" · \" & {Ünïcödé}",
+    "stored": "{00000000-0000-7000-8000-000000000028} & \" · \" & {00000000-0000-7000-8000-000000000025}",
+    "display": "{Label} & \" · \" & {Ünïcödé}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "binary",
+        "operator": "&",
+        "left": {
+          "type": "field",
+          "fieldId": "00000000-0000-7000-8000-000000000028",
+          "range": {
+            "start": 0,
+            "end": 7
+          }
+        },
+        "right": {
+          "type": "string",
+          "value": " · ",
+          "range": {
+            "start": 10,
+            "end": 15
+          }
+        },
+        "range": {
+          "start": 0,
+          "end": 15
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000025",
+        "range": {
+          "start": 18,
+          "end": 27
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 27
+      }
+    }
+  }
+]

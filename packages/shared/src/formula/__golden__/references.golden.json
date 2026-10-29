@@ -1,0 +1,808 @@
+[
+  {
+    "formula": "{Name}",
+    "stored": "{00000000-0000-7000-8000-000000000001}",
+    "display": "{Name}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000001",
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "{Price}",
+    "stored": "{00000000-0000-7000-8000-000000000003}",
+    "display": "{Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000003",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "{Unit Price}",
+    "stored": "{00000000-0000-7000-8000-000000000005}",
+    "display": "{Unit Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000005",
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "{ Unit Price }",
+    "stored": "{00000000-0000-7000-8000-000000000005}",
+    "display": "{Unit Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000005",
+      "range": {
+        "start": 0,
+        "end": 14
+      }
+    }
+  },
+  {
+    "formula": "{unit price}",
+    "stored": "{00000000-0000-7000-8000-000000000005}",
+    "display": "{Unit Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000005",
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "{UNIT PRICE}",
+    "stored": "{00000000-0000-7000-8000-000000000005}",
+    "display": "{Unit Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000005",
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "{Weird \\} name}",
+    "stored": "{00000000-0000-7000-8000-000000000023}",
+    "display": "{Weird \\} name}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000023",
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "{Back\\\\slash}",
+    "stored": "{00000000-0000-7000-8000-000000000024}",
+    "display": "{Back\\\\slash}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000024",
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "{Ünïcödé}",
+    "stored": "{00000000-0000-7000-8000-000000000025}",
+    "display": "{Ünïcödé}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000025",
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "{Total (USD)}",
+    "stored": "{00000000-0000-7000-8000-000000000026}",
+    "display": "{Total (USD)}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000026",
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "{Created By}",
+    "stored": "{00000000-0000-7000-8000-000000000021}",
+    "display": "{Created By}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000021",
+      "range": {
+        "start": 0,
+        "end": 12
+      }
+    }
+  },
+  {
+    "formula": "{Modified By}",
+    "stored": "{00000000-0000-7000-8000-000000000022}",
+    "display": "{Modified By}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000022",
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "{Score}",
+    "stored": "{00000000-0000-7000-8000-000000000027}",
+    "display": "{Score}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000027",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "{Label}",
+    "stored": "{00000000-0000-7000-8000-000000000028}",
+    "display": "{Label}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000028",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "{Lookup Prices}",
+    "stored": "{00000000-0000-7000-8000-000000000029}",
+    "display": "{Lookup Prices}",
+    "type": "array",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000029",
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "{Mystery}",
+    "stored": "{00000000-0000-7000-8000-000000000030}",
+    "display": "{Mystery}",
+    "type": "any",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000030",
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "{Case}",
+    "stored": "{00000000-0000-7000-8000-000000000031}",
+    "display": "{Case}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000031",
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "{case}",
+    "stored": "{00000000-0000-7000-8000-000000000032}",
+    "display": "{case}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000032",
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "{CASE}",
+    "error": {
+      "code": "unknownField",
+      "message": "Unknown field {CASE}",
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "Price",
+    "stored": "{00000000-0000-7000-8000-000000000003}",
+    "display": "{Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000003",
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "Qty * Price",
+    "stored": "{00000000-0000-7000-8000-000000000004} * {00000000-0000-7000-8000-000000000003}",
+    "display": "{Qty} * {Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000004",
+        "range": {
+          "start": 0,
+          "end": 3
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000003",
+        "range": {
+          "start": 6,
+          "end": 11
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "price",
+    "stored": "{00000000-0000-7000-8000-000000000003}",
+    "display": "{Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000003",
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "Name & \"!\"",
+    "stored": "{00000000-0000-7000-8000-000000000001} & \"!\"",
+    "display": "{Name} & \"!\"",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000001",
+        "range": {
+          "start": 0,
+          "end": 4
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "!",
+        "range": {
+          "start": 7,
+          "end": 10
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "Ünïcödé",
+    "stored": "{00000000-0000-7000-8000-000000000025}",
+    "display": "{Ünïcödé}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000025",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "Done",
+    "stored": "{00000000-0000-7000-8000-000000000007}",
+    "display": "{Done}",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000007",
+      "range": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "Status = \"Open\"",
+    "stored": "{00000000-0000-7000-8000-000000000012} = \"Open\"",
+    "display": "{Status} = \"Open\"",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "=",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000012",
+        "range": {
+          "start": 0,
+          "end": 6
+        }
+      },
+      "right": {
+        "type": "string",
+        "value": "Open",
+        "range": {
+          "start": 9,
+          "end": 15
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 15
+      }
+    }
+  },
+  {
+    "formula": "Price*Qty",
+    "stored": "{00000000-0000-7000-8000-000000000003} * {00000000-0000-7000-8000-000000000004}",
+    "display": "{Price} * {Qty}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "*",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000003",
+        "range": {
+          "start": 0,
+          "end": 5
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000004",
+        "range": {
+          "start": 6,
+          "end": 9
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "Name&Status",
+    "stored": "{00000000-0000-7000-8000-000000000001} & {00000000-0000-7000-8000-000000000012}",
+    "display": "{Name} & {Status}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "binary",
+      "operator": "&",
+      "left": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000001",
+        "range": {
+          "start": 0,
+          "end": 4
+        }
+      },
+      "right": {
+        "type": "field",
+        "fieldId": "00000000-0000-7000-8000-000000000012",
+        "range": {
+          "start": 5,
+          "end": 11
+        }
+      },
+      "range": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  },
+  {
+    "formula": "{Nope}",
+    "error": {
+      "code": "unknownField",
+      "message": "Unknown field {Nope}",
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "{Price }",
+    "stored": "{00000000-0000-7000-8000-000000000003}",
+    "display": "{Price}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000003",
+      "range": {
+        "start": 0,
+        "end": 8
+      }
+    }
+  },
+  {
+    "formula": "Nope",
+    "error": {
+      "code": "unknownField",
+      "message": "Unknown field {Nope}",
+      "range": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "{Unit  Price}",
+    "error": {
+      "code": "unknownField",
+      "message": "Unknown field {Unit  Price}",
+      "range": {
+        "start": 0,
+        "end": 13
+      }
+    }
+  },
+  {
+    "formula": "nope + 1",
+    "error": {
+      "code": "unknownField",
+      "message": "Unknown field {nope}",
+      "range": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "{Name} & {Missing}",
+    "error": {
+      "code": "unknownField",
+      "message": "Unknown field {Missing}",
+      "range": {
+        "start": 9,
+        "end": 18
+      }
+    }
+  },
+  {
+    "formula": "{Notes}",
+    "stored": "{00000000-0000-7000-8000-000000000002}",
+    "display": "{Notes}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000002",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "{Discount}",
+    "stored": "{00000000-0000-7000-8000-000000000006}",
+    "display": "{Discount}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000006",
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "{Done}",
+    "stored": "{00000000-0000-7000-8000-000000000007}",
+    "display": "{Done}",
+    "type": "boolean",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000007",
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "{Due}",
+    "stored": "{00000000-0000-7000-8000-000000000008}",
+    "display": "{Due}",
+    "type": "date",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000008",
+      "range": {
+        "start": 0,
+        "end": 5
+      }
+    }
+  },
+  {
+    "formula": "{Start}",
+    "stored": "{00000000-0000-7000-8000-000000000009}",
+    "display": "{Start}",
+    "type": "date",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000009",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "{Duration}",
+    "stored": "{00000000-0000-7000-8000-000000000010}",
+    "display": "{Duration}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000010",
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  },
+  {
+    "formula": "{Rating}",
+    "stored": "{00000000-0000-7000-8000-000000000011}",
+    "display": "{Rating}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000011",
+      "range": {
+        "start": 0,
+        "end": 8
+      }
+    }
+  },
+  {
+    "formula": "{Status}",
+    "stored": "{00000000-0000-7000-8000-000000000012}",
+    "display": "{Status}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000012",
+      "range": {
+        "start": 0,
+        "end": 8
+      }
+    }
+  },
+  {
+    "formula": "{Tags}",
+    "stored": "{00000000-0000-7000-8000-000000000013}",
+    "display": "{Tags}",
+    "type": "array",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000013",
+      "range": {
+        "start": 0,
+        "end": 6
+      }
+    }
+  },
+  {
+    "formula": "{Email}",
+    "stored": "{00000000-0000-7000-8000-000000000014}",
+    "display": "{Email}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000014",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "{Website}",
+    "stored": "{00000000-0000-7000-8000-000000000015}",
+    "display": "{Website}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000015",
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "{Phone}",
+    "stored": "{00000000-0000-7000-8000-000000000016}",
+    "display": "{Phone}",
+    "type": "text",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000016",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "{Files}",
+    "stored": "{00000000-0000-7000-8000-000000000017}",
+    "display": "{Files}",
+    "type": "array",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000017",
+      "range": {
+        "start": 0,
+        "end": 7
+      }
+    }
+  },
+  {
+    "formula": "{ID}",
+    "stored": "{00000000-0000-7000-8000-000000000018}",
+    "display": "{ID}",
+    "type": "number",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000018",
+      "range": {
+        "start": 0,
+        "end": 4
+      }
+    }
+  },
+  {
+    "formula": "{Created}",
+    "stored": "{00000000-0000-7000-8000-000000000019}",
+    "display": "{Created}",
+    "type": "date",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000019",
+      "range": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  },
+  {
+    "formula": "{Modified}",
+    "stored": "{00000000-0000-7000-8000-000000000020}",
+    "display": "{Modified}",
+    "type": "date",
+    "errors": [],
+    "ast": {
+      "type": "field",
+      "fieldId": "00000000-0000-7000-8000-000000000020",
+      "range": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  }
+]

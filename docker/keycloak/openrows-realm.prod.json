@@ -1,0 +1,124 @@
+{
+  "realm": "openrows",
+  "displayName": "OpenRows",
+  "loginTheme": "openrows",
+  "emailTheme": "openrows",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "rememberMe": false,
+  "passwordPolicy": "length(12) and notUsername and notEmail",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 10,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "maxTemporaryLockouts": 0,
+  "accessTokenLifespan": 300,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "ssoSessionIdleTimeout": 604800,
+  "ssoSessionMaxLifespan": 2592000,
+  "accessCodeLifespanLogin": 1800,
+  "eventsEnabled": true,
+  "eventsExpiration": 604800,
+  "eventsListeners": ["jboss-logging"],
+  "adminEventsEnabled": false,
+  "smtpServer": {
+    "host": "${OPENROWS_KC_SMTP_HOST:}",
+    "port": "${OPENROWS_KC_SMTP_PORT:587}",
+    "from": "${OPENROWS_KC_SMTP_FROM:noreply@openrows.io}",
+    "fromDisplayName": "OpenRows",
+    "auth": "${OPENROWS_KC_SMTP_AUTH:false}",
+    "user": "${OPENROWS_KC_SMTP_USER:}",
+    "password": "${OPENROWS_KC_SMTP_PASSWORD:}",
+    "starttls": "${OPENROWS_KC_SMTP_STARTTLS:false}",
+    "ssl": "${OPENROWS_KC_SMTP_SSL:false}"
+  },
+  "clients": [
+    {
+      "clientId": "openrows-app",
+      "name": "openrows",
+      "description": "The OpenRows server (backend-for-frontend, ADR-006). Production: app.openrows.io; the secret comes from the env file.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${OIDC_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "rootUrl": "https://app.openrows.io",
+      "baseUrl": "/",
+      "redirectUris": ["https://app.openrows.io/auth/callback"],
+      "webOrigins": ["https://app.openrows.io"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://app.openrows.io/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "identity provider",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usersessionmodel-note-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.session.note": "identity_provider",
+            "claim.name": "identity_provider",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": "${OPENROWS_GOOGLE_ENABLED:false}",
+      "trustEmail": true,
+      "storeToken": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${OPENROWS_GOOGLE_CLIENT_ID:}",
+        "clientSecret": "${OPENROWS_GOOGLE_CLIENT_SECRET:}",
+        "syncMode": "IMPORT",
+        "guiOrder": "1"
+      }
+    },
+    {
+      "alias": "github",
+      "displayName": "GitHub",
+      "providerId": "github",
+      "enabled": "${OPENROWS_GITHUB_ENABLED:false}",
+      "trustEmail": true,
+      "storeToken": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${OPENROWS_GITHUB_CLIENT_ID:}",
+        "clientSecret": "${OPENROWS_GITHUB_CLIENT_SECRET:}",
+        "defaultScope": "user:email",
+        "syncMode": "IMPORT",
+        "guiOrder": "2"
+      }
+    }
+  ]
+}

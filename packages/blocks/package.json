@@ -1,0 +1,46 @@
+{
+  "name": "@openrows/blocks",
+  "version": "0.1.0",
+  "description": "Typed SDK for OpenRows extensions: records, cursor, settings and live changes over postMessage",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Draggable/openrows.git",
+    "directory": "packages/blocks"
+  },
+  "homepage": "https://openrows.io/docs/extensions",
+  "keywords": [
+    "openrows",
+    "airtable",
+    "extensions",
+    "blocks",
+    "sdk"
+  ],
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@openrows/shared": "*"
+  }
+}

@@ -1,0 +1,4 @@
+# kind-smoke.sh passes every value with --set (random per run).
+secretName: openrows-secrets
+bucket: openrows
+secrets: {}

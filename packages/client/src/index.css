@@ -1,0 +1,375 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+/* Dark mode follows a `.dark` class on <html> (set by lib/theme.ts from the OS or the user). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens (docs/design/DESIGN.md §3, the rose refresh). The raw tokens are CSS
+ * variables; the shadcn/ui names (background, primary, muted…) map onto them so copied
+ * components fit. `primary` is the leaf green of selected and active states; `brand` is the rose.
+ */
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-app: var(--bg-app);
+  --color-sidebar: var(--bg-sidebar);
+  --color-surface: var(--bg-surface);
+  --color-header: var(--bg-header);
+  --color-hover: var(--bg-hover);
+  --color-selected: var(--bg-selected);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent-hover: var(--accent-hover);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-foreground: var(--brand-fg);
+  --color-brand-text: var(--brand-text);
+  --color-brand-tint: var(--brand-tint);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-scrim: var(--scrim);
+
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--brand);
+  --color-background: var(--bg-app);
+  --color-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-fg);
+  --color-secondary: var(--bg-surface);
+  --color-secondary-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--danger-fg);
+  --color-danger-foreground: var(--danger-fg);
+  --color-muted: var(--bg-hover);
+  --color-muted-foreground: var(--text-2);
+  --color-accent: var(--bg-hover);
+  --color-accent-foreground: var(--text);
+  --color-popover: var(--bg-surface);
+  --color-popover-foreground: var(--text);
+  --color-card: var(--bg-surface);
+  --color-card-foreground: var(--text);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-1: var(--sh-1);
+  --shadow-2: var(--sh-2);
+  --shadow-3: var(--sh-3);
+
+  /* Headings scale down on narrow screens: 28 px from ~530 px wide, 22 px at 360. */
+  --text-display: clamp(22px, 3.4vw + 10px, 28px);
+  --text-display--line-height: 1.22;
+  --text-title: clamp(18px, 1.6vw + 12.5px, 22px);
+  --text-title--line-height: 1.28;
+  --text-heading: 15px;
+  --text-heading--line-height: 22px;
+  --text-body: 13px;
+  --text-body--line-height: 20px;
+  --text-small: 12px;
+  --text-small--line-height: 16px;
+  --text-caps: 11px;
+  --text-caps--line-height: 16px;
+}
+
+@layer base {
+  :root {
+    /* The rose (DESIGN.md §2-3): the brand colour #E22651, sampled from the logo, and its scale.
+       Used sparingly: the logo, the one primary button of a view, focus and the active nav item. */
+    --rose-50: #fff2f3;
+    --rose-100: #ffe5e5;
+    --rose-200: #ffcdcf;
+    --rose-300: #fea7ac;
+    --rose-400: #ff6b7d;
+    --rose-500: #e22651;
+    --rose-600: #c91143;
+    --rose-700: #aa0536;
+    --rose-800: #8b0b2c;
+    --rose-900: #720f25;
+    --rose-950: #470212;
+    /* The leaf: the rose's complementary green, for selected and active states and success. */
+    --leaf-50: #f1f7f4;
+    --leaf-100: #e2f0e9;
+    --leaf-200: #c8e3d6;
+    --leaf-300: #9ed0b8;
+    --leaf-400: #65b693;
+    --leaf-500: #1e8c66;
+    --leaf-600: #17805d;
+    --leaf-700: #0e6b4c;
+    --leaf-800: #0f583f;
+    --leaf-900: #104834;
+    --leaf-950: #032a1c;
+
+    --bg-app: #faf7f5;
+    --bg-sidebar: #f4f0ec;
+    --bg-surface: #ffffff;
+    --bg-header: #f8f5f2;
+    --bg-hover: #f2edea;
+    --bg-selected: var(--leaf-100);
+    --border: #e8e2dd;
+    --border-strong: #d7cfc9;
+    --text: #1c1719;
+    --text-2: #6e6468;
+    --text-3: #716769;
+    /* Brand: primary buttons, focus rings, the active nav item's bar, text and petal tint. */
+    --brand: var(--rose-500);
+    --brand-hover: var(--rose-600);
+    --brand-fg: #ffffff;
+    --brand-text: var(--rose-600);
+    --brand-tint: #fdecef;
+    /* Selection and active state: checkboxes, the selected cell, active toolbar buttons. */
+    --accent: var(--leaf-700);
+    --accent-hover: var(--leaf-800);
+    --accent-fg: #ffffff;
+    --success: var(--leaf-700);
+    /* Errors have their own hue (vermilion), so the brand rose never reads as an error. */
+    --danger: #bd3d00;
+    --danger-fg: #ffffff;
+    --warning: #b7791f;
+    --scrim: rgba(40, 30, 34, 0.32);
+    --sh-1: 0 1px 2px rgba(28, 23, 25, 0.06);
+    --sh-2: 0 4px 12px rgba(28, 23, 25, 0.08), 0 1px 3px rgba(28, 23, 25, 0.06);
+    --sh-3: 0 24px 48px rgba(28, 23, 25, 0.16), 0 2px 6px rgba(28, 23, 25, 0.08);
+    /* Select chips (DESIGN.md "Select / chip palette"): solid dot, tint background, text. Red
+       leans to tomato and pink to orchid, away from the brand rose. */
+    --chip-green: #2f9e6e;
+    --chip-green-bg: #e3f3ea;
+    --chip-green-text: #1c6b48;
+    --chip-amber: #d9901a;
+    --chip-amber-bg: #fcf0da;
+    --chip-amber-text: #8a5a0b;
+    --chip-blue: #3b6fd8;
+    --chip-blue-bg: #e5ecfb;
+    --chip-blue-text: #2a4fa0;
+    --chip-red: #d1512e;
+    --chip-red-bg: #ffe8e1;
+    --chip-red-text: #913015;
+    --chip-violet: #7a5ad0;
+    --chip-violet-bg: #eee9fa;
+    --chip-violet-text: #55399f;
+    --chip-teal: #1f9aa8;
+    --chip-teal-bg: #e0f3f5;
+    --chip-teal-text: #146c76;
+    --chip-pink: #ba54a1;
+    --chip-pink-bg: #fde7f6;
+    --chip-pink-text: #80346e;
+    --chip-slate: #64748b;
+    --chip-slate-bg: #eceff3;
+    --chip-slate-text: #3f4b5c;
+    --chip-olive: #7c8a2a;
+    --chip-olive-bg: #f0f2de;
+    --chip-olive-text: #545e17;
+    --chip-brown: #9a6a43;
+    --chip-brown-bg: #f3eae1;
+    --chip-brown-text: #6b4529;
+
+    /* Dashboard charts: categorical slots in a fixed order (Ledger green first), checked
+       for colour-blind separation on the surface; a single series is slot 1. */
+    --chart-1: #1e8c66;
+    --chart-2: #2a78d6;
+    --chart-3: #eb6834;
+    --chart-4: #6250d6;
+    --chart-5: #eda100;
+    --chart-6: #e87ba4;
+    --chart-other: #a39a9e;
+    color-scheme: light;
+  }
+
+  .dark {
+    /* Warm charcoal, never #000. */
+    --bg-app: #17131a;
+    --bg-sidebar: #1b161e;
+    --bg-surface: #211b24;
+    --bg-header: #261f29;
+    --bg-hover: #2b242e;
+    --bg-selected: color-mix(in srgb, var(--leaf-400) 16%, transparent);
+    --border: #362e39;
+    --border-strong: #483f4b;
+    --text: #eee8ea;
+    --text-2: #a89ea5;
+    --text-3: #968c93;
+    --brand: var(--rose-500);
+    --brand-hover: var(--rose-600);
+    --brand-fg: #ffffff;
+    --brand-text: var(--rose-400);
+    --brand-tint: color-mix(in srgb, var(--rose-500) 16%, transparent);
+    --accent: var(--leaf-400);
+    --accent-hover: var(--leaf-300);
+    --accent-fg: var(--leaf-950);
+    --success: var(--leaf-400);
+    --danger: #f6946d;
+    --danger-fg: #240d03;
+    /* The dark amber chip text: the light theme's #B7791F is too dim on charcoal. */
+    --warning: #f2c46d;
+    --scrim: rgba(0, 0, 0, 0.55);
+    --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --sh-2: 0 4px 12px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --sh-3: 0 24px 48px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+    /* Chips: the solid at 18% for the background, the light text column. */
+    --chip-green-bg: color-mix(in srgb, var(--chip-green) 18%, transparent);
+    --chip-green-text: #7fd8ae;
+    --chip-amber-bg: color-mix(in srgb, var(--chip-amber) 18%, transparent);
+    --chip-amber-text: #f2c46d;
+    --chip-blue-bg: color-mix(in srgb, var(--chip-blue) 18%, transparent);
+    --chip-blue-text: #93b2f2;
+    --chip-red-bg: color-mix(in srgb, var(--chip-red) 18%, transparent);
+    --chip-red-text: #f8a690;
+    --chip-violet-bg: color-mix(in srgb, var(--chip-violet) 18%, transparent);
+    --chip-violet-text: #bca8f0;
+    --chip-teal-bg: color-mix(in srgb, var(--chip-teal) 18%, transparent);
+    --chip-teal-text: #7dd3dc;
+    --chip-pink-bg: color-mix(in srgb, var(--chip-pink) 18%, transparent);
+    --chip-pink-text: #e7a6d3;
+    --chip-slate-bg: color-mix(in srgb, var(--chip-slate) 18%, transparent);
+    --chip-slate-text: #b4becc;
+    --chip-olive-bg: color-mix(in srgb, var(--chip-olive) 18%, transparent);
+    --chip-olive-text: #c8d47c;
+    --chip-brown-bg: color-mix(in srgb, var(--chip-brown) 18%, transparent);
+    --chip-brown-text: #d8b497;
+    --chart-1: #1e8c66;
+    --chart-2: #3987e5;
+    --chart-3: #d95926;
+    --chart-4: #9085e9;
+    --chart-5: #c98500;
+    --chart-6: #d55181;
+    --chart-other: #6f6570;
+    color-scheme: dark;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html,
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-size: 13px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Focus is always visible (keyboard-first): a ring outside the element, in the brand rose. */
+  :focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--bg-surface),
+      0 0 0 4px var(--brand);
+  }
+  .tnum {
+    font-feature-settings: "tnum", "cv11";
+  }
+}
+
+/* Toasts slide in at full opacity instead of fading in: a half-transparent toast's text falls
+   below 4.5:1 (DESIGN.md §10). Unlayered and more specific than sonner's injected styles; the
+   fade on dismiss (data-removed) and on stacked toasts (data-visible) is unchanged. */
+[data-sonner-toast][data-mounted="false"][data-removed="false"][data-visible="true"] {
+  opacity: 1;
+}
+
+/* Toast motion on the DESIGN.md §9 tokens instead of sonner's 400 ms: the slide takes 220 ms,
+   fades and height changes 180 ms, with the standard easing. More specific than sonner's
+   injected rules (a swipe still follows the pointer without a transition); sonner's own
+   !important rule turns motion off under prefers-reduced-motion. */
+html [data-sonner-toast]:not([data-swiping="true"]) {
+  transition:
+    transform 220ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 180ms cubic-bezier(0.2, 0, 0, 1),
+    height 180ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+html [data-sonner-toast] > * {
+  transition: opacity 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* The mobile sidebar drawer slides in from the left on the DESIGN.md §9 tokens. */
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+.drawer[data-state="open"] {
+  animation: drawer-in 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer[data-state="open"] {
+    animation: none;
+  }
+}
+
+/* The WYSIWYG rich text editor: the same look as rendered rich text (cells/RichText.tsx). */
+.rich-text-editor {
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rich-text-editor h1,
+.rich-text-editor h2,
+.rich-text-editor h3 {
+  font-weight: 600;
+}
+.rich-text-editor h1 {
+  font-size: 16px;
+}
+.rich-text-editor h2 {
+  font-size: 14px;
+}
+.rich-text-editor strong {
+  font-weight: 600;
+}
+.rich-text-editor code {
+  border-radius: var(--radius-xs);
+  background: var(--bg-hover);
+  padding: 0 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.rich-text-editor pre {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  padding: 8px;
+}
+.rich-text-editor pre code {
+  background: none;
+  padding: 0;
+}
+.rich-text-editor blockquote {
+  padding-left: 12px;
+  color: var(--text-2);
+  font-style: italic;
+}
+.rich-text-editor ul {
+  list-style: disc;
+  padding-left: 20px;
+}
+.rich-text-editor ol {
+  list-style: decimal;
+  padding-left: 20px;
+}
+.rich-text-editor ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+.rich-text-editor ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.rich-text-editor ul[data-type="taskList"] input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.rich-text-editor a {
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 2px;
+}

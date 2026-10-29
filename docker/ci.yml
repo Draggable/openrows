@@ -1,0 +1,81 @@
+# ci overlay: the dev stack (compose.yml + dev.yml + this file) for CI's smoke job, through
+# `docker/compose.sh ci`. Publishes NO host port, so it never clashes with other services on the
+# Docker host or with another openrows CI run: compose.sh names the project openrows-ci-<OPENROWS_CI_ID>
+# (CI passes the run id and attempt), so containers, volumes and the namespace are per run.
+#
+# Nothing outside the stack talks to it. Playwright runs in the `e2e` service (profile `e2e`),
+# inside `net`'s network namespace like every other service (docker/README.md "Networking"), so
+# the browser, the api and Keycloak all see the app at http://localhost:8180 and Keycloak at
+# http://localhost:8080, exactly as on a developer's machine. No bridge traffic between
+# containers is needed, so this runs on the CI runners and on hosts that block it alike.
+#
+#   OPENROWS_CI_ID=local docker/compose.sh ci up -d --wait
+#   E2E_UID=$(id -u) E2E_GID=$(id -g) OPENROWS_CI_ID=local docker/compose.sh ci run --rm e2e
+#   OPENROWS_CI_ID=local docker/compose.sh ci --profile e2e down -v --remove-orphans
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "10"
+    compress: "true"
+
+services:
+  net:
+    ports: !reset []
+
+  api:
+    # In the namespace the api listens on 8180 itself, so APP_URL (http://localhost:8180, which
+    # the dev realm registers) is reachable from the browser in the same namespace.
+    environment:
+      PORT: "8180"
+      # Every spec of a shard signs in from the one browser IP, and the stack specs (golden path,
+      # sharing, presence...) together pass the default 30 /auth requests a minute.
+      AUTH_RATE_LIMIT: "300"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8180/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+  keycloak:
+    # On a shared, busy CI daemon start-dev's Quarkus re-augmentation, the H2 schema and the
+    # realm import took over 3 minutes once (locally under one), past dev's budget (30s grace +
+    # 30 × 5s). Here it gets 8 minutes of grace, probed every 5s (start_interval, Engine 25+) so
+    # it still turns healthy as soon as it's ready, then 6 × 10s before it counts as unhealthy:
+    # about 9 minutes, inside the smoke job's `--wait-timeout 660` (the compose tests check).
+    healthcheck:
+      start_period: 8m
+      start_interval: 5s
+      interval: 10s
+      retries: 6
+
+  e2e:
+    # The browsers ship in the image, so the version tag is the cache key: the runner's Docker
+    # keeps the image between runs. It must match @playwright/test in package-lock.json (the
+    # compose tests check), because the test runner comes from the checkout's node_modules.
+    image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+    profiles: ["e2e"]
+    network_mode: service:net
+    init: true
+    logging: *logging
+    # As the runner's user: the report and traces land in the checkout, and root-owned files
+    # there would break the next checkout on a persistent runner.
+    user: "${E2E_UID:-1000}:${E2E_GID:-1000}"
+    shm_size: 1gb
+    working_dir: /work
+    volumes:
+      - ..:/work
+    environment:
+      CI: "true"
+      HOME: /tmp
+      E2E_BASE_URL: http://localhost:8180
+      # Also runs e2e/stack.spec.ts (/ready, the Keycloak sign-in).
+      E2E_STACK: "1"
+      # e2e/stack.spec.ts checks /health's edition.
+      E2E_EDITION: oss
+      # The worker's /health and /metrics, reachable in the shared namespace only.
+      E2E_WORKER_URL: http://localhost:3001
+    command: ["npx", "--no-install", "playwright", "test"]
+    depends_on:
+      api:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
