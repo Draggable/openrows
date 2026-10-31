@@ -104,6 +104,25 @@ describe('security headers on every response', () => {
     expect(res.headers.get('cache-control')).toBe('no-cache');
   });
 
+  it("the OAuth popup's pages keep their opener: COOP unsafe-none, framing still denied", async () => {
+    for (const path of [
+      '/oauth/authorize?client_id=x',
+      '/login',
+      '/login?returnTo=%2Foauth%2Fauthorize',
+    ]) {
+      const res = await app.request(path);
+      expect(res.headers.get('content-type'), path).toMatch(/^text\/html/);
+      expect(res.headers.get('cross-origin-opener-policy'), path).toBe('unsafe-none');
+      expect(res.headers.get('x-frame-options'), path).toBe('DENY');
+      expect(res.headers.get('content-security-policy'), path).toBe(expectedCsp);
+    }
+    // Everything else, the consent screen's API included, stays same-origin.
+    for (const path of ['/oauth/authorize/x', '/login-help', '/settings', '/api/oauth/authorize']) {
+      const res = await app.request(path);
+      expect(res.headers.get('cross-origin-opener-policy'), path).toBe('same-origin');
+    }
+  });
+
   it('a hashed static asset, cached for a year', async () => {
     const res = await app.request('/assets/index-abc123.js');
     expect(res.status).toBe(200);

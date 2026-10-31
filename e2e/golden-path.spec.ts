@@ -71,7 +71,9 @@ test('sign up, build a base, work with data, import, export and invite', async (
     expect(headers['content-security-policy']).toContain("script-src 'self';");
     expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
     expect(headers['x-content-type-options']).toBe('nosniff');
-    expect(headers['cross-origin-opener-policy']).toBe('same-origin');
+    // /login is on an OAuth app's popup path, so it keeps its opener (unsafe-none); other pages
+    // are same-origin (security-headers.test.ts).
+    expect(headers['cross-origin-opener-policy']).toBe('unsafe-none');
   });
 
   await test.step('sign up', async () => {

@@ -133,6 +133,15 @@ export function securityHeaderValues(config: Config): Record<string, string> {
 const NO_STORE_PATHS = /^\/(api|auth)(\/|$)/;
 
 /**
+ * Pages a third-party app's OAuth popup (Make, Zapier, n8n...) renders on its way to the consent
+ * screen: the consent screen itself and the sign-in page it bounces signed-out visitors to.
+ * `Cross-Origin-Opener-Policy: same-origin` there severs the popup from the app's window, which
+ * then sees `popup.closed === true` at once, gives up and verifies a connection that has no tokens.
+ * These pages get `unsafe-none`; framing stays denied (frame-ancestors 'none', X-Frame-Options).
+ */
+export const OAUTH_POPUP_PATHS = /^\/(oauth\/authorize|login)\/?$/;
+
+/**
  * Sets the security headers on every response: HTML, JSON, problem+json errors and static
  * files. Production has no reverse proxy adding them (Cloudflare Tunnel points straight at
  * the api). API and auth responses also get `Cache-Control: no-store`. A header a route set
@@ -166,6 +175,8 @@ export function securityHeaders(config: Config): MiddlewareHandler<AppEnv> {
         headers.set('Content-Security-Policy', shareContentSecurityPolicy(config, ancestors));
       }
     }
+    if (OAUTH_POPUP_PATHS.test(c.req.path))
+      headers.set('Cross-Origin-Opener-Policy', 'unsafe-none');
     for (const [name, value] of values) {
       if (framed && name === 'X-Frame-Options') continue;
       if (!headers.has(name)) headers.set(name, value);
