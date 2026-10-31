@@ -145,7 +145,8 @@ jobs:
 
   docker:
     # Builds docker/Dockerfile's `oss` target after every other job passed. On a push to main or
-    # a v* tag (only) it pushes it to GHCR. Pull requests only build.
+    # a v* tag (only) it pushes it to GHCR. Pull requests only build. The OCI labels name this
+    # repository as the source and give the GHCR package page its description.
     needs: [check, integration, smoke, helm]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -165,7 +166,11 @@ jobs:
           docker buildx build -f docker/Dockerfile --target oss -t "$LOCAL_IMAGE"
           --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           --label org.opencontainers.image.revision=${{ github.sha }}
-          --label org.opencontainers.image.licenses=AGPL-3.0-only .
+          --label org.opencontainers.image.licenses=AGPL-3.0-only
+          --label org.opencontainers.image.title=OpenRows
+          --label "org.opencontainers.image.description=The open-source Airtable alternative you can host yourself"
+          --label org.opencontainers.image.url=https://openrows.io
+          --label org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}/blob/main/docs/guide/self-hosting.md .
       - name: Push the image to GHCR
         if: github.event_name == 'push'
         env:
