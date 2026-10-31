@@ -116,8 +116,28 @@ describe('security headers on every response', () => {
       expect(res.headers.get('x-frame-options'), path).toBe('DENY');
       expect(res.headers.get('content-security-policy'), path).toBe(expectedCsp);
     }
+    // The sign-in round trip the popup is redirected through (no OIDC here: problem responses,
+    // in production 302s; Chromium applies COOP on redirects too).
+    for (const path of [
+      '/auth/login?returnTo=%2Foauth%2Fauthorize',
+      '/auth/signup',
+      '/auth/callback?code=x&state=y',
+    ]) {
+      const res = await app.request(path);
+      expect(res.headers.get('cross-origin-opener-policy'), path).toBe('unsafe-none');
+      expect(res.headers.get('x-frame-options'), path).toBe('DENY');
+      expect(res.headers.get('cache-control'), path).toBe('no-store');
+    }
     // Everything else, the consent screen's API included, stays same-origin.
-    for (const path of ['/oauth/authorize/x', '/login-help', '/settings', '/api/oauth/authorize']) {
+    for (const path of [
+      '/oauth/authorize/x',
+      '/login-help',
+      '/settings',
+      '/api/oauth/authorize',
+      '/auth/providers',
+      '/auth/logout',
+      '/auth/login/x',
+    ]) {
       const res = await app.request(path);
       expect(res.headers.get('cross-origin-opener-policy'), path).toBe('same-origin');
     }
@@ -139,7 +159,7 @@ describe('security headers on every response', () => {
   });
 
   it('problem+json errors (401, 404, 503) and auth responses', async () => {
-    for (const path of ['/api/me', '/api/nope', '/auth/login']) {
+    for (const path of ['/api/me', '/api/nope', '/auth/logout']) {
       const res = await app.request(path);
       expect(res.status, path).toBeGreaterThanOrEqual(400);
       expect(res.headers.get('content-type'), path).toBe('application/problem+json');
