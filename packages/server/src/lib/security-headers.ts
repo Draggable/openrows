@@ -133,13 +133,15 @@ export function securityHeaderValues(config: Config): Record<string, string> {
 const NO_STORE_PATHS = /^\/(api|auth)(\/|$)/;
 
 /**
- * Pages a third-party app's OAuth popup (Make, Zapier, n8n...) renders on its way to the consent
- * screen: the consent screen itself and the sign-in page it bounces signed-out visitors to.
- * `Cross-Origin-Opener-Policy: same-origin` there severs the popup from the app's window, which
- * then sees `popup.closed === true` at once, gives up and verifies a connection that has no tokens.
- * These pages get `unsafe-none`; framing stays denied (frame-ancestors 'none', X-Frame-Options).
+ * Every response a third-party app's OAuth popup (Make, Zapier, n8n...) commits or is redirected
+ * through on its way to the consent screen: the consent screen, the sign-in page it bounces
+ * signed-out visitors to, and the sign-in round trip (`/auth/login` or `/auth/signup` -> the OIDC
+ * provider -> `/auth/callback`, 302s). Chromium applies COOP on redirect responses too, so one
+ * `same-origin` anywhere in that chain severs the popup from the app's window, which then sees
+ * `popup.closed === true`, gives up and verifies a connection that has no tokens yet. These get
+ * `unsafe-none`; framing stays denied (frame-ancestors 'none', X-Frame-Options).
  */
-export const OAUTH_POPUP_PATHS = /^\/(oauth\/authorize|login)\/?$/;
+export const OAUTH_POPUP_PATHS = /^\/(oauth\/authorize|login|auth\/(login|signup|callback))\/?$/;
 
 /**
  * Sets the security headers on every response: HTML, JSON, problem+json errors and static

@@ -150,8 +150,9 @@ Also: `Strict-Transport-Security: max-age=31536000; includeSubDomains` when `APP
 (never over http), `X-Content-Type-Options: nosniff`,
 `Referrer-Policy: strict-origin-when-cross-origin`,
 `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()` and
-`Cross-Origin-Opener-Policy: same-origin` (except `/oauth/authorize` and `/login`, the pages an
-OAuth app's sign-in popup shows: `unsafe-none`, so the app's window keeps its handle on the popup).
+`Cross-Origin-Opener-Policy: same-origin` (except the OAuth popup chain, `/oauth/authorize`,
+`/login`, `/auth/login`, `/auth/signup` and `/auth/callback`: `unsafe-none`, so an OAuth app's
+window keeps its handle on its sign-in popup; browsers apply COOP on redirects too).
 `/api/*` and `/auth/*` responses get
 `Cache-Control: no-store`, the hashed files under `/assets` `public, max-age=31536000, immutable`,
 and everything else `no-cache`. A proxy in front may add headers but shouldn't set a second,
