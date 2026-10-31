@@ -44,7 +44,7 @@ POST /api/v1/bases/{baseId}/webhooks
   `table.updated`, `table.deleted`, `table.restored`, `comment.created`, `comment.updated` (an
   edit or a reaction) and `comment.deleted`.
 - **tableIds**: only these tables' events (`null`: every table, including new ones).
-- **fieldIds**: record updates only when one of these fields changed (`null`: any field).
+- **fieldIds**: record updates only when one of these fields changed (`null` or `[]`: any field).
 - A base has at most 10 webhooks. The URL must be `https` on port 443 at a public address (a
   self-hosted server can allow more with `OUTBOUND_HTTP_*`, see the deployment docs). It is
   checked when saved and again before every delivery.

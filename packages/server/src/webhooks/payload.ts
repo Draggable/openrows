@@ -41,7 +41,8 @@ export function webhookEventType(
       return wants.has('record.created') ? 'record.created' : null;
     case 'record.updated': {
       if (!wants.has('record.updated') || payload['computed'] === true) return null;
-      if (!webhook.fieldIds) return 'record.updated';
+      // No field filter, null or empty: an update of any field.
+      if (!webhook.fieldIds?.length) return 'record.updated';
       const changed = Array.isArray(payload['fieldIds']) ? payload['fieldIds'] : [];
       return changed.some((id) => webhook.fieldIds?.includes(String(id))) ? 'record.updated' : null;
     }

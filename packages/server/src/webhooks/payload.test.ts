@@ -73,6 +73,8 @@ describe('webhookEventType (#107)', () => {
     expect(webhookEventType(hook({ tableIds: [T1] }), update)).toBe('record.updated');
     expect(webhookEventType(hook({ fieldIds: [F2] }), update)).toBe(null);
     expect(webhookEventType(hook({ fieldIds: [F2, F1] }), update)).toBe('record.updated');
+    // An empty field filter is no filter, like null.
+    expect(webhookEventType(hook({ fieldIds: [] }), update)).toBe('record.updated');
     expect(
       webhookEventType(hook(), { ...update, payload: { fieldIds: [F1], computed: true } })
     ).toBe(null);
