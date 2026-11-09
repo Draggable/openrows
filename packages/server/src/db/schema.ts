@@ -101,14 +101,15 @@ export const users = pgTable(
       { onDelete: 'set null' }
     ),
     /**
-     * The user asked to delete their account: they can't sign in any more, and the worker's
+     * The user asked to delete their account: they can't sign in, and OAuth and personal
+     * access tokens are refused the same way as for a suspended account. The worker's
      * `purge.deleted` job deletes the row and everything personal within the hour (the row is
      * gone afterwards, so this is only ever seen in between).
      */
     deletedAt: deletedAt(),
     /**
-     * A system admin suspended the account (the ops console): its sessions end, sign-in and
-     * its personal access tokens are refused until it is lifted.
+     * A system admin suspended the account (the ops console): its sessions end, and sign-in,
+     * personal access tokens and OAuth tokens are refused until it is lifted.
      */
     suspendedAt: timestamp('suspended_at', { withTimezone: true }),
     suspendedReason: text('suspended_reason'),

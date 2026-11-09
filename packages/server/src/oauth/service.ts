@@ -488,9 +488,16 @@ async function issueTokens(
   };
 }
 
+/** Present, and neither deleted nor suspended. */
+function usableAccount<T extends { deletedAt: Date | null; suspendedAt: Date | null }>(
+  user: T | undefined
+): user is T {
+  return user !== undefined && user.deletedAt === null && user.suspendedAt === null;
+}
+
 async function activeUser(tx: Transaction, userId: string): Promise<boolean> {
   const [user] = await tx.select().from(users).where(eq(users.id, userId));
-  return Boolean(user && user.suspendedAt === null);
+  return usableAccount(user);
 }
 
 async function revokeIn(tx: Transaction, authorizationId: string): Promise<void> {
@@ -654,9 +661,9 @@ export async function revokeByClient(
 
 /**
  * The principal of an OAuth access token (`or_oat_…`), or null when it is malformed, unknown,
- * expired, revoked, or its authorization or app is gone (the caller answers 401 alike). It acts
- * as its person, narrowed to the authorization's scopes and grants, like a personal access
- * token; its rate limit bucket is the authorization's.
+ * expired, revoked, its authorization or app is gone, or the account is deleted or suspended
+ * (the caller answers 401 alike). It acts as its person, narrowed to the authorization's scopes
+ * and grants, like a personal access token; its rate limit bucket is the authorization's.
  */
 export async function resolveOAuthToken(
   db: Database,
@@ -668,7 +675,8 @@ export async function resolveOAuthToken(
   const expiresAt = new Date(row.expires_at);
   if (expiresAt.getTime() <= now()) return null;
   const [user] = await db.select().from(users).where(eq(users.id, row.user_id));
-  if (!user || user.suspendedAt !== null) return null;
+  // A deleted account is refused the same way as a suspended one.
+  if (!usableAccount(user)) return null;
   await db.execute(sql`SELECT oauth_touch(${row.authorization_id}::uuid)`);
   return {
     user,
