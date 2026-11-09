@@ -50,7 +50,7 @@ grant_type=authorization_code&code=…&redirect_uri=…&code_verifier=…
 
 (`client_id` and `client_secret` in the body work too.) The code is good once, for 10 minutes,
 for the same redirect URI and the verifier of its challenge; a code used twice revokes everything
-that authorization gave. The answer:
+that authorization gave. A deleted or suspended account cannot exchange it. The answer:
 
 ```json
 {
@@ -72,8 +72,8 @@ token endpoint takes 120 requests per minute per IP.
 `Authorization: Bearer or_oat_…` works wherever a personal access token does (the REST API v1,
 the SDK's `apiKey`, the MCP endpoint), and the same way: the person's live role ∩ the scopes ∩
 the workspaces and bases they picked, the same session-only routes refused, the same rate limits
-(one bucket per authorization). A suspended account, a workspace whose policy turns tokens off
-, a revoked authorization or a deleted app end it at once.
+(one bucket per authorization). A deleted or suspended account, a workspace whose policy turns
+tokens off, a revoked authorization or a deleted app end it at once.
 
 ## 4. Refresh
 
@@ -82,9 +82,9 @@ POST /oauth/token
 grant_type=refresh_token&refresh_token=or_ort_…
 ```
 
-answers a new access token and a new refresh token (60 days). Each refresh token is used once:
-presenting an old one again revokes the authorization (it has leaked), and the person has to
-authorize the app again.
+answers a new access token and a new refresh token (60 days). Refreshing is refused for a
+deleted or suspended account. Each refresh token is used once: presenting an old one again
+revokes the authorization (it has leaked), and the person has to authorize the app again.
 
 ## Revocation
 

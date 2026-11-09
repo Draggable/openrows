@@ -39,8 +39,9 @@ function recentUntil(authenticatedAt: Date | null | undefined, now: Date): Date 
  * Deleting your own account. Session only (never a token), and only ever the caller's
  * account: there is no user id in the path. `POST /api/me/delete` needs a recent sign-in
  * (`/auth/login?reauth=1`) and the account's email typed again; it refuses while the user is the
- * only owner of a workspace others are in. It marks the account deleted, ends every session,
- * deletes the user's tokens and the workspaces only they are in, and sends the `purge.deleted`
+ * only owner of a workspace others are in. It marks the account deleted, which refuses its
+ * OAuth tokens the same way a suspension does, ends every session, deletes the user's
+ * personal access tokens and the workspaces only they are in, and sends the `purge.deleted`
  * job, which hard-deletes all of it (and the provider's user) within minutes; the hourly run
  * catches anything a failure left.
  */

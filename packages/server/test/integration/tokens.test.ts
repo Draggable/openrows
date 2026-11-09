@@ -299,6 +299,18 @@ describe('personal access tokens', () => {
     expect(rename.status).toBe(200);
   });
 
+  it('refuses a token when the account is deleted', async () => {
+    const { token } = await createToken(t.db, owner, { workspaceIds: [workspaceId] });
+    expect((await call('GET', '/api/workspaces', { bearer: token })).status).toBe(200);
+    await t.db.execute(sql`UPDATE users SET deleted_at = now() WHERE id = ${owner.id}`);
+    try {
+      expect((await call('GET', '/api/workspaces', { bearer: token })).status).toBe(401);
+    } finally {
+      await t.db.execute(sql`UPDATE users SET deleted_at = NULL WHERE id = ${owner.id}`);
+    }
+    expect((await call('GET', '/api/workspaces', { bearer: token })).status).toBe(200);
+  });
+
   it('rejects revoked, expired, unknown and malformed tokens with the same 401', async () => {
     const created = await create({
       name: 'to revoke',

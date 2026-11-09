@@ -29,7 +29,7 @@ function pkce() {
  * OAuth apps end to end as openrows_app: registration, the consent screen's checks, the
  * code exchange with PKCE, the access token as a narrowed bearer (scopes, grants, live role),
  * refresh rotation and replay detection, code replay, revocation from Settings and by the app
- * (RFC 7009), deleting the app, expiry, and no secret in the logs.
+ * (RFC 7009), deleting the app, a deleted account, expiry, and no secret in the logs.
  */
 describe('OAuth apps', () => {
   const t = useTestDb();
@@ -523,6 +523,68 @@ describe('OAuth apps', () => {
     expect((await call(tokens.access_token, 'GET', '/api/v1/meta/bases')).status).toBe(401);
     await t.db.execute(sql`UPDATE users SET suspended_at = NULL WHERE id = ${person.id}`);
     expect((await call(tokens.access_token, 'GET', '/api/v1/meta/bases')).status).toBe(200);
+  });
+
+  it('refuses OAuth tokens while the account is deleted', async () => {
+    const app = await register('Deleted mark');
+    const { verifier, challenge } = pkce();
+    const code = await consent(app, challenge);
+    const tokens = await authorize(app);
+    await t.db.execute(sql`UPDATE users SET deleted_at = now() WHERE id = ${person.id}`);
+    try {
+      expect((await call(tokens.access_token, 'GET', '/api/v1/meta/bases')).status).toBe(401);
+      expect(
+        (
+          await form(
+            '/oauth/token',
+            { grant_type: 'refresh_token', refresh_token: tokens.refresh_token },
+            app
+          )
+        ).body.error
+      ).toBe('invalid_grant');
+      expect((await exchange(app, code, verifier)).body.error).toBe('invalid_grant');
+    } finally {
+      await t.db.execute(sql`UPDATE users SET deleted_at = NULL WHERE id = ${person.id}`);
+    }
+    // Clearing the mark allows the access token again, the same as lifting a suspension.
+    expect((await call(tokens.access_token, 'GET', '/api/v1/meta/bases')).status).toBe(200);
+  });
+
+  it('revokes OAuth tokens when the account is deleted', async () => {
+    const app = await register('Delete account');
+    const { owner, workspace } = await createWorkspace(t.db);
+    const cookie = await createSession(t.db, owner);
+    await t.db.execute(
+      sql`UPDATE sessions SET authenticated_at = now() WHERE user_id = ${owner.id}`
+    );
+    cookies.set(owner.id, cookie);
+    const { verifier, challenge } = pkce();
+    const consentRes = await call(owner, 'POST', '/api/oauth/authorize', {
+      clientId: app.clientId,
+      redirectUri: REDIRECT,
+      scope: 'schema.bases:read data.records:read',
+      state: 'xyz',
+      codeChallenge: challenge,
+      codeChallengeMethod: 'S256',
+      decision: 'allow',
+      workspaceIds: [workspace.id],
+    });
+    expect(consentRes.status, JSON.stringify(consentRes.body)).toBe(200);
+    const code = new URL(consentRes.body.redirectTo).searchParams.get('code') ?? '';
+    const issued = await exchange(app, code, verifier);
+    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+    const deleted = await call(owner, 'POST', '/api/me/delete', { confirmEmail: owner.email });
+    expect(deleted.status, JSON.stringify(deleted.body)).toBe(200);
+    expect((await call(issued.body.access_token, 'GET', '/api/v1/meta/bases')).status).toBe(401);
+    expect(
+      (
+        await form(
+          '/oauth/token',
+          { grant_type: 'refresh_token', refresh_token: issued.body.refresh_token },
+          app
+        )
+      ).body.error
+    ).toBe('invalid_grant');
   });
 
   it('describes itself (RFC 8414)', async () => {

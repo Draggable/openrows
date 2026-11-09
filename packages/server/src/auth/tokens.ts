@@ -106,8 +106,8 @@ export async function resolveToken(
   if (row.revoked_at !== null || expiresAt.getTime() <= now()) return null;
 
   const [user] = await db.select().from(users).where(eq(users.id, row.user_id));
-  // A suspended account's tokens are refused until it is lifted.
-  if (!user || user.suspendedAt !== null) return null;
+  // A deleted or suspended account's tokens are refused. A suspension can be lifted.
+  if (!user || user.deletedAt !== null || user.suspendedAt !== null) return null;
   await db.execute(sql`SELECT pat_use(${row.id}::uuid)`);
   const known: readonly string[] = TOKEN_SCOPES;
   return {
