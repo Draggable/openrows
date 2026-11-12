@@ -810,6 +810,9 @@ const CASES: Record<string, Case> = {
   // The REST API v1: resource routes on the base in the path, then the table action on
   // the table it names (here by id; by name and across bases in v1.test.ts).
   'GET /api/v1/meta/bases': signedIn(200),
+  // Record search: every signed-in caller gets their own hits (each base and table is
+  // authorized in the service; search.test.ts covers who sees what).
+  'GET /api/v1/search': { ...signedIn(200), query: '?q=abc' },
   // Webhooks: the base's creators, and tokens with `webhook:manage` (the scopeless token's
   // one scope). The world's webhook points at a private address, so a ping fails at once.
   'GET /api/v1/bases/:baseId/webhooks': {

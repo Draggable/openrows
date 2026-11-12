@@ -17,6 +17,8 @@ import type {
   FindOptions,
   OpenRowsRecord,
   RecordUpdate,
+  SearchOptions,
+  SearchPage,
   SelectParams,
   TableSchema,
   UpdateFieldInput,
@@ -29,7 +31,7 @@ import type {
   WriteOptions,
 } from './types.js';
 
-const { v1Meta, v1Records, v1Comments, v1Webhooks, v1Automations } = V1_ENDPOINTS;
+const { v1Meta, v1Records, v1Comments, v1Webhooks, v1Automations, v1Search } = V1_ENDPOINTS;
 
 /** `items` in slices of at most `size`. */
 export function chunks<T>(items: readonly T[], size = V1_BATCH_MAX): T[][] {
@@ -58,6 +60,15 @@ export class OpenRows {
     this.bases = {
       list: async () => (await this.http.call<{ bases: Base[] }>(v1Meta.bases)).bases,
     };
+  }
+
+  /**
+   * Finds records whose text contains `q` (at least 3 characters, ignoring case) in every table
+   * the token (and its owner) can read, across bases. One page: pass its `offset` back for the
+   * next; a page may hold fewer than `pageSize` hits while `offset` is present.
+   */
+  search(q: string, options: SearchOptions = {}): Promise<SearchPage> {
+    return this.http.call<SearchPage>(v1Search.records, { query: { q, ...options } });
   }
 
   /** A base: its tables, a table, its webhooks. */

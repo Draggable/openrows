@@ -5,6 +5,7 @@ import {
   BookOpenIcon,
   CheckIcon,
   DatabaseIcon,
+  FileTextIcon,
   HomeIcon,
   LayoutListIcon,
   MoonIcon,
@@ -14,7 +15,7 @@ import {
   UserRoundIcon,
 } from 'lucide-react';
 import { useState } from 'react';
-import { baseQueries, tableQueries, workspaceQueries } from '../api/queries';
+import { baseQueries, searchQueries, tableQueries, workspaceQueries } from '../api/queries';
 import {
   CommandDialog,
   CommandEmpty,
@@ -23,16 +24,20 @@ import {
   CommandItem,
   CommandList,
 } from '../components/ui';
+import { useDebounced } from '../features/views/toolbar/useViewQuery';
 import { signInInfoQuery } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 import { useAppActions } from './AppContext';
 import { useCreateViewAction, VIEW_TYPE_OPTIONS, ViewTypeIcon } from './CreateView';
 import { DOCS_URL } from './HelpMenu';
+import { hitContext, hitTitle, RECORD_SEARCH_DEBOUNCE_MS, recordSearchTerm } from './recordSearch';
 
 /**
- * Ctrl/⌘ K: jump to a base or a table of the open base, or run a command. "Create view…" (on
- * a table, for editors and up) turns the list into the view types; Backspace in the empty
- * search goes back.
+ * Ctrl/⌘ K: jump to a base or a table of the open base, find a record, or run a command.
+ * Records come from the server's search (3 characters or more, debounced) across every table
+ * and base the user can read, the open base first; choosing one opens it in its table.
+ * "Create view…" (on a table, for editors and up) turns the list into the view types;
+ * Backspace in the empty search goes back.
  */
 export function CommandPalette({
   open,
@@ -70,6 +75,13 @@ export function CommandPalette({
     })),
   }).flatMap((q) => q.data?.bases ?? []);
   const tables = useQuery({ ...tableQueries.list(baseId ?? ''), enabled: open && !!baseId });
+  const term = recordSearchTerm(useDebounced(search, RECORD_SEARCH_DEBOUNCE_MS));
+  const searching = open && page === 'root' && term !== null;
+  const found = useQuery({
+    ...searchQueries.records(term ?? '', baseId ?? null),
+    enabled: searching,
+  });
+  const hits = searching ? (found.data?.records ?? []) : [];
 
   const run = (fn: () => void) => () => {
     onOpenChange(false);
@@ -81,7 +93,9 @@ export function CommandPalette({
       {/* On phones the palette is a full-screen sheet: room for its close button. */}
       <CommandInput
         placeholder={
-          page === 'create-view' ? 'Pick a view type…' : 'Search bases, tables and commands…'
+          page === 'create-view'
+            ? 'Pick a view type…'
+            : 'Search bases, tables, records and commands…'
         }
         aria-label={page === 'create-view' ? 'Pick a view type' : undefined}
         value={search}
@@ -95,7 +109,12 @@ export function CommandPalette({
         className="max-md:mr-10"
       />
       <CommandList className="max-md:max-h-none max-md:flex-1">
-        <CommandEmpty>No results.</CommandEmpty>
+        {/* Record hits are the server's matches, shown whatever the palette's own filter says. */}
+        {hits.length === 0 && (
+          <CommandEmpty>
+            {searching && found.isFetching ? 'Searching records…' : 'No results.'}
+          </CommandEmpty>
+        )}
         {page === 'create-view' && canCreateView && (
           <CommandGroup heading="Create view">
             {VIEW_TYPE_OPTIONS.map((o) => (
@@ -145,6 +164,37 @@ export function CommandPalette({
                 {b.name}
               </CommandItem>
             ))}
+          </CommandGroup>
+        )}
+        {hits.length > 0 && (
+          <CommandGroup heading="Records" forceMount>
+            {hits.map((hit) => {
+              const { where, match } = hitContext(hit);
+              return (
+                <CommandItem
+                  key={hit.id}
+                  value={`record ${hit.id}`}
+                  forceMount
+                  className="h-auto min-h-8 py-1.5"
+                  onSelect={run(() =>
+                    navigate({
+                      to: '/b/$baseId/$tableId',
+                      params: { baseId: hit.baseId, tableId: hit.tableId },
+                      search: { record: hit.id },
+                    })
+                  )}
+                >
+                  <FileTextIcon className="shrink-0" />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate">{hitTitle(hit)}</span>
+                    <span className="truncate text-small text-text-2">
+                      {where}
+                      {match && ` · ${match}`}
+                    </span>
+                  </span>
+                </CommandItem>
+              );
+            })}
           </CommandGroup>
         )}
         {page === 'root' && (

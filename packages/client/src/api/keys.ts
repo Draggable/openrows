@@ -237,6 +237,9 @@ export const queryKeys = {
     /** The names of the records a link filter names by id. */
     linkedNames: (fieldId: string, ids: readonly string[]) =>
       ['records', 'link-candidates', fieldId, 'ids', ...ids] as const,
+    /** A record search across tables and bases (the command palette's), the open base first. */
+    search: (q: string, firstBaseId: string | null) =>
+      ['records', 'search', q, firstBaseId] as const,
     /** Everything cached for one table's records. */
     table: (tableId: string) => ['records', tableId] as const,
     list: (tableId: string, query: ListQuery = {}) => ['records', tableId, 'list', query] as const,

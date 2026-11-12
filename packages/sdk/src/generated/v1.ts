@@ -1317,6 +1317,37 @@ export type V1AutomationsTriggerResponse = {
   triggerId: string;
 };
 
+/** The query of GET /api/v1/search: Find records by text in every table and base the caller can read. */
+export type V1SearchRecordsQuery = {
+  q: string;
+  baseId?: string;
+  firstBaseId?: string;
+  pageSize?: number;
+  offset?: string;
+};
+
+/** The answer of GET /api/v1/search: Find records by text in every table and base the caller can read. */
+export type V1SearchRecordsResponse = {
+  records: {
+    id: string;
+    baseId: string;
+    baseName: string;
+    tableId: string;
+    tableName: string;
+    name: string;
+    matches: {
+      fieldId: string;
+      fieldName: string;
+      text: string;
+    }[];
+  }[];
+  offset?: string;
+  skippedTables?: {
+    baseId: string;
+    tableId: string;
+  }[];
+};
+
 /** Every v1 endpoint's method, path and success status. */
 export const V1_ENDPOINTS = {
   v1Meta: {
@@ -1389,5 +1420,8 @@ export const V1_ENDPOINTS = {
       path: '/api/v1/bases/:baseId/automations/:automationId/trigger',
       status: 200,
     },
+  },
+  v1Search: {
+    records: { method: 'GET', path: '/api/v1/search', status: 200 },
   },
 } as const;

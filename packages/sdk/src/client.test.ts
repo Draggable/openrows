@@ -70,6 +70,31 @@ describe('OpenRows', () => {
     });
   });
 
+  it('searches records across bases, with its options in the query string', async () => {
+    const hit = {
+      id: '0190a000-0000-7000-8000-000000000009',
+      baseId: BASE,
+      baseName: 'Roadmap',
+      tableId: '0190a000-0000-7000-8000-000000000002',
+      tableName: 'Tasks',
+      name: 'Ada Lovelace',
+      matches: [],
+    };
+    const { openrows, sent } = client(() => json({ records: [hit], offset: 'next' }));
+    expect(await openrows.search('lovelace', { firstBaseId: BASE, pageSize: 5 })).toEqual({
+      records: [hit],
+      offset: 'next',
+    });
+    expect(sent[0]?.method).toBe('GET');
+    const url = new URL(sent[0]?.url ?? '');
+    expect(url.pathname).toBe('/api/v1/search');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      q: 'lovelace',
+      firstBaseId: BASE,
+      pageSize: '5',
+    });
+  });
+
   it('pages through select() with the offset, in the body', async () => {
     const { openrows, sent } = client((req) =>
       json(

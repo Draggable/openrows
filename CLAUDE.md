@@ -294,6 +294,12 @@ packages/
                              records.ts (names ⇄ ids, cells via the registry's apiValue, list,
                              upsert, PUT), meta.ts, formula-filter.ts (filterByFormula → a
                              Predicate the query compiler runs as SQL), errors.ts ({ error })
+    src/search/              record search (`GET /api/v1/search`, docs/api/v1.md#search): service.ts
+                             (bases in a fixed order, each authorized like its routes, every
+                             table for `record:read`, searched by the view query engine's
+                             `search` with the readable fields; pages capped by records, tables
+                             and time, resumed by `offset`), routes.ts. `GET /api/search` stays
+                             unmounted (app.test.ts)
     src/mcp/                 the remote MCP endpoint (docs/api/mcp.md): routes.ts (POST /mcp,
                              Streamable HTTP, stateless; personal access tokens only through
                              `routes.token`; the @openrows/mcp-server tools on @openrows/sdk,
@@ -398,7 +404,7 @@ packages/
     src/router.tsx           code-based routes and guards
     src/app/                 the app shell (drawer below 768 px, rail
                              to 1023 px, NavToggle in the top bars): Shell, sidebars, HomePage, BasePage, SettingsPage,
-                             CommandPalette (Ctrl/Cmd K), CreateView (the view type picker), ErrorPage, WorkspaceSwitcher, MembersPage,
+                             CommandPalette (Ctrl/Cmd K; recordSearch.ts: its Records group), CreateView (the view type picker), ErrorPage, WorkspaceSwitcher, MembersPage,
                              InvitePage (/invite/:token); routes in src/router.tsx
     src/features/grid/       the grid view (ADR-007): Grid.tsx (virtualized rows/columns),
                              selection.ts (selection + keyboard model), layout.ts (columns),

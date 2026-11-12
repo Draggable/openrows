@@ -74,6 +74,8 @@ describe('route registry', () => {
       'GET /api/me user.email:read',
       // The REST API v1's base list.
       'GET /api/v1/meta/bases schema.bases:read',
+      // Record search: each base and table is authorized for `record:read` in the service.
+      'GET /api/v1/search data.records:read',
       'GET /api/workspaces schema.bases:read',
       'GET /api/workspaces/:workspaceId/bases schema.bases:read',
     ]);

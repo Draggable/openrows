@@ -21,6 +21,12 @@
           "summary": ""
         },
         {
+          "name": "search",
+          "kind": "method",
+          "signatures": ["search(q: string, options?: SearchOptions): Promise<SearchPage>"],
+          "summary": "Finds records whose text contains `q` (at least 3 characters, ignoring case) in every table\nthe token (and its owner) can read, across bases. One page: pass its `offset` back for the\nnext; a page may hold fewer than `pageSize` hits while `offset` is present."
+        },
+        {
           "name": "base",
           "kind": "method",
           "signatures": ["base(baseId: string): BaseClient"],
@@ -572,6 +578,14 @@
           "summary": "Extra headers sent with every request."
         }
       ],
+      "signatures": []
+    },
+    {
+      "name": "SearchPage",
+      "kind": "interface",
+      "summary": "One page of a record search: the hits, and `offset` while there is more to search.",
+      "generated": false,
+      "members": [],
       "signatures": []
     },
     {
@@ -1128,6 +1142,22 @@
       "signatures": []
     },
     {
+      "name": "V1SearchRecordsQuery",
+      "kind": "type",
+      "summary": "The query of GET /api/v1/search: Find records by text in every table and base the caller can read.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1SearchRecordsResponse",
+      "kind": "type",
+      "summary": "The answer of GET /api/v1/search: Find records by text in every table and base the caller can read.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
       "name": "Fetch",
       "kind": "type",
       "summary": "",
@@ -1152,6 +1182,22 @@
       "signatures": [
         "type OpenRowsRecord<F> = Omit<V1RecordsGetResponse, \"fields\"> & { fields: Partial<F> }"
       ]
+    },
+    {
+      "name": "SearchHit",
+      "kind": "type",
+      "summary": "A record a search found: its base, table, primary field text and the other fields that matched.",
+      "generated": false,
+      "members": [],
+      "signatures": ["type SearchHit = V1SearchRecordsResponse[\"records\"][number]"]
+    },
+    {
+      "name": "SearchOptions",
+      "kind": "type",
+      "summary": "Where to search and how much: one base only, a base first, the page size, the next page.",
+      "generated": false,
+      "members": [],
+      "signatures": ["type SearchOptions = Omit<V1SearchRecordsQuery, \"q\">"]
     },
     {
       "name": "CreateTableInput",

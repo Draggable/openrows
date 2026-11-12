@@ -25,6 +25,7 @@ export * from './region.js';
 export * from './revision.js';
 export * from './scim.js';
 export * from './script.js';
+export * from './search.js';
 export * from './share.js';
 export * from './snapshot.js';
 export * from './sso.js';

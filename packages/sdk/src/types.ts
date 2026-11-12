@@ -13,6 +13,8 @@ import type {
   V1RecordsGetQuery,
   V1RecordsGetResponse,
   V1RecordsListPostBody,
+  V1SearchRecordsQuery,
+  V1SearchRecordsResponse,
   V1WebhooksCreateBody,
   V1WebhooksCreateResponse,
   V1WebhooksDeliveriesResponse,
@@ -32,6 +34,13 @@ type BaseShape = V1MetaBasesResponse['bases'][number];
 type TableShape = V1MetaTablesResponse['tables'][number];
 type FieldShape = TableShape['fields'][number];
 type ViewShape = TableShape['views'][number];
+
+/** One page of a record search: the hits, and `offset` while there is more to search. */
+export interface SearchPage extends V1SearchRecordsResponse {}
+/** A record a search found: its base, table, primary field text and the other fields that matched. */
+export type SearchHit = V1SearchRecordsResponse['records'][number];
+/** Where to search and how much: one base only, a base first, the page size, the next page. */
+export type SearchOptions = Omit<V1SearchRecordsQuery, 'q'>;
 
 /** A base the caller can reach, with Airtable's name for their role (`read` … `owner`). */
 export interface Base extends BaseShape {}
