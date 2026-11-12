@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { GRID_URL, IDS, mockApi } from './fixtures/mockApi.js';
 import { expect, test } from './helpers/test.js';
 
 // CSV import and download from the view toolbar against the mocked API: the download link
-// carries the view and its visible fields; the import dialog previews, maps and follows the job.
+// carries the view and its visible fields; the import dialog previews, maps and follows the job,
+// for CSV files and for a chosen sheet of an Excel workbook.
 
 const JOB = '0190a000-0000-7000-8000-000000000777';
 
@@ -42,9 +45,9 @@ test('downloads the view as CSV and imports a CSV with a progress bar', async ({
   const query = JSON.parse(href.searchParams.get('query') ?? '{}');
   expect(query.fields[0]).toBe(IDS.name);
 
-  await page.getByRole('menuitem', { name: 'Import CSV…' }).click();
-  const dialog = page.getByRole('dialog', { name: /Import CSV/ });
-  await dialog.getByLabel('Choose a CSV file').setInputFiles({
+  await page.getByRole('menuitem', { name: 'Import CSV or Excel…' }).click();
+  const dialog = page.getByRole('dialog', { name: /Import into/ });
+  await dialog.getByLabel('Choose a CSV or Excel file').setInputFiles({
     name: 'tasks.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from('Name,Effort,Stage\nWrite spec,3,Todo\nShip,5.5,Done\n'),
@@ -62,4 +65,51 @@ test('downloads the view as CSV and imports a CSV with a progress bar', async ({
     { index: 1, newField: { name: 'Effort', type: 'number', options: { precision: 1 } } },
     { index: 2, newField: { name: 'Stage', type: 'singleLineText', options: {} } },
   ]);
+});
+
+test('imports the chosen sheet of an Excel workbook', async ({ page }) => {
+  await mockApi(page, { rows: 5 });
+  const posted: Record<string, unknown>[] = [];
+  await page.route('**/api/tables/*/imports**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'POST') posted.push(req.postDataJSON());
+    return route.fulfill({
+      status: req.method() === 'POST' ? 201 : 200,
+      json: {
+        id: JOB,
+        tableId: IDS.table,
+        status: req.method() === 'POST' ? 'running' : 'done',
+        totalRows: 1,
+        processedRows: req.method() === 'POST' ? 0 : 1,
+        skippedCells: 0,
+        createdFieldIds: [],
+        error: null,
+        createdAt: '2026-10-25T10:00:00.000Z',
+        finishedAt: req.method() === 'POST' ? null : '2026-10-25T10:00:01.000Z',
+      },
+    });
+  });
+  // Written by LibreOffice: Tasks, Notes and an empty sheet.
+  const xlsx = readFileSync(
+    fileURLToPath(
+      new URL('../packages/client/src/features/import/__fixtures__/tasks.xlsx', import.meta.url)
+    )
+  );
+  await page.goto(GRID_URL);
+  await page.getByRole('button', { name: 'More view actions' }).click();
+  await page.getByRole('menuitem', { name: 'Import CSV or Excel…' }).click();
+  const dialog = page.getByRole('dialog', { name: /Import into/ });
+  await dialog.getByLabel('Choose a CSV or Excel file').setInputFiles({
+    name: 'tasks.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: xlsx,
+  });
+  await expect(dialog.getByText('tasks.xlsx')).toBeVisible();
+  await expect(dialog.getByLabel('Sheet')).toHaveValue('Tasks');
+  await expect(dialog.getByLabel('Type of the new field for Due')).toHaveValue('date');
+  await dialog.getByLabel('Sheet').selectOption('Notes');
+  await expect(dialog.getByLabel('Import column Note into')).toHaveValue('new');
+  await dialog.getByRole('button', { name: 'Import 1 record' }).click();
+  await expect(page.getByText('Imported 1 records.')).toBeVisible();
+  expect(posted[0]).toMatchObject({ xlsx: xlsx.toString('base64'), sheet: 'Notes' });
 });

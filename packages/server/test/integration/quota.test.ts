@@ -30,6 +30,7 @@ import {
 } from '../helpers/factories.js';
 import { MemoryObjectStore } from '../helpers/object-store.js';
 import { planEdition } from '../helpers/plans.js';
+import { xlsxBase64 } from '../helpers/xlsx.js';
 
 /**
  * Plan enforcement, Airtable's "read and edit, no new data": per limit, new data past it
@@ -204,6 +205,14 @@ describe('plan limits', () => {
       await refused(
         request('POST', `/api/tables/${w.table.id}/imports`, w.who, {
           csv: 'Name\nA\n',
+          columns: [{ index: 0, fieldId: w.primary }],
+        }),
+        'recordsPerBase'
+      );
+      // So is an Excel one.
+      await refused(
+        request('POST', `/api/tables/${w.table.id}/imports`, w.who, {
+          xlsx: xlsxBase64({ Sheet1: [['Name'], ['A']] }),
           columns: [{ index: 0, fieldId: w.primary }],
         }),
         'recordsPerBase'

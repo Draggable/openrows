@@ -45,7 +45,7 @@ Choose **Start from scratch** (or **New base**), give the base a name and choose
 
 ### Import a file
 
-Choose **Import a file** and pick a CSV file (comma, semicolon, tab or pipe separated) of up to 50 MB. OpenRows creates a base named after the file and opens the import dialog, where you choose a field type for each column. Details are in [Bases, tables and records](bases-and-tables.md#csv-import). Excel files aren't supported yet.
+Choose **Import a file** and pick a CSV file (comma, semicolon, tab or pipe separated) or an Excel workbook (.xlsx) of up to 50 MB. OpenRows creates a base named after the file and opens the import dialog, where you choose a field type for each column; for a workbook with several sheets, you also choose the sheet. Older .xls files aren't supported: save them as .xlsx or CSV first. Details are in [Bases, tables and records](bases-and-tables.md#csv-and-excel-import).
 
 ### Import from Airtable
 

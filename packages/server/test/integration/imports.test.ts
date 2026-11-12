@@ -14,10 +14,12 @@ import { tables, type users } from '../../src/db/index.js';
 import { testApp } from '../helpers/app.js';
 import { useTestDb } from '../helpers/db.js';
 import { addMember, createSession, createWorkspace } from '../helpers/factories.js';
+import { xlsxBase64, xlsxBombBase64 } from '../helpers/xlsx.js';
 
 /**
  * CSV import and export through the API as openrows_app: the mapping checks, the job and
- * its progress, type coercion through the registry, a 100k-row import, and the streaming export
+ * its progress, type coercion through the registry, Excel workbooks (a chosen sheet, refusals
+ * and the unpacked-size cap), a 100k-row import, and the streaming export
  * of a view (filter, sorts, hidden fields, column order, formula-injection guard).
  */
 describe('CSV import and export', () => {
@@ -265,6 +267,98 @@ describe('CSV import and export', () => {
       });
       const res = await request('GET', `/api/tables/${other.id}/imports/${job.id}`);
       expect(res.status).toBe(404);
+    });
+
+    it('imports the chosen sheet of an Excel workbook, values as the sheet shows them', async () => {
+      const table = await newTable();
+      const xlsx = xlsxBase64({
+        Notes: [['Not this sheet'], ['nor this row']],
+        Tasks: [
+          ['Title', 'Estimate', 'Due', 'Done', 'Notes'],
+          ['Write spec', 3.5, new Date(Date.UTC(2024, 0, 31)), true, 'a < b & "c"'],
+          ['Ship, then rest', 12, new Date(Date.UTC(2024, 1, 1)), false, 'line 1\nline 2'],
+          // An empty row is left out, like a blank CSV line.
+          [],
+          ['Bad number', 'lots', 'not a date', true, null],
+        ],
+      });
+      const job = await runImport(table.id, {
+        xlsx,
+        sheet: 'Tasks',
+        columns: [
+          { index: 0, fieldId: fieldOf(table, 'Name').id },
+          { index: 1, newField: { name: 'Estimate', type: 'number', options: { precision: 1 } } },
+          { index: 2, newField: { name: 'Due', type: 'date' } },
+          { index: 3, newField: { name: 'Done', type: 'checkbox' } },
+          { index: 4, fieldId: fieldOf(table, 'Notes').id },
+        ],
+      });
+      expect(job).toMatchObject({ status: 'done', totalRows: 3, processedRows: 3, error: null });
+      // "lots" and "not a date" can't be read; they stay empty.
+      expect(job.skippedCells).toBe(2);
+
+      const meta = await tableMeta(table.id);
+      const rows = await allRecords(table.id);
+      const v = (r: RecordData | undefined, name: string) => r?.fields[fieldOf(meta, name).id];
+      expect(rows.map((r) => v(r, 'Name'))).toEqual([
+        'Write spec',
+        'Ship, then rest',
+        'Bad number',
+      ]);
+      expect(rows.map((r) => v(r, 'Estimate'))).toEqual([3.5, 12, null]);
+      // Serial dates under a date format come through as calendar dates.
+      expect(rows.map((r) => v(r, 'Due'))).toEqual(['2024-01-31', '2024-02-01', null]);
+      expect(rows.map((r) => v(r, 'Done'))).toEqual([true, false, true]);
+      expect(v(rows[0], 'Notes')).toBe('a < b & "c"');
+      expect(v(rows[1], 'Notes')).toBe('line 1\nline 2');
+    });
+
+    it("imports a workbook's first sheet when none is named", async () => {
+      const table = await newTable();
+      const job = await runImport(table.id, {
+        xlsx: xlsxBase64({ First: [['Name'], ['One'], ['Two']], Second: [['Name'], ['Three']] }),
+        columns: [{ index: 0, fieldId: fieldOf(table, 'Name').id }],
+      });
+      expect(job).toMatchObject({ status: 'done', totalRows: 2 });
+      const name = fieldOf(table, 'Name').id;
+      expect((await allRecords(table.id)).map((r) => r.fields[name])).toEqual(['One', 'Two']);
+    });
+
+    it('refuses a file that is not a workbook, a missing sheet and a zip bomb', async () => {
+      const table = await newTable();
+      const name = fieldOf(table, 'Name').id;
+      const columns = [{ index: 0, fieldId: name }];
+      const post = (body: Record<string, unknown>) =>
+        request('POST', `/api/tables/${table.id}/imports`, { columns, ...body });
+      const refused = async (body: Record<string, unknown>, detail: RegExp) => {
+        const res = await post(body);
+        expect(res.status, JSON.stringify(Object.keys(body))).toBe(422);
+        expect(await res.text()).toMatch(detail);
+      };
+      const book = xlsxBase64({ Tasks: [['Name'], ['One']] });
+      await refused(
+        { xlsx: Buffer.from('Name\nOne\n').toString('base64') },
+        /not a valid Excel workbook/
+      );
+      const xls = Buffer.alloc(512);
+      xls.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+      await refused({ xlsx: xls.toString('base64') }, /older Excel file \(\.xls\)/);
+      await refused({ xlsx: book, sheet: 'Missing' }, /no sheet named \\"Missing\\"/);
+      await refused({ xlsx: 'not base64!' }, /xlsx/);
+      // Exactly one file, and the options of the other kind don't apply.
+      await refused({ xlsx: book, csv: 'Name\nOne\n' }, /either csv or xlsx/);
+      await refused({}, /either csv or xlsx/);
+      await refused({ csv: 'Name\nOne\n', sheet: 'Tasks' }, /sheet goes with xlsx/);
+      await refused({ xlsx: book, delimiter: ';' }, /delimiter goes with csv/);
+      // A few hundred kilobytes that would unpack to 210 MB stop at the 200 MB cap.
+      await refused({ xlsx: xlsxBombBase64(210) }, /unpacks to more than 200 MB/);
+
+      expect(await allRecords(table.id)).toEqual([]);
+      expect((await tableMeta(table.id)).fields).toHaveLength(3);
+      // The same request with a sound workbook goes through.
+      expect((await runImport(table.id, { xlsx: book, sheet: 'Tasks', columns })).status).toBe(
+        'done'
+      );
     });
 
     it('imports a 100,000-row CSV completely and correctly', { timeout: 300_000 }, async () => {

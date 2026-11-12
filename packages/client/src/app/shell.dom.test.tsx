@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs';
 import { QueryClient } from '@tanstack/react-query';
 import { createMemoryHistory, RouterProvider } from '@tanstack/react-router';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -202,10 +204,10 @@ describe('app shell', () => {
     const api = stubApi(ME);
     const router = renderApp('/');
     await screen.findByRole('heading', { name: 'No bases yet' });
-    expect(screen.queryByText(/coming soon/)?.textContent).toBe('Excel is coming soon');
+    expect(screen.getByText('New base from a CSV or Excel file, up to 50 MB')).toBeTruthy();
 
     const csv = 'Title,Points\nWrite spec,3\nShip,5\n';
-    fireEvent.change(screen.getByLabelText('CSV file for a new base'), {
+    fireEvent.change(screen.getByLabelText('CSV or Excel file for a new base'), {
       target: { files: [new File([csv], 'Launch plan.csv', { type: 'text/csv' })] },
     });
 
@@ -213,7 +215,7 @@ describe('app shell', () => {
     await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/b\/.+\/.+\/.+$/));
     expect(api.bases[0]?.name).toBe('Launch plan');
     expect(api.tables[0]?.name).toBe('Launch plan');
-    const dialog = await screen.findByRole('dialog', { name: 'Import CSV into Launch plan' });
+    const dialog = await screen.findByRole('dialog', { name: 'Import into Launch plan' });
     expect(await within(dialog).findByText('Launch plan.csv')).toBeTruthy();
     const fields = (api.tables[0]?.['fields'] ?? []) as { id: string; name: string }[];
     const primary = fields[0];
@@ -225,6 +227,29 @@ describe('app shell', () => {
     expect(within(dialog).getByLabelText('Import column Points into')).toHaveProperty(
       'value',
       'new'
+    );
+    expect(within(dialog).getByRole('button', { name: 'Import 2 records' })).toBeTruthy();
+  });
+
+  it('imports an Excel workbook from Home, its first sheet preselected (#14)', async () => {
+    const api = stubApi(ME);
+    const router = renderApp('/');
+    await screen.findByRole('heading', { name: 'No bases yet' });
+    const xlsx = readFileSync(`${import.meta.dirname}/../features/import/__fixtures__/tasks.xlsx`);
+    fireEvent.change(screen.getByLabelText('CSV or Excel file for a new base'), {
+      target: { files: [new File([new Uint8Array(xlsx)], 'Roadmap.xlsx')] },
+    });
+
+    await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/b\/.+\/.+\/.+$/));
+    expect(api.bases[0]?.name).toBe('Roadmap');
+    const fields = (api.tables[0]?.['fields'] ?? []) as { id: string; name: string }[];
+    expect(fields[0]?.name).toBe('Name');
+    const dialog = await screen.findByRole('dialog', { name: 'Import into Roadmap' });
+    expect(await within(dialog).findByText('Roadmap.xlsx')).toBeTruthy();
+    expect(within(dialog).getByLabelText('Sheet')).toHaveProperty('value', 'Tasks');
+    expect(within(dialog).getByLabelText('Import column Name into')).toHaveProperty(
+      'value',
+      fields[0]?.id
     );
     expect(within(dialog).getByRole('button', { name: 'Import 2 records' })).toBeTruthy();
   });

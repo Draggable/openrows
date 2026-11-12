@@ -126,7 +126,7 @@ export function ViewToolbar({
           {onImport && (
             <DropdownMenuItem onSelect={onImport}>
               <FileUp className="size-4 text-text-2" aria-hidden />
-              Import CSV…
+              Import CSV or Excel…
             </DropdownMenuItem>
           )}
           <DropdownMenuItem asChild>

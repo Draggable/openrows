@@ -1,6 +1,21 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs';
 import type { FieldMeta, FieldTypeName } from '@openrows/shared';
 import { describe, expect, it } from 'vitest';
-import { importableTypes, importBody, mappingErrors, planColumns, readCsv } from './model';
+import {
+  importableTypes,
+  importBody,
+  isWorkbookFile,
+  mappingErrors,
+  planColumns,
+  readCsv,
+  readImportFile,
+  readWorkbook,
+  toBase64,
+} from './model';
+
+/** A workbook written by LibreOffice: Tasks (4 columns, 2 rows), Notes, and an empty sheet. */
+const TASKS_XLSX = new Uint8Array(readFileSync(`${import.meta.dirname}/__fixtures__/tasks.xlsx`));
 
 const NOW = '2026-10-25T10:00:00.000Z';
 let n = 0;
@@ -37,6 +52,75 @@ describe('readCsv', () => {
     });
     expect(readCsv('', 0)).toEqual({ ok: false, error: 'The file is empty.' });
     expect(readCsv('a', 51 * 1024 * 1024)).toMatchObject({ ok: false });
+  });
+});
+
+describe('readWorkbook', () => {
+  it("reads a workbook's first sheet, or the one chosen, as rows of text", () => {
+    expect(readWorkbook(TASKS_XLSX)).toEqual({
+      ok: true,
+      rows: [
+        ['Name', 'Points', 'Due', 'Done'],
+        ['Write spec', '1', '2024-01-31', 'TRUE'],
+        ['Ship', '2.5', '2024-02-01', 'FALSE'],
+      ],
+      source: {
+        kind: 'xlsx',
+        bytes: TASKS_XLSX,
+        sheets: ['Tasks', 'Notes', 'Empty'],
+        sheet: 'Tasks',
+      },
+    });
+    expect(readWorkbook(TASKS_XLSX, 'Notes')).toMatchObject({
+      ok: true,
+      rows: [['Note'], ['hello']],
+      source: { sheet: 'Notes' },
+    });
+    // An empty sheet of several reads, so the dialog can offer the others.
+    expect(readWorkbook(TASKS_XLSX, 'Empty')).toMatchObject({ ok: true, rows: [] });
+  });
+
+  it('says why a workbook is refused', () => {
+    expect(readWorkbook(new TextEncoder().encode('a,b\n1,2'))).toEqual({
+      ok: false,
+      error: 'The file is not a valid Excel workbook (.xlsx).',
+    });
+    expect(readWorkbook(TASKS_XLSX, 'Nope')).toEqual({
+      ok: false,
+      error: 'The workbook has no sheet named "Nope".',
+    });
+    expect(readWorkbook(new Uint8Array(51 * 1024 * 1024))).toEqual({
+      ok: false,
+      error: 'The file is bigger than 50 MB.',
+    });
+  });
+
+  it('tells workbooks from CSV files by name or type, and reads either', async () => {
+    expect(isWorkbookFile({ name: 'Q1.XLSX', type: '' })).toBe(true);
+    expect(isWorkbookFile({ name: 'old.xls', type: '' })).toBe(true);
+    expect(isWorkbookFile({ name: 'macros.xlsm', type: '' })).toBe(false);
+    expect(isWorkbookFile({ name: 'data.csv', type: 'text/csv' })).toBe(false);
+    const xlsx = await readImportFile(new File([TASKS_XLSX], 'tasks.xlsx'));
+    expect(xlsx).toMatchObject({ ok: true, source: { kind: 'xlsx', sheet: 'Tasks' } });
+    const csv = await readImportFile(new File(['a,b\n1,2'], 'a.csv', { type: 'text/csv' }));
+    expect(csv).toMatchObject({ ok: true, source: { kind: 'csv', text: 'a,b\n1,2' } });
+    // A workbook saved under another name is still read as one.
+    const renamed = await readImportFile(new File([TASKS_XLSX], 'export.csv'));
+    expect(renamed).toMatchObject({ ok: true, source: { kind: 'xlsx', sheet: 'Tasks' } });
+    const bom = await readImportFile(new File(['\ufeffa,b\n1,2'], 'bom.csv'));
+    expect(bom).toMatchObject({
+      ok: true,
+      rows: [
+        ['a', 'b'],
+        ['1', '2'],
+      ],
+    });
+  });
+
+  it('encodes bytes as base64 in slices', () => {
+    const bytes = new Uint8Array(100_000).map((_, i) => (i * 7919) % 256);
+    expect(toBase64(bytes)).toBe(Buffer.from(bytes).toString('base64'));
+    expect(toBase64(new Uint8Array())).toBe('');
   });
 });
 
@@ -100,7 +184,7 @@ describe('mappingErrors and importBody', () => {
     const plans = planColumns(rows, true, FIELDS, true);
     const first = plans[0];
     if (!first) throw new Error('no plan');
-    const body = importBody('csv', rows, true, [
+    const body = importBody({ kind: 'csv', text: 'csv' }, rows, true, [
       { ...first, target: { kind: 'field', fieldId: name.id } },
       ...plans.slice(1),
     ]);
@@ -111,6 +195,18 @@ describe('mappingErrors and importBody', () => {
         { index: 0, fieldId: name.id },
         { index: 1, newField: { name: 'Size', type: 'number', options: { precision: 2 } } },
       ],
+    });
+  });
+
+  it('sends a workbook as base64 with its chosen sheet', () => {
+    const read = readWorkbook(TASKS_XLSX, 'Notes');
+    if (!read.ok) throw new Error(read.error);
+    const plans = planColumns(read.rows, true, FIELDS, true);
+    expect(importBody(read.source, read.rows, true, plans)).toEqual({
+      xlsx: Buffer.from(TASKS_XLSX).toString('base64'),
+      sheet: 'Notes',
+      hasHeader: true,
+      columns: [{ index: 0, newField: { name: 'Note', type: 'singleLineText', options: {} } }],
     });
   });
 

@@ -37,7 +37,7 @@ async function createWorkspace(page: Page, name: string): Promise<string> {
 test('imports a CSV from Home into a new base and lands on its grid', async ({ page }) => {
   await signInDevUser(page);
   const name = `E2E import ${Date.now()}`;
-  await expect(page.getByText('Excel is coming soon')).toBeVisible();
+  await expect(page.getByText('New base from a CSV or Excel file, up to 50 MB')).toBeVisible();
 
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Import a file/ }).click();
@@ -48,7 +48,7 @@ test('imports a CSV from Home into a new base and lands on its grid', async ({ p
   });
 
   // The new base opens on its table with the import dialog on the file.
-  const dialog = page.getByRole('dialog', { name: `Import CSV into ${name}` });
+  const dialog = page.getByRole('dialog', { name: `Import into ${name}` });
   await expect(dialog.getByText(`${name}.csv`)).toBeVisible();
   await expect(dialog.getByLabel('Type of the new field for Points')).toHaveValue('number');
   await dialog.getByRole('button', { name: 'Import 3 records' }).click();

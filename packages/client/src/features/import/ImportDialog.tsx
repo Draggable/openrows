@@ -17,11 +17,14 @@ import {
   type ColumnPlan,
   type ColumnTarget,
   dataRows,
+  IMPORT_FILE_ACCEPT,
+  type ImportSource,
   importableTypes,
   importBody,
   mappingErrors,
   planColumns,
-  readCsv,
+  readImportFile,
+  readWorkbook,
   writableFields,
 } from './model';
 
@@ -30,14 +33,15 @@ const selectClass =
 
 interface Picked {
   name: string;
-  text: string;
+  source: ImportSource;
   rows: string[][];
 }
 
 /**
- * CSV import: pick a file, check the preview, map each column to an existing field, a new
- * field (with the inferred type, changeable) or nothing, then the import runs on the server and
- * the dialog shows its progress. Creating fields needs a creator; editors map to existing ones.
+ * CSV and Excel import: pick a file (and, for a workbook of several sheets, the sheet), check
+ * the preview, map each column to an existing field, a new field (with the inferred type,
+ * changeable) or nothing, then the import runs on the server and the dialog shows its
+ * progress. Creating fields needs a creator; editors map to existing ones.
  */
 export function ImportDialog({
   table,
@@ -79,13 +83,24 @@ export function ImportDialog({
   const pick = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
-    const text = await file.text();
-    const read = readCsv(text, file.size);
+    const read = await readImportFile(file);
     if (!read.ok) {
       setError(read.error);
       return;
     }
-    setPicked({ name: file.name, text, rows: read.rows });
+    setPicked({ name: file.name, source: read.source, rows: read.rows });
+    setPlans(planColumns(read.rows, hasHeader, table.fields, canCreateFields));
+  };
+
+  const chooseSheet = (sheet: string) => {
+    if (picked?.source.kind !== 'xlsx') return;
+    const read = readWorkbook(picked.source.bytes, sheet);
+    if (!read.ok) {
+      setError(read.error);
+      return;
+    }
+    setError(null);
+    setPicked({ ...picked, source: read.source, rows: read.rows });
     setPlans(planColumns(read.rows, hasHeader, table.fields, canCreateFields));
   };
 
@@ -106,7 +121,7 @@ export function ImportDialog({
   const submit = () => {
     if (!picked || errors.size > 0) return;
     const typecast = canCreateFields && addOptions;
-    start.mutate(importBody(picked.text, picked.rows, hasHeader, plans, typecast), {
+    start.mutate(importBody(picked.source, picked.rows, hasHeader, plans, typecast), {
       onSuccess: (j) => setImportId(j.id),
       onError: (err) =>
         setError(err instanceof ApiError ? err.message : "Couldn't start the import."),
@@ -133,6 +148,8 @@ export function ImportDialog({
   }, [finished?.id]);
 
   const rowCount = picked ? dataRows(picked.rows, hasHeader).length : 0;
+  const sheets = picked?.source.kind === 'xlsx' ? picked.source : undefined;
+  const emptySheet = picked !== null && picked.rows.length === 0;
   const running = importId !== undefined;
   const progress = current && current.totalRows > 0 ? current.processedRows / current.totalRows : 0;
 
@@ -140,9 +157,10 @@ export function ImportDialog({
     <Dialog open={open} onOpenChange={(next) => !running && close(next)}>
       <DialogContent className="max-w-3xl" aria-describedby={`${fileInputId}-desc`}>
         <DialogHeader>
-          <DialogTitle>Import CSV into {table.name}</DialogTitle>
+          <DialogTitle>Import into {table.name}</DialogTitle>
           <DialogDescription id={`${fileInputId}-desc`}>
-            Up to 50 MB. Each row becomes a record; choose where each column goes.
+            A CSV or Excel (.xlsx) file of up to 50 MB. Each row becomes a record; choose where each
+            column goes.
           </DialogDescription>
         </DialogHeader>
 
@@ -152,11 +170,11 @@ export function ImportDialog({
             className="flex h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-border border-dashed text-text-2 hover:bg-hover"
           >
             <FileUp className="size-5" aria-hidden />
-            <span>Choose a CSV file</span>
+            <span>Choose a CSV or Excel file</span>
             <input
               id={fileInputId}
               type="file"
-              accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values"
+              accept={IMPORT_FILE_ACCEPT}
               className="sr-only"
               onChange={(e) => void pick(e.target.files?.[0])}
             />
@@ -165,6 +183,22 @@ export function ImportDialog({
 
         {picked && !running && (
           <div className="flex min-h-0 flex-col gap-3">
+            {sheets && sheets.sheets.length > 1 && (
+              <label className="flex items-center gap-2 text-text-2">
+                Sheet
+                <select
+                  value={sheets.sheet}
+                  onChange={(e) => chooseSheet(e.target.value)}
+                  className={`${selectClass} min-w-40`}
+                >
+                  {sheets.sheets.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="flex items-center justify-between gap-3 text-text-2">
               <span className="truncate">
                 <span className="text-text">{picked.name}</span> · {rowCount.toLocaleString()}{' '}
@@ -191,29 +225,32 @@ export function ImportDialog({
                 Add missing options to select fields
               </label>
             )}
-            <div className="max-h-[50vh] overflow-auto rounded-md border border-border">
-              <table className="w-full border-collapse text-body" aria-label="Column mapping">
-                <thead className="sticky top-0 bg-header text-left text-text-2">
-                  <tr>
-                    <th className="w-40 px-2 py-1.5 font-medium">Column</th>
-                    <th className="px-2 py-1.5 font-medium">Preview</th>
-                    <th className="w-64 px-2 py-1.5 font-medium">Import into</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {plans.map((p) => (
-                    <ColumnRow
-                      key={p.index}
-                      plan={p}
-                      fields={table.fields}
-                      canCreateFields={canCreateFields}
-                      error={errors.get(p.index)}
-                      onChange={(t) => setTarget(p.index, t)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {emptySheet && <p className="text-text-2">This sheet is empty. Choose another one.</p>}
+            {!emptySheet && (
+              <div className="max-h-[50vh] overflow-auto rounded-md border border-border">
+                <table className="w-full border-collapse text-body" aria-label="Column mapping">
+                  <thead className="sticky top-0 bg-header text-left text-text-2">
+                    <tr>
+                      <th className="w-40 px-2 py-1.5 font-medium">Column</th>
+                      <th className="px-2 py-1.5 font-medium">Preview</th>
+                      <th className="w-64 px-2 py-1.5 font-medium">Import into</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plans.map((p) => (
+                      <ColumnRow
+                        key={p.index}
+                        plan={p}
+                        fields={table.fields}
+                        canCreateFields={canCreateFields}
+                        error={errors.get(p.index)}
+                        onChange={(t) => setTarget(p.index, t)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
@@ -237,7 +274,7 @@ export function ImportDialog({
           </div>
         )}
 
-        {(error ?? errors.get(-1)) && picked && !running && (
+        {(error ?? (emptySheet ? undefined : errors.get(-1))) && picked && !running && (
           <p role="alert" className="text-danger">
             {error ?? errors.get(-1)}
           </p>

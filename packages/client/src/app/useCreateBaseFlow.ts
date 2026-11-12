@@ -4,7 +4,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { ApiError, api } from '../api/client';
 import { queryKeys } from '../api/keys';
 import { toast } from '../components/ui';
-import { readCsv } from '../features/import/model';
+import { readImportFile } from '../features/import/model';
 import { stashImport } from '../features/import/pending';
 
 /** Thrown before anything is created when the picked file can't be imported. */
@@ -21,9 +21,9 @@ export function importedBaseName(fileName: string): string {
  * user can create bases in, else a new "<name>'s workspace" on first run), creates the base
  * with one table, as Airtable's "Start from scratch" does, and opens it.
  *
- * With a `file` (Home's "Import a file") the base is named after the file, its table
- * starts with only the primary field (named after the first column) and the grid opens the
- * import dialog on the file, where the other columns become fields.
+ * With a `file` (Home's "Import a file": CSV, or a workbook's first sheet) the base is named
+ * after the file, its table starts with only the primary field (named after the first column)
+ * and the grid opens the import dialog on the file, where the other columns become fields.
  */
 export function useCreateBaseFlow(me: MeResponse) {
   const qc = useQueryClient();
@@ -40,7 +40,7 @@ export function useCreateBaseFlow(me: MeResponse) {
     }) => {
       let primaryFieldName: string | undefined;
       if (file) {
-        const read = readCsv(await file.text(), file.size);
+        const read = await readImportFile(file);
         if (!read.ok) throw new UnreadableFile(read.error);
         primaryFieldName = read.rows[0]?.[0]?.trim().slice(0, 255) || 'Name';
       }

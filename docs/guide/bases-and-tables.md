@@ -135,17 +135,26 @@ A restore is a normal edit: it shows up in the history, and table and field edit
 
 On a self-hosted server, history is kept for 365 days unless the server sets another period. On the hosted service, your plan's limits apply (see https://openrows.io/pricing).
 
-## CSV import
+## CSV and Excel import
 
-You can import a CSV file into a new base from Home (**Import a file**), or into an existing table: in a grid view, open the toolbar's **More view actions** menu and choose **Import CSV…** (editors and up).
+You can import a CSV file or an Excel workbook into a new base from Home (**Import a file**), or into an existing table: in a grid view, open the toolbar's **More view actions** menu and choose **Import CSV or Excel…** (editors and up).
 
-1. **Choose a CSV file** of up to 50 MB (at most 250,000 rows and 500 columns). Commas, semicolons, tabs and pipes are detected.
-2. Tick or untick **First row is the header**.
-3. For each column, choose an existing field under **Import into**, **New field** (with a name and a type; creators and owners), or **Don't import**. A preview shows the first values.
-4. Creators and owners can keep **Add missing options to select fields** on, so new select values become options.
-5. Choose **Import**. A progress bar follows the import.
+1. **Choose a CSV or Excel file** of up to 50 MB (at most 250,000 rows and 500 columns). In a CSV file, commas, semicolons, tabs and pipes are detected.
+2. For a workbook with more than one sheet, choose the **Sheet** to import (the first sheet is chosen to start with). One import takes one sheet; import another sheet into another table.
+3. Tick or untick **First row is the header**.
+4. For each column, choose an existing field under **Import into**, **New field** (with a name and a type; creators and owners), or **Don't import**. A preview shows the first values.
+5. Creators and owners can keep **Add missing options to select fields** on, so new select values become options.
+6. Choose **Import**. A progress bar follows the import.
 
 Each row becomes a record. Values that can't be read for their field are left empty and counted in the summary. One import runs per table at a time.
+
+Excel workbooks (.xlsx) are read as the sheet shows its values:
+
+- Dates and times become calendar dates and times (`2024-01-31`, `2024-01-31 13:45`), percentages keep their `%`, dollar amounts their `$`, and numbers the decimals of their format, so the suggested field types match the sheet's.
+- A formula cell imports the value it last showed in the spreadsheet; formulas aren't imported or run.
+- Empty rows are skipped, like blank lines in a CSV file, and so are empty columns after the last value.
+- Macros, links to other workbooks, data connections and embedded objects are never opened or run, and nothing is downloaded.
+- A workbook that would unpack to more than 200 MB is refused. Older .xls files and password-protected workbooks can't be read: save them as .xlsx without a password, or as CSV.
 
 ## CSV export
 

@@ -88,7 +88,9 @@ packages/
             DST rules; template.ts, the `{{trigger...}}`/`{{steps.N...}}` tokens, never eval;
             schemas/automation.ts), the ViewQuery
             spec (src/query/; `within` and `dateRange`), CSV parse/write and type inference
-            (src/csv/), the endpoint contracts (and `downloads`, the file routes), typed
+            (src/csv/), Excel workbooks for import (src/xlsx/: readXlsx, one sheet as rows of
+            text; zip.ts inflates against MAX_XLSX_UNPACKED_BYTES, format.ts: number formats
+            and date serials; never macros or external links), the endpoint contracts (and `downloads`, the file routes), typed
             client builder and OpenAPI generator (src/contracts/; v1/: the REST API v1). Built to dist/ by tsc;
             server and client import the built output, so rebuild shared after changing it
   server/   @openrows/server: Hono on @hono/node-server
@@ -368,7 +370,8 @@ packages/
                              presence over NOTIFY without storage),
                              projection.ts (the event filter: personal views, FieldVisibility),
                              routes.ts (GET /api/bases/:baseId/events catch-up)
-    src/import-export/       CSV import (import.ts: checked in the request, run by the worker's
+    src/import-export/       CSV and Excel import (import.ts: checked in the request, a
+                             workbook's sheet kept as CSV, run by the worker's
                              `imports.run` job, resumable by batch) and the streaming CSV
                              export of a view (export.ts),
     src/export/              data export: zip.ts (streaming ZIP writer), base.ts (a whole
@@ -538,8 +541,9 @@ packages/
                              useAiAvailability in api/queries.ts hides AI features when off
     src/features/airtable/   Home's "Import from Airtable": AirtableImportDialog (token, pick
                              bases, your imports with progress and the report), model.ts
-    src/features/import/     CSV import dialog: ImportDialog (preview, column mapping,
-                             progress), model.ts (mapping and request)
+    src/features/import/     CSV and Excel import dialog: ImportDialog (sheet picker,
+                             preview, column mapping, progress), model.ts (reading the file,
+                             mapping and request)
     src/features/realtime/   live updates (ADR-003): connection.ts (the tab's one WebSocket,
                              backoff, resume via catch-up), apply.ts (patches the query caches by
                              record id), RealtimeProvider (useRealtimeSubscription,

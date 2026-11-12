@@ -20,6 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "re2js": "^2.9.0",
     "zod": "^4.6.7"
   },

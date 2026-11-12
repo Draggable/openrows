@@ -2109,7 +2109,8 @@ export const contracts = {
     create: e({
       method: 'POST',
       path: '/api/tables/:tableId/imports',
-      summary: 'Import a CSV (up to 50 MB) into the table, in the background',
+      summary:
+        'Import a CSV file or an Excel sheet (up to 50 MB) into the table, in the background',
       tag: 'imports',
       body: createImportSchema,
       response: ImportJobSchema,
