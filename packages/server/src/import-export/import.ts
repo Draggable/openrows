@@ -1,17 +1,21 @@
 import {
   type CreateImportInput,
   CsvParseError,
+  csvLine,
   type FieldTypeName,
   getFieldType,
   type ImportJob,
   MAX_CHOICE_NAME,
   MAX_CHOICES,
   MAX_COLLABORATORS,
+  MAX_IMPORT_BYTES,
   MAX_IMPORT_ROWS,
   type ProblemFieldError,
   parseCsv,
+  readXlsx,
   roleAllows,
   type UserRole,
+  XlsxReadError,
 } from '@openrows/shared';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -49,9 +53,10 @@ import { createRecords, tableFields } from '../records/service.js';
 import { loadTable } from '../tables/service.js';
 
 /**
- * CSV import. The request parses and checks the file and the mapping, then stores the job
- * (`jobs`: the plan, the CSV text) and sends it to the worker in its transaction (
- * ADR-004). The worker creates the new fields, then the records in batches of 1,000 through the
+ * CSV and Excel import. The request parses and checks the file and the mapping, then stores the
+ * job (`jobs`: the plan, the CSV text; a workbook's sheet is kept as CSV) and sends it to the
+ * worker in its transaction
+ * (ADR-004). The worker creates the new fields, then the records in batches of 1,000 through the
  * RecordService, one transaction per batch that also commits the progress, so the progress is
  * visible, a failure keeps the batches before it, and a retry (a killed worker) resumes after
  * the last committed batch.
@@ -72,6 +77,8 @@ interface PlannedColumn {
 /** A checked import, ready to run. */
 export interface ImportPlan {
   rows: string[][];
+  /** The file as the job keeps it: CSV text (a workbook's sheet written as CSV). */
+  source: { csv: string; delimiter?: string | undefined };
   columns: PlannedColumn[];
   /** Create the select options the file names that don't exist yet. */
   typecast: boolean;
@@ -82,8 +89,40 @@ function invalid(errors: ProblemFieldError[], detail = 'The import is invalid.')
 }
 
 /**
- * Parses the CSV and checks the mapping against the table's live fields: existing fields must be
- * writable and mapped once, new fields need `field:create` (403 otherwise), a free name, a
+ * The rows of the request's file: its CSV, or the chosen sheet of its workbook (read with the
+ * shared reader, so the server sees what the preview showed, under the same caps on unpacked
+ * size, rows, columns and cells).
+ */
+function readSource(input: CreateImportInput): { rows: string[][]; source: ImportPlan['source'] } {
+  if (input.xlsx !== undefined) {
+    const bytes = Buffer.from(input.xlsx, 'base64');
+    if (bytes.length > MAX_IMPORT_BYTES) {
+      invalid([{ path: 'xlsx', message: 'An import takes files of up to 50 MB.' }]);
+    }
+    try {
+      const { rows } = readXlsx(bytes, { sheet: input.sheet });
+      return { rows, source: { csv: rows.map((r) => csvLine(r)).join(''), delimiter: ',' } };
+    } catch (err) {
+      if (err instanceof XlsxReadError)
+        invalid([{ path: 'xlsx', message: err.message }], err.message);
+      throw err;
+    }
+  }
+  const csv = input.csv ?? '';
+  try {
+    return {
+      rows: parseCsv(csv, { delimiter: input.delimiter }),
+      source: { csv, delimiter: input.delimiter },
+    };
+  } catch (err) {
+    if (err instanceof CsvParseError) invalid([{ path: 'csv', message: err.message }], err.message);
+    throw err;
+  }
+}
+
+/**
+ * Parses the file and checks the mapping against the table's live fields: existing fields must
+ * be writable and mapped once, new fields need `field:create` (403 otherwise), a free name, a
  * writable type and valid options.
  */
 export async function planImport(
@@ -101,17 +140,13 @@ export async function planImport(
       detail: 'Only owners and creators can add select options.',
     });
   }
-  let rows: string[][];
-  try {
-    rows = parseCsv(input.csv, { delimiter: input.delimiter });
-  } catch (err) {
-    if (err instanceof CsvParseError) invalid([{ path: 'csv', message: err.message }], err.message);
-    throw err;
-  }
+  const read = readSource(input);
+  const path = input.xlsx !== undefined ? 'xlsx' : 'csv';
+  let rows = read.rows;
   if (input.hasHeader) rows = rows.slice(1);
-  if (rows.length === 0) invalid([{ path: 'csv', message: 'The file has no rows to import.' }]);
+  if (rows.length === 0) invalid([{ path, message: 'The file has no rows to import.' }]);
   if (rows.length > MAX_IMPORT_ROWS) {
-    invalid([{ path: 'csv', message: `An import takes at most ${MAX_IMPORT_ROWS} rows.` }]);
+    invalid([{ path, message: `An import takes at most ${MAX_IMPORT_ROWS} rows.` }]);
   }
   const width = Math.max(...rows.map((r) => r.length));
 
@@ -186,7 +221,7 @@ export async function planImport(
     });
   }
   if (errors.length) invalid(errors);
-  return { rows, columns, typecast: input.typecast };
+  return { rows, source: read.source, columns, typecast: input.typecast };
 }
 
 /**

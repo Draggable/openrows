@@ -3,10 +3,10 @@ import { MAX_IMPORT_BYTES, MAX_IMPORT_COLUMNS } from '../csv/index.js';
 import { viewQuerySchema } from '../query/index.js';
 import { fieldTypeNameSchema } from './field.js';
 
-/** Where one CSV column goes: an existing field, or a new one the import creates. */
+/** Where one column of the file goes: an existing field, or a new one the import creates. */
 export const importColumnSchema = z
   .object({
-    /** 0-based column of the CSV. Columns not listed are skipped. */
+    /** 0-based column of the file. Columns not listed are skipped. */
     index: z
       .int()
       .min(0)
@@ -26,14 +26,23 @@ export const importColumnSchema = z
     message: 'Give either fieldId or newField.',
   });
 
+/** Base64 characters of the biggest workbook an import takes. */
+const MAX_IMPORT_BASE64 = Math.ceil(MAX_IMPORT_BYTES / 3) * 4;
+
 /**
- * `POST /api/tables/:tableId/imports`: the CSV text (up to 50 MB), how to read it and the
- * column mapping. The import runs in the background; poll the job for its progress.
+ * `POST /api/tables/:tableId/imports`: the file (CSV text, or an Excel workbook and one of its
+ * sheets; up to 50 MB), how to read it and the column mapping. The import runs in the
+ * background; poll the job for its progress.
  */
 export const createImportSchema = z
   .object({
-    csv: z.string().min(1).max(MAX_IMPORT_BYTES),
-    /** Detected from the first line when omitted. */
+    /** CSV text. Give either `csv` or `xlsx`. */
+    csv: z.string().min(1).max(MAX_IMPORT_BYTES).optional(),
+    /** An Excel workbook (.xlsx), base64-encoded. Give either `csv` or `xlsx`. */
+    xlsx: z.base64().min(1).max(MAX_IMPORT_BASE64).optional(),
+    /** The workbook's sheet to import, by name: its first sheet when omitted. */
+    sheet: z.string().min(1).max(255).optional(),
+    /** The CSV's delimiter: detected from the first line when omitted. */
     delimiter: z.enum([',', ';', '\t', '|']).optional(),
     /** The first row names the columns (and isn't imported). */
     hasHeader: z.boolean().default(true),
@@ -45,8 +54,20 @@ export const createImportSchema = z
     columns: z.array(importColumnSchema).min(1).max(MAX_IMPORT_COLUMNS),
   })
   .strict()
+  .refine((b) => (b.csv === undefined) !== (b.xlsx === undefined), {
+    message: 'Give either csv or xlsx.',
+    path: ['csv'],
+  })
+  .refine((b) => b.xlsx !== undefined || b.sheet === undefined, {
+    message: 'A sheet goes with xlsx.',
+    path: ['sheet'],
+  })
+  .refine((b) => b.csv !== undefined || b.delimiter === undefined, {
+    message: 'A delimiter goes with csv.',
+    path: ['delimiter'],
+  })
   .refine((b) => new Set(b.columns.map((c) => c.index)).size === b.columns.length, {
-    message: 'Each CSV column can be mapped once.',
+    message: 'Each column can be mapped once.',
     path: ['columns'],
   });
 

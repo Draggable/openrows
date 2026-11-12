@@ -89,7 +89,7 @@ Row colours show only in grid views.
 
 ### More view actions
 
-The **…** button in the grid toolbar has **Import CSV…** (if you can add records) and **Download CSV**, which exports the view as you see it. See [Bases, tables and records](bases-and-tables.md).
+The **…** button in the grid toolbar has **Import CSV or Excel…** (if you can add records) and **Download CSV**, which exports the view as you see it. See [Bases, tables and records](bases-and-tables.md).
 
 ## Grid
 

@@ -18,3 +18,4 @@ export * from './schemas/index.js';
 export * from './scripts/index.js';
 export * from './templates/index.js';
 export * from './types/index.js';
+export * from './xlsx/index.js';

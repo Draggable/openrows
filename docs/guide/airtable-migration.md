@@ -186,7 +186,7 @@ If you only need a table's data, or can't create an Airtable token, download a C
 - On **Home**, **Import a file** makes a new base from a CSV of up to 50 MB, with field types suggested from the values.
 - In a table, the view toolbar's **More view actions** (…) → **Import CSV…** adds rows to an existing table: you choose which field each column goes to. Up to 50 MB and 250,000 rows.
 
-A CSV carries one table at a time and only cell text: no formulas, links between tables, attachment files or views. See [CSV import](bases-and-tables.md#csv-import).
+A CSV carries one table at a time and only cell text: no formulas, links between tables, attachment files or views. See [CSV and Excel import](bases-and-tables.md#csv-and-excel-import).
 
 ## After the import: a checklist
 

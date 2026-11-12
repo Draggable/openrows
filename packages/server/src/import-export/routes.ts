@@ -11,12 +11,15 @@ import { assertRecordRoom } from '../usage/quota.js';
 import { exportCsv } from './export.js';
 import { planImport, startImport, toImportJob } from './import.js';
 
-/** JSON around a 50 MB CSV: escaping makes it somewhat bigger. */
-const IMPORT_BODY_LIMIT = Math.ceil(MAX_IMPORT_BYTES * 1.25);
+/**
+ * JSON around a 50 MB file: escaping makes a CSV somewhat bigger, base64 makes a workbook a
+ * third bigger.
+ */
+const IMPORT_BODY_LIMIT = Math.ceil(MAX_IMPORT_BYTES * 1.4);
 
 /**
- * CSV import into a table and CSV export of a view. Importing needs `record:create` (and
- * `field:create` to map columns to new fields) and runs in the worker; only who started
+ * CSV and Excel import into a table and CSV export of a view. Importing needs `record:create`
+ * (and `field:create` to map columns to new fields) and runs in the worker; only who started
  * an import reads its progress. Exporting needs `record:read`.
  */
 export function importExportRoutes(routes: RouteRegistry, deps: { db: Database; jobs: Jobs }) {
@@ -27,7 +30,9 @@ export function importExportRoutes(routes: RouteRegistry, deps: { db: Database; 
     bodyLimit({
       maxSize: IMPORT_BODY_LIMIT,
       onError: () => {
-        throw new AppError('PAYLOAD_TOO_LARGE', { detail: 'A CSV import takes up to 50 MB.' });
+        throw new AppError('PAYLOAD_TOO_LARGE', {
+          detail: 'An import takes files of up to 50 MB.',
+        });
       },
     })
   );
@@ -54,7 +59,7 @@ export function importExportRoutes(routes: RouteRegistry, deps: { db: Database; 
         { workspaceId: resource.workspaceId, userId: who.userId },
         table,
         plan,
-        body
+        { ...plan.source, hasHeader: body.hasHeader }
       );
     }
   );

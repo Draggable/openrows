@@ -194,9 +194,9 @@ test('sign up, build a base, work with data, import, export and invite', async (
 
   await test.step('import a CSV', async () => {
     await page.getByRole('button', { name: 'More view actions' }).click();
-    await page.getByRole('menuitem', { name: 'Import CSV…' }).click();
-    const dialog = page.getByRole('dialog', { name: /Import CSV/ });
-    await dialog.getByLabel('Choose a CSV file').setInputFiles({
+    await page.getByRole('menuitem', { name: 'Import CSV or Excel…' }).click();
+    const dialog = page.getByRole('dialog', { name: /Import into/ });
+    await dialog.getByLabel('Choose a CSV or Excel file').setInputFiles({
       name: 'more-tasks.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from('Name,Effort,Status\nWrite docs,2,Todo\nLoad test,13,In progress\n'),

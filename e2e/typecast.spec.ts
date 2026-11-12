@@ -84,9 +84,9 @@ test('the import dialog asks the server to add missing options', async ({ page }
   });
   await page.goto(GRID_URL);
   await page.getByRole('button', { name: 'More view actions' }).click();
-  await page.getByRole('menuitem', { name: 'Import CSV…' }).click();
-  const dialog = page.getByRole('dialog', { name: /Import CSV/ });
-  await dialog.getByLabel('Choose a CSV file').setInputFiles({
+  await page.getByRole('menuitem', { name: 'Import CSV or Excel…' }).click();
+  const dialog = page.getByRole('dialog', { name: /Import into/ });
+  await dialog.getByLabel('Choose a CSV or Excel file').setInputFiles({
     name: 'stages.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from('Name,Status\nWrite spec,Blocked\nShip,Planned\n'),

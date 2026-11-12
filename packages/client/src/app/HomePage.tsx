@@ -22,6 +22,7 @@ import {
 import { Button, Skeleton } from '../components/ui';
 import { AirtableImportDialog } from '../features/airtable/AirtableImportDialog';
 import { DescribeBaseDialog } from '../features/assistant/AssistantDialog';
+import { IMPORT_FILE_ACCEPT } from '../features/import/model';
 import { NotificationBell } from '../features/notifications/NotificationBell';
 import { TemplateGallery, TemplateTile } from '../features/templates/TemplateGallery';
 import { WorkspaceTrashDialog } from '../features/trash/TrashDialog';
@@ -151,15 +152,16 @@ export function HomePage({
                 <span className="block text-heading font-semibold">
                   {importBase.isPending ? 'Creating the base…' : 'Import a file'}
                 </span>
-                <span className="block text-text-2">New base from a CSV, up to 50 MB</span>
-                <span className="block text-small text-text-2">Excel is coming soon</span>
+                <span className="block text-text-2">
+                  New base from a CSV or Excel file, up to 50 MB
+                </span>
               </span>
             </button>
             <input
               ref={fileInput}
               type="file"
-              accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values"
-              aria-label="CSV file for a new base"
+              accept={IMPORT_FILE_ACCEPT}
+              aria-label="CSV or Excel file for a new base"
               tabIndex={-1}
               className="hidden"
               onChange={(e) => {

@@ -8,19 +8,34 @@ import {
   type ImportColumn,
   type InferredField,
   inferField,
+  isZipFile,
   MAX_IMPORT_BYTES,
   MAX_IMPORT_ROWS,
   optionsForColumn,
   parseCsv,
+  readXlsx,
+  XLSX_MEDIA_TYPE,
+  XlsxReadError,
 } from '@openrows/shared';
 
-/** Where a CSV column goes. */
+/** What the import file pickers take: CSV (and TSV) files and Excel workbooks. */
+export const IMPORT_FILE_ACCEPT = [
+  '.csv',
+  '.tsv',
+  '.txt',
+  '.xlsx',
+  'text/csv',
+  'text/tab-separated-values',
+  XLSX_MEDIA_TYPE,
+].join(',');
+
+/** Where a column of the file goes. */
 export type ColumnTarget =
   | { kind: 'skip' }
   | { kind: 'field'; fieldId: string }
   | { kind: 'new'; name: string; type: FieldTypeName };
 
-/** One CSV column in the import dialog: its name, first values, inferred type and target. */
+/** One column in the import dialog: its name, first values, inferred type and target. */
 export interface ColumnPlan {
   index: number;
   header: string;
@@ -35,9 +50,21 @@ export const PREVIEW_ROWS = 5;
 /** A file read for import, or why it can't be. */
 export type ReadResult = { ok: true; rows: string[][] } | { ok: false; error: string };
 
+/** The picked file as the import sends it: CSV text, or a workbook and the sheet chosen. */
+export type ImportSource =
+  | { kind: 'csv'; text: string }
+  | { kind: 'xlsx'; bytes: Uint8Array; sheets: string[]; sheet: string };
+
+/** A picked file read for import: its rows and how to send it, or why it can't be. */
+export type FileRead =
+  | { ok: true; rows: string[][]; source: ImportSource }
+  | { ok: false; error: string };
+
+const TOO_BIG = 'The file is bigger than 50 MB.';
+
 /** Parses a picked file's text (any of the delimiters `parseCsv` detects). */
 export function readCsv(text: string, bytes: number): ReadResult {
-  if (bytes > MAX_IMPORT_BYTES) return { ok: false, error: 'The file is bigger than 50 MB.' };
+  if (bytes > MAX_IMPORT_BYTES) return { ok: false, error: TOO_BIG };
   try {
     const rows = parseCsv(text);
     if (rows.length === 0) return { ok: false, error: 'The file is empty.' };
@@ -53,6 +80,56 @@ export function readCsv(text: string, bytes: number): ReadResult {
       return { ok: false, error: `Not a valid CSV: ${err.message}` };
     throw err;
   }
+}
+
+/**
+ * Reads one sheet of a workbook (`sheet`, else the first) with the reader the server uses. A
+ * workbook of several sheets reads even when the sheet is empty (rows `[]`), so another one can
+ * be chosen; a workbook's only sheet has to have rows.
+ */
+export function readWorkbook(bytes: Uint8Array, sheet?: string): FileRead {
+  if (bytes.length > MAX_IMPORT_BYTES) return { ok: false, error: TOO_BIG };
+  try {
+    const read = readXlsx(bytes, { sheet });
+    if (read.rows.length === 0 && read.sheets.length === 1) {
+      return { ok: false, error: 'The workbook is empty.' };
+    }
+    return {
+      ok: true,
+      rows: read.rows,
+      source: { kind: 'xlsx', bytes, sheets: read.sheets, sheet: read.sheet },
+    };
+  } catch (err) {
+    if (err instanceof XlsxReadError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+/** An Excel file by its name or type (.xls too: the reader explains it isn't supported). */
+export function isWorkbookFile(file: { name: string; type: string }): boolean {
+  return /\.xlsx?$/i.test(file.name) || file.type === XLSX_MEDIA_TYPE;
+}
+
+/**
+ * Reads a picked file: a workbook's first sheet (by its name or type, or a ZIP archive whatever
+ * its name), else CSV text.
+ */
+export async function readImportFile(file: File): Promise<FileRead> {
+  if (file.size > MAX_IMPORT_BYTES) return { ok: false, error: TOO_BIG };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (isWorkbookFile(file) || isZipFile(bytes)) return readWorkbook(bytes);
+  const text = new TextDecoder().decode(bytes);
+  const read = readCsv(text, file.size);
+  return read.ok ? { ...read, source: { kind: 'csv', text } } : read;
+}
+
+/** Bytes as base64, in slices (a 50 MB file is too big for one `fromCharCode` call). */
+export function toBase64(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    parts.push(String.fromCharCode(...bytes.subarray(i, i + 0x8000)));
+  }
+  return btoa(parts.join(''));
 }
 
 /** Fields an import can write (not computed or read-only). */
@@ -133,11 +210,12 @@ export function mappingErrors(plans: readonly ColumnPlan[], fields: readonly Fie
 }
 
 /**
- * The import request for the file and the mapping. `typecast` ("Add missing options", for
- * roles that may change fields) makes the server add the select options the file names.
+ * The import request for the file and the mapping: the CSV text, or the workbook (base64) and
+ * its chosen sheet. `typecast` ("Add missing options", for roles that may change fields) makes
+ * the server add the select options the file names.
  */
 export function importBody(
-  csv: string,
+  source: ImportSource,
   rows: readonly string[][],
   hasHeader: boolean,
   plans: readonly ColumnPlan[],
@@ -145,7 +223,9 @@ export function importBody(
 ): CreateImportInput {
   const data = dataRows(rows, hasHeader);
   return {
-    csv,
+    ...(source.kind === 'csv'
+      ? { csv: source.text }
+      : { xlsx: toBase64(source.bytes), sheet: source.sheet }),
     hasHeader,
     ...(typecast ? { typecast: true } : {}),
     columns: plans.flatMap((p): ImportColumn[] => {
