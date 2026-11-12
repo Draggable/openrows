@@ -3,13 +3,7 @@ import { Deflate, deflateSync, strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { inferField } from '../csv/index.js';
 import { classifyFormat, formatNumber } from './format.js';
-import {
-  isZipFile,
-  MAX_XLSX_UNPACKED_BYTES,
-  readXlsx,
-  XlsxReadError,
-  xlsxSheetNames,
-} from './index.js';
+import { isZipFile, readXlsx, XlsxReadError, xlsxSheetNames } from './index.js';
 
 // ---------------------------------------------------------------------------------------------
 // Fixtures: minimal workbooks as Excel writes them.
@@ -515,11 +509,13 @@ describe('type inference on sheets', () => {
 
 describe('limits', () => {
   it('stops a sheet that unpacks past the limit, whatever size it declares (zip bomb)', () => {
-    // ~210 MB of spaces deflates to about 200 KB; the archive claims 1 KB.
+    // A 1 MB cap keeps this fast; the next test checks the 200 MB default.
+    // ~4 MB of spaces deflates to a few KB; the archive claims 1 KB.
+    const maxUnpackedBytes = 1024 * 1024;
     const compressed: Uint8Array[] = [];
     const deflate = new Deflate({ level: 9 }, (chunk) => compressed.push(chunk));
     const mb = new Uint8Array(1024 * 1024).fill(0x20);
-    const total = Math.ceil(MAX_XLSX_UNPACKED_BYTES / mb.length) + 10;
+    const total = Math.ceil(maxUnpackedBytes / mb.length) + 3;
     for (let i = 0; i < total; i++) deflate.push(mb, i === total - 1);
     const data = new Uint8Array(compressed.reduce((n, c) => n + c.length, 0));
     let at = 0;
@@ -527,10 +523,10 @@ describe('limits', () => {
       data.set(c, at);
       at += c.length;
     }
-    expect(data.length).toBeLessThan(1024 * 1024);
+    expect(data.length).toBeLessThan(maxUnpackedBytes / 10);
     const bomb = workbookWithSheet(data, 1024);
-    expect(readError(() => readXlsx(bomb))).toBe(
-      'The workbook unpacks to more than 200 MB, too much to import.'
+    expect(readError(() => readXlsx(bomb, { maxUnpackedBytes }))).toBe(
+      'The workbook unpacks to more than 1 MB, too much to import.'
     );
   });
 
