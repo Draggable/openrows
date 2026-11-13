@@ -101,7 +101,7 @@ test('creates every view type with the keyboard, and a personal one under My vie
 test('"Create view…" in the command palette picks a type', async ({ page }) => {
   const api = await open(page);
   await page.keyboard.press('Control+k');
-  const input = page.getByPlaceholder('Search bases, tables and commands…');
+  const input = page.getByPlaceholder('Search bases, tables, records and commands…');
   await input.fill('Create view');
   await page.keyboard.press('Enter');
   await page.getByPlaceholder('Pick a view type…').fill('Timeline');

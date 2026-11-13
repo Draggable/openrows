@@ -83,6 +83,20 @@ await tasks.destroy(single.id); // to the trash
 await tasks.destroy(created.map((r) => r.id));
 ```
 
+## Search
+
+Records whose text contains a query (3 characters or more, ignoring case) in every table and
+base the token can read, one page at a time:
+
+```ts
+const page = await openrows.search('lovelace', { pageSize: 20 });
+for (const hit of page.records) console.log(hit.baseName, hit.tableName, hit.name);
+const next = page.offset ? await openrows.search('lovelace', { offset: page.offset }) : null;
+```
+
+`baseId` limits it to one base, `firstBaseId` searches that base first. A page can hold fewer
+than `pageSize` hits while `offset` is present (each page searches at most 50 tables).
+
 ## Comments
 
 ```ts

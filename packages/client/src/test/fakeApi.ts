@@ -5,6 +5,7 @@ import {
   type MeResponse,
   type Notice,
   type Notification,
+  type SearchHit,
   type SharedRecord,
   type SharedShare,
   type SharedView,
@@ -44,6 +45,9 @@ export function stubApi(me: MeResponse) {
   let emailFrequency = 'immediately';
   /** Service notices the user hasn't dismissed. */
   const notices: Notice[] = [];
+  /** What `GET /api/v1/search` finds (by name or a match's text), and each search's query. */
+  const searchHits: SearchHit[] = [];
+  const searches: Record<string, string>[] = [];
   /** Personal access tokens, without their secrets. */
   const tokens: Row[] = [];
   /** OAuth apps: the ones registered here, the ones authorized, and consent answers. */
@@ -145,6 +149,14 @@ export function stubApi(me: MeResponse) {
       return json({ unread: unread() });
     }
     if (path === contracts.notices.list.path) return json({ notices });
+    if (path === contracts.v1Search.records.path) {
+      searches.push(Object.fromEntries(url.searchParams));
+      const q = (url.searchParams.get('q') ?? '').toLowerCase();
+      const has = (text: string) => text.toLowerCase().includes(q);
+      return json({
+        records: searchHits.filter((h) => has(h.name) || h.matches.some((m) => has(m.text))),
+      });
+    }
     const noticeId = at(/^\/api\/me\/notices\/([^/]+)\/dismiss$/);
     if (noticeId && method === 'POST') {
       const i = notices.findIndex((n) => n.id === noticeId);
@@ -634,6 +646,8 @@ export function stubApi(me: MeResponse) {
     signIn,
     notifications,
     notices,
+    searchHits,
+    searches,
     tokens,
     oauthApps,
     authorizations,

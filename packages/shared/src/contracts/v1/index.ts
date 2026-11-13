@@ -11,6 +11,7 @@ import {
   v1TriggerAutomationSchema,
   v1UpdateAutomationSchema,
 } from '../../schemas/automation.js';
+import { SearchResultSchema, searchQuerySchema } from '../../schemas/search.js';
 import {
   createWebhookSchema,
   updateWebhookSchema,
@@ -553,6 +554,18 @@ export const v1Contracts = {
       tag: 'v1',
       params: { ...webhookParams, deliveryId: z.uuid() },
       response: WebhookRedeliverySchema,
+      status: 200,
+    }),
+  },
+  // Record search across every table and base the caller can read records of.
+  v1Search: {
+    records: e({
+      method: 'GET',
+      path: '/api/v1/search',
+      summary: 'Find records by text in every table and base the caller can read',
+      tag: 'v1',
+      query: searchQuerySchema,
+      response: SearchResultSchema,
       status: 200,
     }),
   },

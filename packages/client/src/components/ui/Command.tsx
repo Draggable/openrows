@@ -28,7 +28,7 @@ export function CommandDialog({
       <DialogContent className="top-[20%] max-w-[560px] translate-y-0 gap-0 overflow-hidden p-0 max-md:flex max-md:flex-col">
         <DialogTitle className="sr-only">Search and commands</DialogTitle>
         <DialogDescription className="sr-only">
-          Search bases and tables, or run a command
+          Search bases, tables and records, or run a command
         </DialogDescription>
         <Command loop className="max-md:min-h-0 max-md:flex-1">
           {children}

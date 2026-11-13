@@ -26,6 +26,8 @@ describe('app shell', () => {
       addEventListener: () => {},
       removeEventListener: () => {},
     })) as unknown as typeof window.matchMedia;
+    // cmdk scrolls the selected item into view.
+    Element.prototype.scrollIntoView ??= () => {};
     globalThis.ResizeObserver ??= class {
       observe() {}
       unobserve() {}
@@ -146,6 +148,69 @@ describe('app shell', () => {
       expect(router.state.location.pathname).toBe(`/b/${base.id}/${table.id}/${api.views[1]?.id}`)
     );
     expect(api.views[1]).toMatchObject({ name: 'Kanban', type: 'kanban' });
+  });
+
+  it('finds records across bases from the command palette and opens one', async () => {
+    const api = stubApi(ME);
+    const router = renderApp('/');
+    await screen.findByRole('heading', { name: 'No bases yet' });
+    const ws = await (
+      await fetch('/api/workspaces', { method: 'POST', body: '{"name":"W"}' })
+    ).json();
+    const base = await (
+      await fetch(`/api/workspaces/${ws.id}/bases`, { method: 'POST', body: '{"name":"Sales"}' })
+    ).json();
+    const table = await (
+      await fetch(`/api/bases/${base.id}/tables`, { method: 'POST', body: '{"name":"Contacts"}' })
+    ).json();
+    await router.navigate({ to: '/b/$baseId', params: { baseId: base.id } });
+    await screen.findByRole('navigation', { name: 'Views' });
+    const ada = crypto.randomUUID();
+    api.searchHits.push(
+      {
+        id: ada,
+        baseId: base.id,
+        baseName: 'Sales',
+        tableId: table.id,
+        tableName: 'Contacts',
+        name: 'Ada Lovelace',
+        matches: [],
+      },
+      {
+        id: crypto.randomUUID(),
+        baseId: crypto.randomUUID(),
+        baseName: 'Support',
+        tableId: crypto.randomUUID(),
+        tableName: 'Tickets',
+        name: 'Printer jam',
+        matches: [{ fieldId: crypto.randomUUID(), fieldName: 'Reporter', text: 'lovelace@x.test' }],
+      }
+    );
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    const input = await screen.findByPlaceholderText('Search bases, tables, records and commands…');
+    // Two characters don't search records.
+    fireEvent.change(input, { target: { value: 'lo' } });
+    await new Promise((r) => setTimeout(r, 400));
+    expect(api.searches).toEqual([]);
+
+    fireEvent.change(input, { target: { value: 'lovelace' } });
+    const records = await screen.findByRole('group', { name: 'Records' });
+    const options = await within(records).findAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual([
+      'Ada LovelaceSales › Contacts',
+      'Printer jamSupport › Tickets · Reporter: lovelace@x.test',
+    ]);
+    // Searched once the typing stopped, the open base first.
+    expect(api.searches).toEqual([{ q: 'lovelace', firstBaseId: base.id }]);
+    expect(screen.queryByText('No results.')).toBeNull();
+
+    fireEvent.click(within(records).getByRole('option', { name: /Ada Lovelace/ }));
+    await waitFor(() =>
+      expect(router.state.location.pathname).toMatch(new RegExp(`^/b/${base.id}/${table.id}`))
+    );
+    expect(router.state.location.search).toMatchObject({ record: ada });
+    expect(screen.queryByPlaceholderText('Search bases, tables, records and commands…')).toBeNull();
   });
 
   it('groups views into sections, moves them from the menu and marks personal views (#42)', async () => {

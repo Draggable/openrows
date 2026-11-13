@@ -40,6 +40,7 @@ export const V1_RESOURCES = [
   'v1Comments',
   'v1Webhooks',
   'v1Automations',
+  'v1Search',
 ] as const;
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;

@@ -78,6 +78,7 @@ On narrow screens the sidebar becomes a drawer: tap the menu button in the top b
 Press **Ctrl K** (**Cmd K** on a Mac) anywhere, or click **Search & commands** in the sidebar. Type to filter, then press Enter. The palette lists:
 
 - **Tables** of the open base and **Bases** you can open.
+- **Records**: type 3 characters or more to find records by their text (a name, an email, a short phrase) in every table and base you can open, the open base first. Each result shows the record's primary field, its base and table, and the field that matched. Choose one to open the record in its table. Only records in tables you can open are found. Search looks at whole tables, so it also finds records a view filters out and text in fields a view hides; attachments aren't searched. The palette shows the first 20 results; the [REST API](../api/v1.md#search) pages through all of them.
 - **Create view…** (on a table, for editors and up): pick a view type, and turn on **Only me (personal view)** for a personal one. Backspace in the empty search goes back.
 - **Create a base**, **Go to home**, **Settings**, and **Switch to dark mode** or **Switch to light mode**.
 

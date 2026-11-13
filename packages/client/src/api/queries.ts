@@ -117,6 +117,20 @@ export const invitationQueries = {
     }),
 };
 
+/**
+ * Records whose text contains `q`, across every table and base the user can read
+ * (`GET /api/v1/search`): the first page, `firstBaseId`'s records first.
+ */
+export const searchQueries = {
+  records: (q: string, firstBaseId: string | null) =>
+    queryOptions({
+      queryKey: queryKeys.records.search(q, firstBaseId),
+      queryFn: () =>
+        api.v1Search.records({ query: { q, ...(firstBaseId ? { firstBaseId } : {}) } }),
+      staleTime: 30_000,
+    }),
+};
+
 export const baseQueries = {
   list: (workspaceId: string) =>
     queryOptions({

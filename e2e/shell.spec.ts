@@ -62,7 +62,7 @@ test('the help menu, the command palette and the sign-in page link the status pa
   await expect(item).toHaveAttribute('target', '_blank');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+k');
-  await page.getByPlaceholder('Search bases, tables and commands…').fill('status');
+  await page.getByPlaceholder('Search bases, tables, records and commands…').fill('status');
   await expect(page.getByRole('option', { name: 'Open the status page' })).toBeVisible();
 });
 
@@ -108,7 +108,7 @@ test('create a base, add a table, add and switch views', async ({ page }) => {
 
   // Back to the first table through the command palette.
   await page.keyboard.press('Control+k');
-  await page.getByPlaceholder('Search bases, tables and commands…').fill('Table 1');
+  await page.getByPlaceholder('Search bases, tables, records and commands…').fill('Table 1');
   await page.keyboard.press('Enter');
   await expect(crumb(page)).toContainText('Table 1');
 

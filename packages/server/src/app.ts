@@ -77,6 +77,7 @@ import { regionRoutes } from './regions/routes.js';
 import { revisionRoutes } from './revisions/routes.js';
 import { scriptRoutes } from './scripts/routes.js';
 import { sandboxRoutes } from './scripts/sandbox.js';
+import { searchRoutes } from './search/routes.js';
 import { sharedRoutes, shareRoutes } from './shares/routes.js';
 import { snapshotRoutes } from './snapshots/routes.js';
 import { connectorRoutes } from './syncs/connector-routes.js';
@@ -443,6 +444,8 @@ export function createApp({
     },
     automations: { ...automationDeps, jobs },
   });
+  // Record search across tables and bases, under the v1 API (its errors, its rate limits).
+  searchRoutes(routes, { db, visibility });
 
   // OAuth apps: registration, consent, and the token endpoint for the apps.
   oauthRoutes(routes, { db, config });
