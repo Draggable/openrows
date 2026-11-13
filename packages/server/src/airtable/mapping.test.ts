@@ -3,10 +3,13 @@ import schema from './__fixtures__/schema.json' with { type: 'json' };
 import type { AirtableTable } from './client.js';
 import {
   cellInput,
+  formulaProblem,
   mapColor,
   mapFieldType,
+  missingFields,
   planTables,
   readableFormula,
+  rollupFallbackMessage,
   rollupFunction,
   storedFormula,
   textOf,
@@ -56,6 +59,74 @@ describe('Airtable type mapping', () => {
       type: 'singleLineText',
     });
     expect(tasks?.fields[0]?.formula).toContain('{fldTTitle');
+    // Created time and created by are live; last modified and autonumber keep Airtable's values.
+    expect(planned('Created')).toMatchObject({ type: 'createdTime', options: { timeZone: 'UTC' } });
+    expect(planned('Created')?.converted).toBeUndefined();
+    expect(planned('Created by')).toMatchObject({ type: 'createdBy' });
+    expect(planned('Modified')).toMatchObject({
+      type: 'date',
+      converted: expect.stringContaining('only some fields'),
+    });
+    expect(planned('Modified by')).toMatchObject({ type: 'user', converted: expect.any(String) });
+    expect(planned('No.')).toMatchObject({
+      type: 'number',
+      converted: expect.stringContaining("can't take Airtable's numbers"),
+    });
+  });
+
+  it('makes created time and created by live, except as a primary field', () => {
+    const dateOnly = { result: { type: 'date', options: { dateFormat: { name: 'iso' } } } };
+    expect(mapFieldType(field('createdTime', dateOnly))).toEqual({
+      type: 'createdTime',
+      options: { dateFormat: 'iso', timeFormat: '12h', timeZone: 'UTC' },
+      converted: expect.stringContaining('time of day'),
+    });
+    expect(mapFieldType(field('createdTime', dateOnly), { live: false })).toMatchObject({
+      type: 'date',
+      options: { dateFormat: 'iso' },
+    });
+    expect(mapFieldType(field('createdBy'))).toEqual({ type: 'createdBy' });
+    expect(mapFieldType(field('createdBy'), { live: false })).toMatchObject({
+      type: 'user',
+      options: { multiple: false },
+    });
+    const [plan] = planTables([
+      {
+        id: 'tblAAAAAAAAAAAAAA',
+        name: 'T',
+        primaryFieldId: 'fldAAAAAAAAAAAAAA',
+        fields: [
+          {
+            id: 'fldAAAAAAAAAAAAAA',
+            name: 'Created',
+            type: 'createdTime',
+            options: { result: { type: 'dateTime', options: { timeZone: 'utc' } } },
+          },
+          { id: 'fldBBBBBBBBBBBBBB', name: 'By', type: 'createdBy' },
+          { id: 'fldCCCCCCCCCCCCCC', name: 'No', type: 'autoNumber' },
+        ],
+        views: [],
+      },
+    ]);
+    // A primary field can't be computed: it keeps Airtable's values.
+    expect(plan?.fields.map((f) => [f.name, f.type])).toEqual([
+      ['Created', 'dateTime'],
+      ['By', 'createdBy'],
+      ['No', 'number'],
+    ]);
+  });
+
+  it('keeps a primary created by field as a plain user field', () => {
+    const [plan] = planTables([
+      {
+        id: 'tblAAAAAAAAAAAAAA',
+        name: 'T',
+        primaryFieldId: 'fldAAAAAAAAAAAAAA',
+        fields: [{ id: 'fldAAAAAAAAAAAAAA', name: 'By', type: 'createdBy' }],
+        views: [],
+      },
+    ]);
+    expect(plan?.fields[0]).toMatchObject({ type: 'user' });
   });
 
   it("keeps Airtable's options where ours have them", () => {
@@ -88,9 +159,61 @@ describe('Airtable type mapping', () => {
       function: 'ARRAYJOIN',
       separator: '; ',
     });
+    // Airtable's AVERAGE is our AVG; names in any case; escapes in the separator.
+    expect(rollupFunction('AVERAGE(values)')).toEqual({ function: 'AVG' });
+    expect(rollupFunction('max(values)')).toEqual({ function: 'MAX' });
+    expect(rollupFunction("ARRAYJOIN(values, '\\n')")).toEqual({
+      function: 'ARRAYJOIN',
+      separator: '\n',
+    });
+    expect(rollupFunction('ARRAYJOIN(values)')).toEqual({ function: 'ARRAYJOIN' });
+    for (const name of ['COUNTALL', 'ARRAYUNIQUE', 'ARRAYCOMPACT', 'CONCATENATE', 'XOR']) {
+      expect(rollupFunction(`${name}(values)`)).toEqual({ function: name });
+    }
     expect(rollupFunction('SUM(values) * 2')).toBeNull();
+    expect(rollupFunction('SUM(values, ", ")')).toBeNull();
     expect(rollupFunction('MEDIAN(values)')).toBeNull();
     expect(rollupFunction(undefined)).toBeNull();
+  });
+
+  it("plans a rollup with a function we have as live, and says why others keep Airtable's values", () => {
+    const rollup = (options: Record<string, unknown>) => {
+      const [plan] = planTables([
+        {
+          id: 'tblAAAAAAAAAAAAAA',
+          name: 'T',
+          primaryFieldId: 'fldAAAAAAAAAAAAAA',
+          fields: [
+            { id: 'fldAAAAAAAAAAAAAA', name: 'Name', type: 'singleLineText' },
+            { id: 'fldBBBBBBBBBBBBBB', name: 'R', type: 'rollup', options },
+          ],
+          views: [],
+        },
+      ]);
+      return plan?.fields[1];
+    };
+    const reads = {
+      recordLinkFieldId: 'fldLLLLLLLLLLLLLL',
+      fieldIdInLinkedTable: 'fldXXXXXXXXXXXXXX',
+      result: { type: 'number', options: { precision: 2 } },
+    };
+    expect(rollup({ ...reads, formula: 'AVERAGE(values)' })).toMatchObject({
+      type: 'number',
+      options: { precision: 2 },
+      computed: { type: 'rollup', function: 'AVG' },
+    });
+    expect(rollup(reads)).toMatchObject({
+      type: 'number',
+      converted:
+        "Airtable's API doesn't say which function this rollup uses: kept with Airtable's values.",
+    });
+    expect(rollup({ ...reads, formula: 'MEDIAN(values)' })?.converted).toBe(
+      "Rollups here have no MEDIAN function: kept with Airtable's values."
+    );
+    expect(rollupFallbackMessage({ ...reads, formula: 'SUM(values) / 2' })).toContain(
+      'SUM(values) / 2'
+    );
+    expect(rollupFallbackMessage({ formula: 'SUM(values)' })).toContain('which link and field');
   });
 
   it('maps colours by hue and falls back to the palette', () => {
@@ -138,6 +261,43 @@ describe('Airtable type mapping', () => {
         ])
       )
     ).toBe('IF({id-a} > 1, {id-b})');
+  });
+
+  it('names the fields a formula reads that are missing', () => {
+    const f = '{fldAAAAAAAAAAAAAA} & {fldBBBBBBBBBBBBBB} & {fldBBBBBBBBBBBBBB}';
+    expect(missingFields(f, new Map([['fldAAAAAAAAAAAAAA', 'id-a']]))).toEqual([
+      'fldBBBBBBBBBBBBBB',
+    ]);
+  });
+
+  it("describes a refused formula's problem with field names and where it is", () => {
+    const stored = '{11111111-1111-7111-8111-111111111111} - TODAY()';
+    const nameOf = (id: string) =>
+      id === '11111111-1111-7111-8111-111111111111' ? 'Due' : undefined;
+    expect(
+      formulaProblem(
+        stored,
+        {
+          code: 'typeMismatch',
+          message: '"-" needs numbers, but this is a date (use DATEADD or DATETIME_DIFF for dates)',
+          range: { start: 0, end: 38 },
+        },
+        nameOf
+      )
+    ).toBe(
+      '"-" needs numbers, but this is a date (use DATEADD or DATETIME_DIFF for dates), in {Due}'
+    );
+    expect(
+      formulaProblem(
+        'AUTONUMBER()',
+        { code: 'unknownFunction', message: 'Unknown function AUTONUMBER' },
+        nameOf
+      )
+    ).toBe('There is no AUTONUMBER function here.');
+    // A range outside the formula: the message alone.
+    expect(formulaProblem('1', { message: 'Bad.', range: { start: 5, end: 9 } }, nameOf)).toBe(
+      'Bad.'
+    );
   });
 
   it('turns cells into input for our fields', () => {

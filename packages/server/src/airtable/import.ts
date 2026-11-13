@@ -17,6 +17,7 @@ import { resolveResource } from '../authz/resolve.js';
 import { inScope } from '../authz/scope.js';
 import { createBase } from '../bases/service.js';
 import { qualified } from '../data/columns.js';
+import { recomputeForRecords } from '../data/computed/engine.js';
 import {
   airtableImportRecords,
   bases,
@@ -74,9 +75,10 @@ import { buildSchema, capped, type LinkPair, type TableState } from './schema.js
  *    (mapping.ts), the links between them, formulas, lookups, rollups and counts, the views.
  * 2. Records, a page of 100 at a time (Airtable's page size, 5 requests a second): the page's
  *    files are copied from Airtable's file hosts first (files.ts), then the page is written
- *    through the RecordService in one transaction that also stores each record's Airtable id
- *    and link cells in the record map (`airtable_import_records`) and commits the progress, so
- *    a retry resumes after the last page.
+ *    through the RecordService in one transaction that also gives the records Airtable's
+ *    creation time and creator (`seedCreated`), stores each record's Airtable id and link cells
+ *    in the record map (`airtable_import_records`) and commits the progress, so a retry resumes
+ *    after the last page.
  * 3. Links, once every table's records are in: per link pair, from the side whose cells hold
  *    the fewest links, 100 records a transaction, Airtable's record ids mapped to ours through
  *    the record map and written through the RecordService (the inverse side, lookups, rollups
@@ -123,6 +125,7 @@ const emptyReport = (): AirtableReport => ({
   skippedLinks: 0,
   views: 0,
   unsupportedViews: [],
+  partialViews: [],
 });
 
 const progressOf = (job: JobRow): Progress => {
@@ -363,6 +366,8 @@ export async function cancelAirtableImport(tx: Transaction, job: JobRow): Promis
 /** One record's work before its page's transaction: cells, files, Airtable link ids. */
 interface Prepared {
   airtableId: string;
+  /** When Airtable says the record was created. */
+  createdTime?: string;
   cells: Record<string, unknown>;
   files: { fieldId: string; stored: StoredFile[] }[];
   links: Record<string, string[]> | null;
@@ -523,6 +528,15 @@ async function importBase(deps: AirtableRunDeps, job: JobRow, opts: AirtableRunO
           )
         : [];
       if (created.length) {
+        await seedCreated(
+          tx,
+          ours,
+          state,
+          created.map((rec) => rec.id),
+          prepared,
+          people,
+          report
+        );
         await tx
           .insert(airtableImportRecords)
           .values(
@@ -638,7 +652,7 @@ async function prepareRecords(
   airtable: AirtableClient,
   job: JobRow,
   table: TableState,
-  records: { id: string; fields: Record<string, unknown> }[]
+  records: { id: string; createdTime?: string; fields: Record<string, unknown> }[]
 ): Promise<Prepared[]> {
   const fileFields = table.fields.filter((f) => f.copy && f.type === 'attachment');
   const linkFields = table.fields.filter((f) => f.link);
@@ -706,12 +720,56 @@ async function prepareRecords(
     }
     return {
       airtableId: r.id,
+      ...(r.createdTime ? { createdTime: r.createdTime } : {}),
       cells: r.fields,
       files: files.filter((f) => f.stored.length),
       links: Object.keys(links).length ? links : null,
       failures,
     };
   });
+}
+
+/**
+ * Gives a page's new records Airtable's creation time and, when the table has a Created by
+ * field, its creator (the person matched by email, else nobody): what our Created time and
+ * Created by fields and CREATED_TIME() read. The records' formulas are then computed again.
+ * Lookups and rollups of these fields in other tables are computed by the links pass, later.
+ */
+async function seedCreated(
+  tx: Transaction,
+  table: TableRow,
+  state: TableState,
+  ids: readonly string[],
+  prepared: readonly Prepared[],
+  people: ReadonlyMap<string, string>,
+  report: AirtableReport
+): Promise<void> {
+  const creator = state.fields.find((f) => f.type === 'createdBy');
+  const rows = ids.map((id, i) => {
+    const p = prepared[i];
+    const time = p?.createdTime ? Date.parse(p.createdTime) : Number.NaN;
+    const row: { id: string; created_at: string | null; created_by?: string | null } = {
+      id,
+      created_at: Number.isNaN(time) ? null : new Date(time).toISOString(),
+    };
+    if (creator) {
+      const raw = p?.cells[creator.airtableId];
+      const matched = raw === undefined || raw === null ? [] : cellInput(creator, raw, people);
+      row.created_by = Array.isArray(matched) ? (matched[0] ?? null) : null;
+      if (raw !== undefined && raw !== null && !row.created_by) report.skippedCells++;
+    }
+    return row;
+  });
+  const by = creator ? sql`, created_by = s.created_by` : sql``;
+  await tx.execute(sql`
+    UPDATE ${qualified(table)} AS r
+       SET created_at = coalesce(s.created_at, r.created_at)${by}
+      FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb)
+           AS s(id uuid, created_at timestamptz, created_by uuid)
+     WHERE r.id = s.id`);
+  if (state.fields.some((f) => f.type === 'formula')) {
+    await recomputeForRecords(tx, table, ids, { ai: false });
+  }
 }
 
 /** The side of a pair whose cells hold the fewest links (a one-to-many's "one" side). */

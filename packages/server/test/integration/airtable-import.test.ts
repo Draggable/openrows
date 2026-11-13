@@ -236,9 +236,9 @@ describe('Airtable import', () => {
       'Task count': 'count',
       Effort: 'number',
       Files: 'attachment',
-      Created: 'dateTime',
+      Created: 'createdTime',
       Modified: 'date',
-      'Created by': 'user',
+      'Created by': 'createdBy',
       'Modified by': 'user',
       'No.': 'number',
       SKU: 'barcode',
@@ -248,6 +248,9 @@ describe('Airtable import', () => {
       Size: 'formula',
       Code: 'singleLineText',
       Summary: 'formula',
+      'Days left': 'singleLineText',
+      Source: 'singleLineText',
+      'Created on': 'formula',
     });
     const field = (name: string) => {
       const f = projects.fields.find((x) => x.name === name);
@@ -314,8 +317,11 @@ describe('Airtable import', () => {
     // Collaborators by email: Ada is a member, Grace isn't (a skipped cell).
     expect(cell('Owner')).toEqual([ada.id]);
     expect(cell('Team')).toEqual([ada.id]);
-    expect(cell('Created by')).toEqual([ada.id]);
+    // Created time and created by are live, with Airtable's creation time and creator;
+    // CREATED_TIME() reads the same.
+    expect(cell('Created by')).toBe(ada.id);
     expect(cell('Created')).toBe('2024-01-05T09:00:00.000Z');
+    expect(cell('Created on')).toBe('2024-01-05');
     expect(cell('Modified')).toBe('2024-02-01');
     expect(cell('No.')).toBe(1);
     expect(cell('SKU')).toEqual({ text: '4006381333931', type: 'ean13' });
@@ -333,6 +339,9 @@ describe('Airtable import', () => {
     expect(cell('Summary')).toMatch(/^Write spec, Task 3, /);
     const hermes = records.find((r) => r.fields[field('Name').id] === 'Hermes');
     expect(hermes?.fields[field('Task count').id]).toBe(10);
+    // Hermes' creator, Grace, isn't a member: nobody; the record keeps Airtable's creation time.
+    expect(hermes?.fields[field('Created by').id] ?? null).toBeNull();
+    expect(hermes?.fields[field('Created').id]).toBe('2024-01-06T09:00:00.000Z');
     // Effort's rollup function isn't in Airtable's API: Airtable's value is kept.
     expect(cell('Effort')).toBe(1);
 
@@ -387,8 +396,9 @@ describe('Airtable import', () => {
     expect(linkedToApollo.map((r) => r.id).sort()).toEqual(linkIds(cell('Tasks')));
     expect(taskRecords.filter((r) => !r.fields[project?.id ?? '']).length).toBe(65);
 
-    // Views: the grid's visible fields in order, the kanban by the single select;
-    // calendar and form views are listed.
+    // Views: the grid's visible fields in order, the kanban by the single select, the
+    // calendar and timeline by the first date field, the gallery covered by the attachments;
+    // the block view, the form and a calendar without a date field are listed.
     const viewsOf = async (tableId: string) =>
       (
         await ok<{ views: { name: string; type: string; config: Record<string, unknown> }[] }>(
@@ -399,6 +409,9 @@ describe('Airtable import', () => {
     expect(projectViews.map((v) => [v.name, v.type])).toEqual([
       ['All projects', 'grid'],
       ['By status', 'kanban'],
+      ['Due dates', 'calendar'],
+      ['Moodboard', 'gallery'],
+      ['Roadmap', 'timeline'],
     ]);
     const grid = projectViews[0]?.config['grid'] as {
       fieldOrder: string[];
@@ -408,12 +421,34 @@ describe('Airtable import', () => {
     expect(grid.hiddenFields).toContain(field('Notes').id);
     expect(grid.hiddenFields).not.toContain(field('Status').id);
     expect(projectViews[1]?.config['kanban']).toMatchObject({ stackFieldId: field('Status').id });
+    expect(projectViews[2]?.config['calendar']).toMatchObject({
+      dateFields: [{ startFieldId: field('Due').id }],
+    });
+    expect(projectViews[3]?.config['gallery']).toMatchObject({ coverFieldId: field('Files').id });
+    expect(projectViews[4]?.config['timeline']).toMatchObject({ startFieldId: field('Due').id });
     expect((await viewsOf(tasks.id)).map((v) => v.name)).toEqual(['Grid view']);
-    expect(done.report.views).toBe(3);
+    expect(done.report.views).toBe(6);
     expect(done.report.unsupportedViews.map((v) => `${v.table}.${v.view}:${v.type}`)).toEqual([
-      'Projects.Due dates:calendar',
+      'Projects.Gantt:block',
       'Tasks.New task:form',
+      'Tasks.Task calendar:calendar',
     ]);
+    expect(done.report.unsupportedViews[2]?.message).toBe(
+      'There is no date field to place the records by.'
+    );
+    // Each view created says what Airtable's API didn't share, and what was chosen here.
+    expect(done.report.partialViews.map((v) => `${v.table}.${v.view}:${v.type}`)).toEqual([
+      'Projects.All projects:grid',
+      'Projects.By status:kanban',
+      'Projects.Due dates:calendar',
+      'Projects.Moodboard:gallery',
+      'Projects.Roadmap:timeline',
+      'Tasks.Grid view:grid',
+    ]);
+    expect(done.report.partialViews[1]?.message).toContain(
+      `Stacked by "Status", the table's first single select`
+    );
+    expect(done.report.partialViews[2]?.message).toContain(`Records placed by "Due"`);
     // The record map is gone with the job.
     const { rows: map } = await t.db.execute<{ n: number }>(
       sql`SELECT count(*)::int AS n FROM airtable_import_records WHERE job_id = ${job.id}`
@@ -439,14 +474,32 @@ describe('Airtable import', () => {
         table: 'Projects',
         field: 'Code',
         formula: 'AUTONUMBER() & "-" & {Name}',
-        message: 'Unknown function AUTONUMBER',
+        message: 'There is no AUTONUMBER function here.',
+      }),
+      expect.objectContaining({
+        table: 'Projects',
+        field: 'Days left',
+        formula: '{Due} - TODAY()',
+        message: expect.stringMatching(/^"-" needs numbers, but this is a date .*, in \{Due\}$/),
+      }),
+      expect.objectContaining({
+        table: 'Projects',
+        field: 'Source',
+        formula: '{Synced from} & ""',
+        message: 'It reads "Synced from", which wasn\'t imported.',
+      }),
+      expect.objectContaining({
+        table: 'Tasks',
+        field: 'Label',
+        formula: 'UPPER({Task})',
+        message: 'It reads "Task", a formula kept as text here.',
       }),
     ]);
+    expect(field('Days left').description).toBe('Airtable formula: {Due} - TODAY()');
+    expect(cell('Days left')).toBe('30');
     expect(done.report.converted.map((c) => c.field)).toEqual([
       'Effort',
-      'Created',
       'Modified',
-      'Created by',
       'Modified by',
       'No.',
       'Open',

@@ -36,10 +36,11 @@ test('imports the fixture base through the UI, with links, files and views', asy
     .getByRole('listitem')
     .filter({ hasText: 'Product launch' });
   await expect(item).toContainText('Done: 2 tables, 153 records', { timeout: 150_000 });
-  await expect(item).toContainText('3 views imported');
+  await expect(item).toContainText('6 views imported');
   await expect(item).toContainText('2 files not copied');
   await item.getByText('Import report').click();
-  await expect(item).toContainText('Projects › Due dates (calendar)');
+  await expect(item).toContainText('Tasks › New task (form)');
+  await expect(item).toContainText('Projects › Due dates (calendar): Records placed by "Due"');
   await expect(item).toContainText('Projects › Files (missing.doc)');
   const axe = await new AxeBuilder({ page })
     .include('[role="dialog"]')

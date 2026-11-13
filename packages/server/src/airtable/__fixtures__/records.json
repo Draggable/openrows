@@ -18,6 +18,8 @@
         "fldShipped0000000": true,
         "fldDue00000000000": "2024-03-01",
         "fldKickoff0000000": "2024-01-10T08:30:00.000Z",
+        "fldDaysLeft000000": 30,
+        "fldCreatedOn00000": "2024-01-05",
         "fldStatus00000000": "Doing",
         "fldTags0000000000": ["Web", "API"],
         "fldOwner000000000": {

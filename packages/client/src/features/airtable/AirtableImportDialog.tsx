@@ -105,7 +105,7 @@ export function AirtableImportDialog({
           <DialogTitle>Import from Airtable</DialogTitle>
           <DialogDescription>
             Each Airtable base becomes a new base here: tables, fields, records with their linked
-            records and attachments, and the grid and kanban views.
+            records and attachments, and its views.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto">
@@ -338,6 +338,15 @@ function ImportItem({
               message: v.message,
             }))}
           />
+          <ReportLines
+            title="View settings not imported"
+            lines={r.partialViews.map((v) => ({
+              table: v.table,
+              field: v.view,
+              type: v.type,
+              message: v.message,
+            }))}
+          />
           {r.skippedLinks > 0 && (
             <p className="mt-2">
               {plural(r.skippedLinks, 'link')} to records that weren't imported (or past 1,000 in a
@@ -349,9 +358,6 @@ function ImportItem({
               Tables cut short at 100,000 records: {r.truncatedTables.join(', ')}
             </p>
           )}
-          <p className="mt-2 text-text-2">
-            Airtable's API doesn't share views' filters, sorts or groups: set them again here.
-          </p>
         </details>
       )}
     </li>

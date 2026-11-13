@@ -2,6 +2,7 @@ import type { AirtableImport } from '@openrows/shared';
 import { describe, expect, it } from 'vitest';
 import {
   eta,
+  hasReportLines,
   importCounts,
   importProgress,
   looksLikeToken,
@@ -20,6 +21,7 @@ const report = {
   skippedLinks: 0,
   views: 0,
   unsupportedViews: [],
+  partialViews: [],
 };
 
 const job = (over: Partial<AirtableImport>): AirtableImport => ({
@@ -110,6 +112,15 @@ describe('airtable import model', () => {
       '1 file not copied',
       '1 link skipped',
     ]);
+  });
+
+  it('shows the report for views created without some of their settings', () => {
+    expect(hasReportLines(report)).toBe(false);
+    const view = { table: 'T', view: 'By status', type: 'kanban', message: 'Stacked by "Status".' };
+    const partial = { ...report, views: 1, partialViews: [view] };
+    expect(hasReportLines(partial)).toBe(true);
+    // Notes on views that were created don't add to the summary line.
+    expect(reportSummary(partial)).toEqual(['1 view imported']);
   });
 
   it('recognizes personal access tokens', () => {

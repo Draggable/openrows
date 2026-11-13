@@ -77,6 +77,7 @@ export function hasReportLines(r: AirtableReport): boolean {
     r.truncatedTables.length > 0 ||
     r.failedAttachments.length > 0 ||
     r.unsupportedViews.length > 0 ||
+    r.partialViews.length > 0 ||
     r.skippedLinks > 0
   );
 }

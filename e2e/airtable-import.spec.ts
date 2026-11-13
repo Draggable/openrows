@@ -35,7 +35,15 @@ const report = {
   skippedLinks: 0,
   views: 2,
   unsupportedViews: [
-    { table: 'Projects', view: 'Due dates', type: 'calendar', message: 'Not imported.' },
+    { table: 'Projects', view: 'New project', type: 'form', message: 'Not imported.' },
+  ],
+  partialViews: [
+    {
+      table: 'Projects',
+      view: 'Due dates',
+      type: 'calendar',
+      message: 'Records placed by "Due".',
+    },
   ],
 };
 
@@ -159,7 +167,9 @@ test('imports an Airtable base and shows the report', async ({ page }) => {
   await item.getByText('Import report').click();
   await expect(item).toContainText('Projects › Code (formula): Unknown function AUTONUMBER');
   await expect(item).toContainText('Projects › Files (logo.png): Airtable answered 404.');
-  await expect(item).toContainText('Projects › Due dates (calendar): Not imported.');
+  await expect(item).toContainText('Projects › New project (form): Not imported.');
+  await expect(item).toContainText('View settings not imported');
+  await expect(item).toContainText('Projects › Due dates (calendar): Records placed by "Due".');
   // The toast says it's done (the watcher), with a way to the base.
   await expect(page.getByText('Airtable import done: Product launch')).toBeVisible({
     timeout: 15_000,
