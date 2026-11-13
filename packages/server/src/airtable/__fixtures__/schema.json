@@ -289,6 +289,46 @@
           }
         },
         {
+          "id": "fldDaysLeft000000",
+          "name": "Days left",
+          "type": "formula",
+          "options": {
+            "isValid": true,
+            "formula": "{fldDue00000000000} - TODAY()",
+            "referencedFieldIds": ["fldDue00000000000"],
+            "result": {
+              "type": "number",
+              "options": {
+                "precision": 0
+              }
+            }
+          }
+        },
+        {
+          "id": "fldSource00000000",
+          "name": "Source",
+          "type": "formula",
+          "options": {
+            "isValid": true,
+            "formula": "{fldSync0000000000} & \"\"",
+            "referencedFieldIds": ["fldSync0000000000"],
+            "result": { "type": "singleLineText" }
+          }
+        },
+        {
+          "id": "fldCreatedOn00000",
+          "name": "Created on",
+          "type": "formula",
+          "options": {
+            "isValid": true,
+            "formula": "DATETIME_FORMAT(CREATED_TIME(), \"YYYY-MM-DD\")",
+            "referencedFieldIds": [],
+            "result": {
+              "type": "singleLineText"
+            }
+          }
+        },
+        {
           "id": "fldCreated0000000",
           "name": "Created",
           "type": "createdTime",
@@ -391,6 +431,21 @@
           "id": "viwProjCal0000001",
           "name": "Due dates",
           "type": "calendar"
+        },
+        {
+          "id": "viwProjGallery001",
+          "name": "Moodboard",
+          "type": "gallery"
+        },
+        {
+          "id": "viwProjTimeline01",
+          "name": "Roadmap",
+          "type": "timeline"
+        },
+        {
+          "id": "viwProjGantt00001",
+          "name": "Gantt",
+          "type": "block"
         }
       ]
     },
@@ -432,6 +487,19 @@
             "prefersSingleRecordLink": true,
             "inverseLinkFieldId": "fldTasks000000000"
           }
+        },
+        {
+          "id": "fldTLabel00000000",
+          "name": "Label",
+          "type": "formula",
+          "options": {
+            "isValid": true,
+            "formula": "UPPER({fldTName000000000})",
+            "referencedFieldIds": ["fldTName000000000"],
+            "result": {
+              "type": "singleLineText"
+            }
+          }
         }
       ],
       "views": [
@@ -450,6 +518,11 @@
           "id": "viwTaskForm000001",
           "name": "New task",
           "type": "form"
+        },
+        {
+          "id": "viwTaskCal0000001",
+          "name": "Task calendar",
+          "type": "calendar"
         }
       ]
     }

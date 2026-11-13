@@ -49,7 +49,7 @@ Choose **Import a file** and pick a CSV file (comma, semicolon, tab or pipe sepa
 
 ### Import from Airtable
 
-Choose **Import from Airtable**, paste an Airtable personal access token with the `data.records:read` and `schema.bases:read` scopes, choose **Find bases**, tick the bases you want and start the import. Each Airtable base becomes a new base with its tables, fields, records, linked records, attachments, and grid and kanban views. The token is used only for that import and deleted when it ends. See [Moving from Airtable](airtable-migration.md).
+Choose **Import from Airtable**, paste an Airtable personal access token with the `data.records:read` and `schema.bases:read` scopes, choose **Find bases**, tick the bases you want and start the import. Each Airtable base becomes a new base with its tables, fields, records, linked records, attachments, and views (grid, kanban, calendar, gallery, timeline and list, without the filters, sorts and other settings Airtable's API doesn't share). The token is used only for that import and deleted when it ends. See [Moving from Airtable](airtable-migration.md).
 
 ### The demo base
 

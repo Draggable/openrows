@@ -16,9 +16,11 @@ import type { AirtableField, AirtableTable } from './client.js';
 /**
  * Airtable's field types → ours. Pure: the job turns each Airtable table into a plan, then
  * creates what it says. A field we have is created with Airtable's options where they map
- * (precision, symbol, formats, choices and their colours, …). A field whose values Airtable
- * computes but ours would recompute differently (created time, autonumber, …) becomes a plain
- * field holding Airtable's values. Formulas are translated later, once every field they read
+ * (precision, symbol, formats, choices and their colours, …). Created time and created by
+ * become our live fields: the job gives each imported record Airtable's creation time and
+ * creator. A field whose values Airtable computes but ours would compute differently (last
+ * modified time and by, autonumber, …) becomes a plain field holding Airtable's values.
+ * Formulas are translated later, once every field they read
  * exists (`plan.formula`). Links are created once every table exists (`plan.link`), and
  * lookups, rollups and counts (`plan.computed`) like formulas, once what they read exists; one
  * that can't be made keeps Airtable's values in a plain field (`type`). Attachments are copied
@@ -182,8 +184,17 @@ interface Mapped {
   converted?: string;
 }
 
-/** One Airtable field's type and options; null when it isn't imported. */
-export function mapFieldType(field: AirtableField): Mapped | null {
+/** Why last modified fields keep Airtable's values. */
+const LAST_MODIFIED_REASON =
+  "Airtable's can follow only some fields, which its API doesn't always say, and ours follows every change to a record";
+
+/**
+ * One Airtable field's type and options; null when it isn't imported. `live: false` maps
+ * created time and created by to plain fields too (a primary field, or a computed field's
+ * result type), where `live` makes them our Created time and Created by fields.
+ */
+export function mapFieldType(field: AirtableField, opts: { live?: boolean } = {}): Mapped | null {
+  const live = opts.live ?? true;
   const o = rec(field.options);
   switch (field.type) {
     case 'singleLineText':
@@ -245,36 +256,68 @@ export function mapFieldType(field: AirtableField): Mapped | null {
       return { type: 'barcode' };
     case 'multipleAttachments':
       return { type: 'attachment' };
-    // Computed by Airtable; ours would compute other values (the import's time, our numbers),
-    // so they keep Airtable's.
-    case 'createdTime':
-    case 'lastModifiedTime': {
+    // Live here: the job gives imported records Airtable's creation time and creator.
+    case 'createdTime': {
       const result = rec(o['result']);
-      const opts = dateTimeOptions(rec(result['options']));
-      return rec(result)['type'] === 'date'
+      const options = dateTimeOptions(rec(result['options']));
+      const dateOnly = result['type'] === 'date';
+      if (live) {
+        return {
+          type: 'createdTime',
+          options,
+          ...(dateOnly
+            ? { converted: 'Shown with the time of day: a Created time field here always has it.' }
+            : {}),
+        };
+      }
+      return dateOnly
         ? {
             type: 'date',
-            options: { dateFormat: opts.dateFormat },
+            options: { dateFormat: options.dateFormat },
             converted: 'Kept as a date with the values from Airtable.',
           }
         : {
             type: 'dateTime',
-            options: opts,
+            options,
             converted: 'Kept as a date and time with the values from Airtable.',
           };
     }
     case 'createdBy':
+      return live
+        ? { type: 'createdBy' }
+        : {
+            type: 'user',
+            options: { multiple: false },
+            converted: 'Kept as a user field with the people from Airtable.',
+          };
+    // Computed by Airtable; ours would compute other values, so they keep Airtable's.
+    case 'lastModifiedTime': {
+      const result = rec(o['result']);
+      const options = dateTimeOptions(rec(result['options']));
+      return result['type'] === 'date'
+        ? {
+            type: 'date',
+            options: { dateFormat: options.dateFormat },
+            converted: `Kept as a date with the values from Airtable: ${LAST_MODIFIED_REASON}.`,
+          }
+        : {
+            type: 'dateTime',
+            options,
+            converted: `Kept as a date and time with the values from Airtable: ${LAST_MODIFIED_REASON}.`,
+          };
+    }
     case 'lastModifiedBy':
       return {
         type: 'user',
         options: { multiple: false },
-        converted: 'Kept as a user field with the people from Airtable.',
+        converted: `Kept as a user field with the people from Airtable: ${LAST_MODIFIED_REASON}.`,
       };
     case 'autoNumber':
       return {
         type: 'number',
         options: { precision: 0 },
-        converted: 'Kept as a number with the values from Airtable.',
+        converted:
+          "Kept as a number with the values from Airtable: an Autonumber field here numbers records itself and can't take Airtable's numbers.",
       };
     case 'button':
       return {
@@ -308,6 +351,48 @@ export function storedFormula(formula: string, ids: ReadonlyMap<string, string>)
     return `{${ours ?? id}}`;
   });
   return missing ? null : out;
+}
+
+/** The Airtable field ids a formula reads that aren't ours, in the order it reads them. */
+export function missingFields(formula: string, ids: ReadonlyMap<string, string>): string[] {
+  const out: string[] = [];
+  for (const m of formula.matchAll(/\{(fld[A-Za-z0-9]{14})\}/g)) {
+    const id = m[1] ?? '';
+    if (!ids.has(id) && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+/** Longest part of a formula a report line quotes. */
+const MAX_EXCERPT = 120;
+
+/**
+ * A refused formula's problem for the report: what's wrong, and where (the part of the formula,
+ * with field names). `stored` is the formula as it was given (fields as `{<our field id>}`),
+ * which the problem's `range` points into.
+ */
+export function formulaProblem(
+  stored: string,
+  problem: { message?: string; code?: string; range?: { start: number; end: number } },
+  nameOf: (fieldId: string) => string | undefined
+): string {
+  const message = problem.message ?? 'The formula is invalid.';
+  if (problem.code === 'unknownFunction') {
+    const name = /([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(message)?.[1];
+    if (name) return `There is no ${name.toUpperCase()} function here.`;
+  }
+  const r = problem.range;
+  if (!r || r.start < 0 || r.end > stored.length || r.end <= r.start) return message;
+  const part = stored
+    .slice(r.start, r.end)
+    .replace(/\{([^{}]+)\}/g, (whole, id: string) => {
+      const name = nameOf(id);
+      return name === undefined ? whole : `{${name}}`;
+    })
+    .trim();
+  if (!part) return message;
+  const quoted = part.length > MAX_EXCERPT ? `${part.slice(0, MAX_EXCERPT - 1)}…` : part;
+  return `${message.replace(/\.$/, '')}, in ${quoted}`;
 }
 
 function uniqueName(raw: string, taken: Set<string>, fallback: string): string {
@@ -364,7 +449,7 @@ export function planTables(tables: readonly AirtableTable[]): TablePlan[] {
         });
         continue;
       }
-      const mapped = mapFieldType(f);
+      const mapped = mapFieldType(f, { live: !isPrimary });
       if (!mapped) {
         if (isPrimary) {
           // Every table has a primary field: an unsupported one becomes text.
@@ -397,7 +482,11 @@ export function planTables(tables: readonly AirtableTable[]): TablePlan[] {
         type: primaryOk ? mapped.type : 'singleLineText',
         options: primaryOk && parsed.success ? (parsed.data as Record<string, unknown>) : {},
         ...(description ? { description } : {}),
-        ...(mapped.converted ? { converted: mapped.converted } : {}),
+        ...(!primaryOk
+          ? { converted: 'The primary field was kept as text.' }
+          : mapped.converted
+            ? { converted: mapped.converted }
+            : {}),
       });
     }
     return {
@@ -415,7 +504,10 @@ function resultType(o: Record<string, unknown>): Mapped {
   const result = rec(o['result']);
   const type = str(result['type']);
   const mapped = type
-    ? mapFieldType({ id: 'fld00000000000000', name: '', type, options: rec(result['options']) })
+    ? mapFieldType(
+        { id: 'fld00000000000000', name: '', type, options: rec(result['options']) },
+        { live: false }
+      )
     : null;
   if (mapped && writable(mapped.type) && mapped.type !== 'attachment') {
     const def = getFieldType(mapped.type);
@@ -428,16 +520,47 @@ function resultType(o: Record<string, unknown>): Mapped {
   return { type: 'singleLineText', options: {} };
 }
 
-/** `SUM(values)`, `ARRAYJOIN(values, "; ")`, … → our rollup function and separator. */
+/** Airtable's rollup functions whose name differs here. */
+const ROLLUP_ALIASES: Record<string, RollupFunction> = { AVERAGE: 'AVG' };
+
+/** `NAME(values)` or `NAME(values, "separator")`, any case and spacing. */
+const ROLLUP_FORMULA =
+  /^\s*([A-Za-z_]+)\s*\(\s*values\s*(?:,\s*(["'])((?:\\.|(?!\2).){0,100})\2\s*)?\)\s*$/i;
+
+const unescapeSeparator = (text: string) =>
+  text.replace(/\\(.)/g, (_whole, c: string) =>
+    c === 'n' ? '\n' : c === 't' ? '\t' : c === 'r' ? '\r' : c
+  );
+
+/**
+ * `SUM(values)`, `AVERAGE(values)`, `ARRAYJOIN(values, "; ")`, … → our rollup function and
+ * separator; null for any other formula.
+ */
 export function rollupFunction(
   formula: unknown
 ): { function: RollupFunction; separator?: string } | null {
   if (typeof formula !== 'string') return null;
-  const m = /^\s*([A-Z]+)\(\s*values\s*(?:,\s*(["'])(.{0,100}?)\2\s*)?\)\s*$/.exec(formula);
-  const name = m?.[1] as RollupFunction | undefined;
-  if (!name || !(ROLLUP_FUNCTIONS as readonly string[]).includes(name)) return null;
-  if (m?.[3] !== undefined && name !== 'ARRAYJOIN') return null;
-  return m?.[3] !== undefined ? { function: name, separator: m[3] } : { function: name };
+  const m = ROLLUP_FORMULA.exec(formula);
+  if (!m) return null;
+  const upper = (m[1] ?? '').toUpperCase();
+  const name = ROLLUP_ALIASES[upper] ?? upper;
+  if (!(ROLLUP_FUNCTIONS as readonly string[]).includes(name)) return null;
+  const fn = name as RollupFunction;
+  if (m[3] === undefined) return { function: fn };
+  return fn === 'ARRAYJOIN' ? { function: fn, separator: unescapeSeparator(m[3]) } : null;
+}
+
+/** Why a rollup keeps Airtable's values instead of being a live rollup. */
+export function rollupFallbackMessage(o: Record<string, unknown>): string {
+  const kept = "kept with Airtable's values";
+  if (!str(o['recordLinkFieldId']) || !str(o['fieldIdInLinkedTable'])) {
+    return `Airtable's API doesn't say which link and field this rollup reads: ${kept}.`;
+  }
+  const formula = str(o['formula'])?.trim();
+  if (!formula) return `Airtable's API doesn't say which function this rollup uses: ${kept}.`;
+  const name = ROLLUP_FORMULA.exec(formula)?.[1]?.toUpperCase();
+  if (name) return `Rollups here have no ${name} function: ${kept}.`;
+  return `Its formula, ${formula.slice(0, 200)}, is more than one rollup function: ${kept}.`;
 }
 
 /** Links, lookups, rollups and counts: what the job makes once their tables exist. */
@@ -484,7 +607,7 @@ function planRelational(
         return {
           type: fallback.type,
           options: fallback.options ?? {},
-          converted: "Airtable doesn't share this rollup's function: kept with Airtable's values.",
+          converted: rollupFallbackMessage(o),
         };
       }
       return {

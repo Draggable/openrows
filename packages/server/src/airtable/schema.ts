@@ -3,13 +3,14 @@ import type {
   AirtableReportField,
   FieldTypeName,
   LinkOptions,
-  UpdateViewInput,
+  ViewType,
 } from '@openrows/shared';
 import { MAX_AIRTABLE_REPORT_ITEMS } from '@openrows/shared';
 import type { bases, Transaction } from '../db/index.js';
 import {
   createField,
   type FieldRow,
+  fieldType,
   liveFields,
   MAX_FIELDS_PER_TABLE,
   parseOptions,
@@ -21,13 +22,22 @@ import { AppError } from '../lib/errors.js';
 import { createTable, loadTable } from '../tables/service.js';
 import { createView, liveViews, updateView } from '../views/service.js';
 import type { AirtableTable } from './client.js';
-import { type PlannedField, readableFormula, storedFormula, type TablePlan } from './mapping.js';
+import {
+  formulaProblem,
+  missingFields,
+  type PlannedField,
+  readableFormula,
+  storedFormula,
+  type TablePlan,
+  writable,
+} from './mapping.js';
+import { planView } from './views.js';
 
 /**
  * The schema step of an Airtable import, in one transaction: every table with its
  * primary and plain fields, then the links between them (an Airtable link and its inverse
  * become one of our link fields and its inverse), then formulas, lookups, rollups and counts in
- * rounds (one waits for the fields it reads, across tables), then the grid and kanban views.
+ * rounds (one waits for the fields it reads, across tables), then the views (views.ts).
  */
 
 export interface FieldState {
@@ -80,9 +90,11 @@ export async function attempt<T>(tx: Transaction, fn: (sp: Transaction) => Promi
 }
 
 /** The first problem of a refused formula or computed field, for the report. */
-function problemOf(err: AppError): string {
-  const errors = (err.extensions?.['errors'] ?? []) as { message?: string }[];
-  return errors[0]?.message ?? err.detail ?? err.message;
+function problemOf(err: AppError, stored?: string, nameOf?: (id: string) => string | undefined) {
+  const errors = (err.extensions?.['errors'] ?? []) as Parameters<typeof formulaProblem>[1][];
+  const first = errors[0];
+  if (!first?.message) return err.detail ?? err.message;
+  return stored !== undefined && nameOf ? formulaProblem(stored, first, nameOf) : first.message;
 }
 
 interface Built {
@@ -101,7 +113,11 @@ export async function buildSchema(
   report: AirtableReport
 ): Promise<{ tables: TableState[]; links: LinkPair[] }> {
   const ids = new Map<string, string>();
-  const names = new Map(plans.flatMap((p) => p.fields.map((f) => [f.airtableId, f.name])));
+  // Field names for the report: ours, and Airtable's for fields left out.
+  const names = new Map([
+    ...sources.flatMap((t) => t.fields.map((f) => [f.id, f.name] as const)),
+    ...plans.flatMap((p) => p.fields.map((f) => [f.airtableId, f.name] as const)),
+  ]);
   const built: Built[] = [];
   for (const plan of plans) built.push(await createTableFrom(ctx, base, plan, report, ids, names));
   const byAirtable = new Map(built.map((b) => [b.plan.airtableId, b]));
@@ -211,7 +227,8 @@ async function createTableFrom(
       airtableType: f.airtableType,
       fieldId: made.value.id,
       type: f.type,
-      copy: true,
+      // Created time and created by: the job gives the records Airtable's values.
+      copy: writable(f.type),
     });
     ids.set(f.airtableId, made.value.id);
   }
@@ -355,6 +372,27 @@ async function createComputed(
 ) {
   const { tx } = ctx;
   type Pending = { b: Built; f: PlannedField };
+  const planned = new Map(built.flatMap((b) => b.plan.fields.map((f) => [f.airtableId, f])));
+  /** Why a field a formula reads isn't there to read, for the report. */
+  const unreadable = (airtableId: string) => {
+    const f = planned.get(airtableId);
+    const name = f?.name ?? names.get(airtableId);
+    const what =
+      f?.formula !== undefined
+        ? 'a formula kept as text here'
+        : f?.computed
+          ? `a ${f.computed.type} kept with Airtable's values`
+          : f?.link
+            ? "a link that wasn't imported"
+            : "which wasn't imported";
+    return name ? `It reads "${name}", ${what}.` : "It reads a field that wasn't imported.";
+  };
+  const nameOf = (fieldId: string) => {
+    for (const [airtableId, ours] of ids) {
+      if (ours === fieldId) return planned.get(airtableId)?.name ?? names.get(airtableId);
+    }
+    return undefined;
+  };
   let pending: Pending[] = built.flatMap((b) =>
     b.plan.fields
       .filter((f) => !f.isPrimary && (f.formula !== undefined || f.computed))
@@ -396,6 +434,10 @@ async function createComputed(
       type: f.type,
       copy: true,
     });
+    // A rollup or count keeping Airtable's values holds them in its result's type, as
+    // Airtable's did: formulas may read it. A formula kept as text, or a lookup (a list there,
+    // text here), would read differently.
+    if (f.computed && f.computed.type !== 'lookup') ids.set(f.airtableId, made.value.id);
   };
 
   const create = async ({ b, f }: Pending) => {
@@ -415,8 +457,10 @@ async function createComputed(
       };
     } else {
       const stored = storedFormula(f.formula ?? '', ids);
-      if (stored === null)
-        return fallback({ b, f }, "It reads a field that wasn't imported as it is in Airtable.");
+      if (stored === null) {
+        const missing = missingFields(f.formula ?? '', ids)[0] ?? '';
+        return fallback({ b, f }, unreadable(missing));
+      }
       input = { type: 'formula', options: { formula: stored } };
     }
     if (b.count >= MAX_FIELDS_PER_TABLE) {
@@ -430,7 +474,10 @@ async function createComputed(
         ...(f.description ? { description: f.description } : {}),
       })
     );
-    if (!made.ok) return fallback({ b, f }, problemOf(made.err));
+    if (!made.ok) {
+      const stored = input.type === 'formula' ? String(input.options['formula']) : undefined;
+      return fallback({ b, f }, problemOf(made.err, stored, nameOf));
+    }
     b.count++;
     b.state.fields.push({
       airtableId: f.airtableId,
@@ -455,8 +502,9 @@ async function createComputed(
         await fallback(p, 'It reads a formula that reads it back.');
         continue;
       }
-      if (p.f.computed && !depsOf(p.f).every((d) => ids.has(d))) {
-        await fallback(p, "It reads a field that wasn't imported as it is in Airtable.");
+      const missing = p.f.computed ? depsOf(p.f).find((d) => !ids.has(d)) : undefined;
+      if (missing !== undefined) {
+        await fallback(p, unreadable(missing));
         continue;
       }
       await create(p);
@@ -465,10 +513,9 @@ async function createComputed(
 }
 
 /**
- * Airtable's grid views (visible fields in their order) and kanban views (stacked by the
- * table's first single select, or one-person user field). The first grid view takes over the
- * table's default "Grid view". Airtable's API doesn't share filters, sorts or groups; other
- * view types are listed in the report.
+ * The table's views as views.ts plans them. The first grid view takes over the table's default
+ * "Grid view". Each view created gets a report note (what was chosen here, what Airtable's API
+ * doesn't share); one that can't be is listed with the reason.
  */
 async function createViews(
   ctx: SchemaContext,
@@ -479,79 +526,39 @@ async function createViews(
 ) {
   const { tx } = ctx;
   const rights = { canLock: true };
-  const ours = await liveFields(tx, b.table.id);
-  const primaryId = ours.find((f) => f.isPrimary)?.id;
+  const ours = (await liveFields(tx, b.table.id)).map((f) => ({
+    id: f.id,
+    name: f.name,
+    type: f.type,
+    isPrimary: f.isPrimary,
+    options: parseOptions(fieldType(f), f.config),
+  }));
   let spare = (await liveViews(tx, b.table.id, ctx.userId)).find((v) => v.type === 'grid');
   for (const v of source.views) {
     const name = v.name.trim().slice(0, 255) || 'View';
-    if (v.type !== 'grid' && v.type !== 'kanban') {
-      capped(report.unsupportedViews, {
-        table: b.plan.name,
-        view: name,
-        type: v.type,
-        message: `${v.type[0]?.toUpperCase() ?? ''}${v.type.slice(1)} views aren't imported: create it again here.`,
-      });
+    const line = { table: b.plan.name, view: name, type: v.type };
+    const plan = planView(v, ours, ids);
+    if (!plan.ok) {
+      capped(report.unsupportedViews, { ...line, message: plan.message });
       continue;
     }
-    let config: UpdateViewInput;
-    if (v.type === 'grid') {
-      const visible = (v.visibleFieldIds ?? [])
-        .map((id) => ids.get(id))
-        .filter((id): id is string => id !== undefined);
-      config = visible.length
-        ? {
-            grid: {
-              fieldOrder: [...new Set(visible)],
-              hiddenFields: ours
-                .filter((f) => f.id !== primaryId && !visible.includes(f.id))
-                .map((f) => f.id),
-            },
-          }
-        : {};
-    } else {
-      const stack =
-        ours.find((f) => f.type === 'singleSelect') ??
-        ours.find(
-          (f) =>
-            f.type === 'user' &&
-            !(parseOptions('user', f.config) as { multiple?: boolean }).multiple
-        );
-      if (!stack) {
-        capped(report.unsupportedViews, {
-          table: b.plan.name,
-          view: name,
-          type: v.type,
-          message: 'There is no single select field to stack the cards by.',
-        });
-        continue;
-      }
-      config = { kanban: { stackFieldId: stack.id } };
-    }
-    const reuse = v.type === 'grid' ? spare : undefined;
+    const reuse = plan.type === 'grid' ? spare : undefined;
     if (reuse) spare = undefined;
     const made = await attempt(tx, async (sp) => {
       const sctx = { ...ctx, tx: sp };
-      const row = reuse ?? (await createViewRow(sctx, b.table, name, v.type as 'grid' | 'kanban'));
-      await updateView(sctx, row, { ...(reuse ? { name } : {}), ...config }, rights);
+      const row = reuse ?? (await createViewRow(sctx, b.table, name, plan.type));
+      await updateView(sctx, row, { ...(reuse ? { name } : {}), ...plan.config }, rights);
     });
-    if (made.ok) report.views++;
-    else {
-      capped(report.unsupportedViews, {
-        table: b.plan.name,
-        view: name,
-        type: v.type,
-        message: made.message,
-      });
+    if (made.ok) {
+      report.views++;
+      capped(report.partialViews, { ...line, message: plan.note });
+    } else {
+      capped(report.unsupportedViews, { ...line, message: made.message });
     }
   }
 }
 
-async function createViewRow(
-  ctx: SchemaContext,
-  table: TableRow,
-  name: string,
-  type: 'grid' | 'kanban'
-) {
+async function createViewRow(ctx: SchemaContext, table: TableRow, name: string, type: ViewType) {
   const view = await createView(ctx, table, { name, type });
   const row = (await liveViews(ctx.tx, table.id, ctx.userId)).find((v) => v.id === view.id);
   if (!row) throw new Error('airtable: the new view is gone');

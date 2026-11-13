@@ -282,10 +282,12 @@ packages/
                              downloads from AIRTABLE_ATTACHMENT_HOSTS only), mapping.ts (Airtable
                              field types and options → ours, formula references, links, lookups,
                              rollups, counts), schema.ts (the schema step: tables, links and
-                             inverses, computed fields in rounds, grid/kanban views), files.ts
-                             (attachments copied per page, sniffed, thumbnails), import.ts (the
-                             request's new bases + encrypted-token jobs, the worker's
-                             `airtable.import`: schema, records by page with the record map
+                             inverses, computed fields in rounds, then the views), views.ts
+                             (Airtable's views → ours: the fields chosen and the report notes),
+                             files.ts (attachments copied per page, sniffed, thumbnails),
+                             import.ts (the request's new bases + encrypted-token jobs, the
+                             worker's `airtable.import`: schema, records by page with Airtable's
+                             creation times and creators, the record map
                              `airtable_import_records`, the links pass; cancel), routes.ts;
                              __fixtures__/ (the recorded-fixture fake of Airtable and a generated
                              20k-record base, for tests)

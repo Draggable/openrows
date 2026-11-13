@@ -6,8 +6,9 @@ import { z } from 'zod';
  * filled by a background job: tables, fields (a type mapping, formulas translated where our
  * parser takes them), then the records. The token is only kept, encrypted, for the job; it is
  * never returned. adds linked records (a second pass once every table's records are in),
- * lookups, rollups and counts on them, attachments copied from Airtable's file hosts, the grid
- * and kanban views, cancelling and the progress the dialog shows.
+ * lookups, rollups and counts on them, attachments copied from Airtable's file hosts, the views
+ * Airtable's API describes well enough to build (grid, kanban, calendar, gallery, timeline,
+ * list), cancelling and the progress the dialog shows.
  */
 
 /** Most bases one request imports. */
@@ -66,6 +67,16 @@ export const AirtableReportFieldSchema = z.object({
 });
 export type AirtableReportField = z.infer<typeof AirtableReportFieldSchema>;
 
+/** A view the import left out, or created without some of its settings. */
+export const AirtableReportViewSchema = z.object({
+  table: z.string(),
+  view: z.string(),
+  /** Airtable's view type. */
+  type: z.string(),
+  message: z.string(),
+});
+export type AirtableReportView = z.infer<typeof AirtableReportViewSchema>;
+
 export const AirtableReportSchema = z.object({
   tables: z.array(
     z.object({
@@ -98,12 +109,15 @@ export const AirtableReportSchema = z.object({
     .default([]),
   /** Links to records that weren't imported, or past a cell's 1,000 links. */
   skippedLinks: z.int().min(0).default(0),
-  /** Views created (grid and kanban). */
+  /** Views created. */
   views: z.int().min(0).default(0),
-  /** Views that weren't (calendar, form, …), and what was left out of those that were. */
-  unsupportedViews: z
-    .array(z.object({ table: z.string(), view: z.string(), type: z.string(), message: z.string() }))
-    .default([]),
+  /** Views that weren't (a form, a calendar without a date field, …), and why. */
+  unsupportedViews: z.array(AirtableReportViewSchema).default([]),
+  /**
+   * Views that were created without some of their settings: what Airtable's API doesn't
+   * share (filters, sorts, groups, …) and the fields chosen here in their place.
+   */
+  partialViews: z.array(AirtableReportViewSchema).default([]),
 });
 export type AirtableReport = z.infer<typeof AirtableReportSchema>;
 
