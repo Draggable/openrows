@@ -5,7 +5,7 @@ import { expect, test } from './helpers/test.js';
 
 // "Import from Airtable" on Home against the mocked API: paste a token, pick a
 // base, start the import, watch its progress bar, see it finish (a toast too) and read its
-// report (comments too); cancel a running one. The token goes only in request bodies, and is
+// report (comments and collaborators too); cancel a running one. The token goes only in request bodies, and is
 // cleared from the dialog once the import starts.
 
 const TOKEN = `patE2eFixture0001.${'ab12'.repeat(16)}`;
@@ -61,6 +61,24 @@ const report = {
     cappedRecords: 0,
     unreadRecords: 0,
   },
+  collaborators: {
+    unavailable: null,
+    raised: [
+      {
+        email: 'ada@example.test',
+        name: 'Ada Lovelace',
+        level: 'create',
+        role: 'creator',
+        previous: 'editor',
+      },
+    ],
+    unchanged: 1,
+    notMembers: [{ email: 'grace@example.test', level: 'owner' }],
+    notApplied: [],
+    groups: [{ name: 'Design team', level: 'edit', scope: 'base' }],
+    invitations: [],
+    interfaceOnly: [],
+  },
 };
 
 type Status = 'running' | 'done' | 'cancelled';
@@ -96,6 +114,7 @@ function job(status: Status) {
             unmatchedAuthors: [],
             attachments: [],
           },
+          collaborators: null,
         }
       : report,
     error:
@@ -209,6 +228,15 @@ test('imports an Airtable base and shows the report', async ({ page }) => {
   await expect(item).toContainText(
     "Files attached to comments aren't copied: notes.pdf (Projects)."
   );
+  // Collaborators: a member given a base role, a non-member and a group only listed.
+  await expect(item).toContainText('1 person given a base role');
+  await expect(item).toContainText('No invitations or emails were sent.');
+  await expect(item).toContainText(
+    'Ada Lovelace (ada@example.test): editor → creator (Airtable: create)'
+  );
+  await expect(item).toContainText('grace@example.test (Airtable: owner)');
+  await expect(item).toContainText('Design team, a base group (Airtable: edit)');
+  await expect(item).toContainText("Airtable's API doesn't share table or field edit permissions");
   // The toast says it's done (the watcher), with a way to the base.
   await expect(page.getByText('Airtable import done: Product launch')).toBeVisible({
     timeout: 15_000,

@@ -1,0 +1,68 @@
+{
+  "id": "appFixtureBase001",
+  "name": "Product launch",
+  "permissionLevel": "create",
+  "workspaceId": "wspFixture0000001",
+  "createdTime": "2023-11-02T08:00:00.000Z",
+  "individualCollaborators": {
+    "baseCollaborators": [
+      {
+        "createdTime": "2023-11-02T08:00:00.000Z",
+        "email": "Ada@Airtable-Fixture.test",
+        "grantedByUserId": "usrGrace00000001",
+        "permissionLevel": "create",
+        "userId": "usrAda0000000001"
+      },
+      {
+        "createdTime": "2023-11-03T08:00:00.000Z",
+        "email": "linus@airtable-fixture.test",
+        "grantedByUserId": "usrGrace00000001",
+        "permissionLevel": "comment",
+        "userId": "usrLinus00000001"
+      },
+      {
+        "createdTime": "2023-11-04T08:00:00.000Z",
+        "email": "katherine@airtable-fixture.test",
+        "grantedByUserId": "usrGrace00000001",
+        "permissionLevel": "none",
+        "userId": "usrKatherine0001"
+      }
+    ],
+    "workspaceCollaborators": [
+      {
+        "createdTime": "2023-10-01T08:00:00.000Z",
+        "email": "grace@airtable-fixture.test",
+        "grantedByUserId": "usrGrace00000001",
+        "permissionLevel": "owner",
+        "userId": "usrGrace00000001"
+      },
+      {
+        "createdTime": "2023-10-02T08:00:00.000Z",
+        "email": "ada@airtable-fixture.test",
+        "grantedByUserId": "usrGrace00000001",
+        "permissionLevel": "edit",
+        "userId": "usrAda0000000001"
+      }
+    ]
+  },
+  "groupCollaborators": {
+    "baseCollaborators": [
+      {
+        "createdTime": "2023-11-05T08:00:00.000Z",
+        "grantedByUserId": "usrGrace00000001",
+        "groupId": "ugpDesign0000001",
+        "name": "Design team",
+        "permissionLevel": "edit"
+      }
+    ],
+    "workspaceCollaborators": [
+      {
+        "createdTime": "2023-10-03T08:00:00.000Z",
+        "grantedByUserId": "usrGrace00000001",
+        "groupId": "ugpEveryone00001",
+        "name": "Everyone",
+        "permissionLevel": "read"
+      }
+    ]
+  }
+}

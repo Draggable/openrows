@@ -28,6 +28,7 @@ describe('Airtable client', () => {
     const client = createAirtableClient(FIXTURE_TOKEN, { http: fakeAirtable().http });
     await expect(client.tables('../../evil.example')).rejects.toThrow('bad base id');
     await expect(client.records(FIXTURE_BASE_ID, 'tbl/../x')).rejects.toThrow();
+    await expect(client.collaborators('app/../../v0/meta/bases')).rejects.toThrow('bad base id');
   });
 
   it('turns refusals into messages without the token', async () => {

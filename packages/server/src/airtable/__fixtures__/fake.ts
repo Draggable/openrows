@@ -6,7 +6,8 @@ import type { SafeFetch, SafeFetchInit, SafeResponse } from '../../lib/safe-fetc
  * responses in this directory, in Airtable's shapes (`bases.json`: GET /v0/meta/bases;
  * `schema.json`: GET /v0/meta/bases/appFixtureBase001/tables; `records.json`: each table's
  * records, paged by 100 with `offset` like Airtable; `comments.json`: record comments by record id,
- * newest first, paged like GET /v0/{base}/{table}/{record}/comments). It stands in for the SSRF-safe client, so
+ * newest first, paged like GET /v0/{base}/{table}/{record}/comments; `collaborators.json`: GET
+ * /v0/meta/bases/appFixtureBase001?include[]=collaborators, refused with any other `include`). It stands in for the SSRF-safe client, so
  * the importer's real client code runs against it. Besides api.airtable.com it answers Airtable's
  * file hosts (#114: `FIXTURE_FILES`, a 404 for any other path) and refuses every other host.
  *
@@ -162,6 +163,12 @@ export interface FakeAirtableOptions {
   commentsScope?: boolean;
   /** Another status for some records' comments (a 404, a 503, …). */
   commentsStatus?: (recordId: string) => number | undefined;
+  /** The base's collaborators answer, in place of `collaborators.json`. */
+  collaborators?: unknown;
+  /** Another status for the collaborators request (a 403, a 503, …). */
+  collaboratorsStatus?: number;
+  /** Called before the collaborators answer (tests: a cancel meanwhile). */
+  onCollaborators?: () => Promise<void> | void;
 }
 
 export interface FakeRequest {
@@ -209,6 +216,7 @@ export function fakeAirtable(opts: FakeAirtableOptions = {}): FakeAirtable {
   const schema = read('schema.json');
   const records = read('records.json') as Record<string, unknown[]>;
   const comments = opts.comments ?? (read('comments.json') as Record<string, unknown[]>);
+  const collaborators = opts.collaborators ?? read('collaborators.json');
   const requests: FakeRequest[] = [];
   let limited = 0;
   let failing: number | null | undefined;
@@ -247,6 +255,25 @@ export function fakeAirtable(opts: FakeAirtableOptions = {}): FakeAirtable {
     if (path === `/v0/meta/bases/${FIXTURE_BASE_ID}/tables`) return response(200, schema, url.href);
     if (large && path === `/v0/meta/bases/${LARGE_BASE_ID}/tables`) {
       return response(200, large.schema, url.href);
+    }
+    if (
+      path === `/v0/meta/bases/${FIXTURE_BASE_ID}` ||
+      (large && path === `/v0/meta/bases/${LARGE_BASE_ID}`)
+    ) {
+      // The importer asks for collaborators only: never invite links, interfaces or packages.
+      const include = url.searchParams.getAll('include[]');
+      if (
+        include.length !== 1 ||
+        include[0] !== 'collaborators' ||
+        url.searchParams.has('include')
+      ) {
+        return response(422, { error: { type: 'INVALID_REQUEST_UNKNOWN' } }, url.href);
+      }
+      await opts.onCollaborators?.();
+      if (opts.collaboratorsStatus) {
+        return response(opts.collaboratorsStatus, { error: 'FAKE' }, url.href);
+      }
+      return response(200, collaborators, url.href);
     }
     const c =
       /^\/v0\/(app[A-Za-z0-9]{14})\/(tbl[A-Za-z0-9]{14})\/(rec[A-Za-z0-9]{14})\/comments$/.exec(

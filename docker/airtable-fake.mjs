@@ -18,6 +18,8 @@ const bases = read('bases.json');
 const schema = read('schema.json');
 // Record comments by record id, newest first (GET /v0/{base}/{table}/{record}/comments).
 const comments = read('comments.json');
+// The base's collaborators (GET /v0/meta/bases/{base}?include[]=collaborators).
+const collaborators = read('collaborators.json');
 // Airtable's file URLs → this server's.
 const records = JSON.parse(
   JSON.stringify(read('records.json')).replace(
@@ -56,6 +58,13 @@ createServer((req, res) => {
   }
   if (path === '/v0/meta/bases') return json(res, 200, bases);
   if (path === `/v0/meta/bases/${BASE_ID}/tables`) return json(res, 200, schema);
+  if (path === `/v0/meta/bases/${BASE_ID}`) {
+    const include = url.searchParams.getAll('include[]');
+    if (include.length !== 1 || include[0] !== 'collaborators') {
+      return json(res, 422, { error: { type: 'INVALID_REQUEST_UNKNOWN' } });
+    }
+    return json(res, 200, collaborators);
+  }
   const c =
     /^\/v0\/(app[A-Za-z0-9]{14})\/(tbl[A-Za-z0-9]{14})\/(rec[A-Za-z0-9]{14})\/comments$/.exec(path);
   if (c && c[1] === BASE_ID && records[c[2]]?.some((r) => r.id === c[3])) {

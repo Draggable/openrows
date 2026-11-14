@@ -1,4 +1,5 @@
 import type { AirtableImport, AirtableReport } from '@openrows/shared';
+import { ROLE_LABELS } from '../../app/names';
 
 /** How far an import is, in words. */
 export function importProgress(i: AirtableImport): string {
@@ -73,7 +74,62 @@ export function reportSummary(r: AirtableReport): string[] {
   if (r.comments.unavailable) {
     out.push(r.comments.imported ? 'some comments not imported' : 'comments not imported');
   }
+  const c = r.collaborators;
+  if (c?.raised.length)
+    out.push(`${plural(c.raised.length, 'person', 'people')} given a base role`);
+  if (c?.unavailable) out.push('collaborators not read');
   return out;
+}
+
+/** Table and field edit permissions: Airtable's API doesn't share them. */
+export const EDIT_PERMISSIONS_NOTE =
+  "Airtable's API doesn't share table or field edit permissions, so none were imported: set them again if you need them.";
+
+/**
+ * The report's collaborators: what was given, and what was only listed. Nothing here was
+ * invited or emailed.
+ */
+export function collaboratorSections(r: AirtableReport): { title: string; lines: string[] }[] {
+  const c = r.collaborators;
+  if (!c) return [];
+  const role = (x: keyof typeof ROLE_LABELS) => ROLE_LABELS[x].toLowerCase();
+  const from = (level: string) => `Airtable: ${level}`;
+  const intro = [
+    c.unavailable ??
+      `No invitations or emails were sent.${c.unchanged ? ` ${plural(c.unchanged, 'workspace member')} already had this access or more.` : ''}`,
+    EDIT_PERMISSIONS_NOTE,
+  ];
+  const sections = [
+    { title: 'Collaborators', lines: intro },
+    {
+      title: 'Given a base role',
+      lines: c.raised.map(
+        (p) =>
+          `${p.name ? `${p.name} (${p.email})` : p.email}: ${role(p.previous)} → ${role(p.role)} (${from(p.level)})`
+      ),
+    },
+    {
+      title: 'Not workspace members (not invited)',
+      lines: c.notMembers.map((p) => `${p.email} (${from(p.level)})`),
+    },
+    {
+      title: 'Roles not given',
+      lines: c.notApplied.map((p) => `${p.email || 'Unknown'} (${from(p.level)}): ${p.message}`),
+    },
+    {
+      title: 'Groups (OpenRows has none)',
+      lines: c.groups.map((g) => `${g.name}, a ${g.scope} group (${from(g.level)})`),
+    },
+    {
+      title: 'Open Airtable invitations (not sent here)',
+      lines: c.invitations.map((p) => `${p.email} (${from(p.level)})`),
+    },
+    {
+      title: "Interface-only (interfaces aren't imported)",
+      lines: c.interfaceOnly.map((p) => `${p.email}, ${p.interface} (${from(p.level)})`),
+    },
+  ];
+  return sections.filter((s) => s.lines.length);
 }
 
 /**
@@ -146,7 +202,8 @@ export function hasReportLines(r: AirtableReport): boolean {
     r.unsupportedViews.length > 0 ||
     r.partialViews.length > 0 ||
     r.skippedLinks > 0 ||
-    commentNotes(r).length > 0
+    commentNotes(r).length > 0 ||
+    Boolean(r.collaborators)
   );
 }
 

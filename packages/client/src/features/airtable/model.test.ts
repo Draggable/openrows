@@ -1,7 +1,13 @@
-import { type AirtableImport, emptyAirtableCommentsReport } from '@openrows/shared';
+import {
+  type AirtableImport,
+  emptyAirtableCollaboratorsReport,
+  emptyAirtableCommentsReport,
+} from '@openrows/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  collaboratorSections,
   commentNotes,
+  EDIT_PERMISSIONS_NOTE,
   eta,
   hasReportLines,
   importCounts,
@@ -24,6 +30,7 @@ const report = {
   unsupportedViews: [],
   partialViews: [],
   comments: emptyAirtableCommentsReport(),
+  collaborators: null,
 };
 
 const job = (over: Partial<AirtableImport>): AirtableImport => ({
@@ -51,6 +58,71 @@ const job = (over: Partial<AirtableImport>): AirtableImport => ({
 });
 
 describe('airtable import model', () => {
+  it("lists the collaborators' roles given and the people only listed", () => {
+    expect(collaboratorSections(report)).toEqual([]);
+    const r = {
+      ...report,
+      collaborators: {
+        ...emptyAirtableCollaboratorsReport(),
+        raised: [
+          {
+            email: 'ada@example.test',
+            name: 'Ada',
+            level: 'create',
+            role: 'creator' as const,
+            previous: 'editor' as const,
+          },
+        ],
+        unchanged: 2,
+        notMembers: [{ email: 'grace@example.test', level: 'owner' }],
+        notApplied: [{ email: 'k@example.test', level: 'none', message: 'No access.' }],
+        groups: [{ name: 'Design team', level: 'edit', scope: 'base' as const }],
+        invitations: [{ email: 'new@example.test', level: 'read' }],
+        interfaceOnly: [{ email: 'v@example.test', level: 'read', interface: 'Dashboard' }],
+      },
+    };
+    expect(collaboratorSections(r)).toEqual([
+      {
+        title: 'Collaborators',
+        lines: [
+          'No invitations or emails were sent. 2 workspace members already had this access or more.',
+          EDIT_PERMISSIONS_NOTE,
+        ],
+      },
+      {
+        title: 'Given a base role',
+        lines: ['Ada (ada@example.test): editor → creator (Airtable: create)'],
+      },
+      {
+        title: 'Not workspace members (not invited)',
+        lines: ['grace@example.test (Airtable: owner)'],
+      },
+      { title: 'Roles not given', lines: ['k@example.test (Airtable: none): No access.'] },
+      {
+        title: 'Groups (OpenRows has none)',
+        lines: ['Design team, a base group (Airtable: edit)'],
+      },
+      {
+        title: 'Open Airtable invitations (not sent here)',
+        lines: ['new@example.test (Airtable: read)'],
+      },
+      {
+        title: "Interface-only (interfaces aren't imported)",
+        lines: ['v@example.test, Dashboard (Airtable: read)'],
+      },
+    ]);
+    expect(reportSummary(r)).toContain('1 person given a base role');
+    expect(hasReportLines(r)).toBe(true);
+    const unread = {
+      ...report,
+      collaborators: { ...emptyAirtableCollaboratorsReport(), unavailable: "Couldn't read." },
+    };
+    expect(collaboratorSections(unread)).toEqual([
+      { title: 'Collaborators', lines: ["Couldn't read.", EDIT_PERMISSIONS_NOTE] },
+    ]);
+    expect(reportSummary(unread)).toContain('collaborators not read');
+  });
+
   it('describes progress', () => {
     expect(importProgress(job({}))).toBe('Creating tables, fields and views…');
     expect(importProgress(job({ phase: 'links', linkedRecords: 1200 }))).toBe(

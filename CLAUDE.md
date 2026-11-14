@@ -289,13 +289,18 @@ packages/
                              `data.recordComments:read`: authors, mentions and reactions by
                              members' emails, replies flattened, written straight to
                              `record_comments` without outbox events or notifications),
+                             collaborators.ts (Airtable's base collaborators, `include[]=
+                             collaborators` only: levels → base roles, existing workspace members
+                             raised through setBaseRole with the job's end, never invited or
+                             emailed; everyone else, groups, invitations, interface-only people
+                             only reported),
                              import.ts (the request's new bases + encrypted-token jobs, the
                              worker's `airtable.import`: schema, records by page with Airtable's
                              creation times and creators, the record map
-                             `airtable_import_records`, the links pass, the comments pass;
-                             cancel), routes.ts; __fixtures__/ (the recorded-fixture fake of
-                             Airtable with comments.json, and a generated 20k-record base, for
-                             tests)
+                             `airtable_import_records`, the links pass, the comments pass, the
+                             collaborators; cancel), routes.ts; __fixtures__/ (the
+                             recorded-fixture fake of Airtable with comments.json and
+                             collaborators.json, and a generated 20k-record base, for tests)
     src/v1/                  the public REST API v1 (Airtable's shape, docs/api/v1.md):
                              routes.ts (resource routes on the base, then authorizeTable),
                              records.ts (names ⇄ ids, cells via the registry's apiValue, list,

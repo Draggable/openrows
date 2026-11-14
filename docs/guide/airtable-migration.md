@@ -5,7 +5,7 @@ Bring your Airtable bases into OpenRows with the built-in importer, see what cha
 ## Before you start
 
 - You import into a workspace where you are an **owner** or **creator**. Each Airtable base becomes a new base there; nothing is written to your existing bases.
-- Invite your team first (see [Sharing and permissions](sharing.md)). Airtable's collaborator cells, comment authors, mentions and reactions are matched to workspace members by email; people who aren't members yet are left out of those cells, and their comments have no author here.
+- Invite your team first (see [Sharing and permissions](sharing.md)). Airtable's collaborators, collaborator cells, comment authors, mentions and reactions are matched to workspace members by email; people who aren't members yet are left out of those cells, their comments have no author here, and they get no access to the new base (see [Collaborators and roles](#collaborators-and-roles)).
 - An import copies a base once. It doesn't keep the two in sync: importing the same base again creates another new base.
 
 ## Import your bases
@@ -13,6 +13,8 @@ Bring your Airtable bases into OpenRows with the built-in importer, see what cha
 ### Create an Airtable token
 
 At [airtable.com/create/tokens](https://airtable.com/create/tokens), create a personal access token with the scopes `data.records:read` and `schema.bases:read`, and give it access to the bases you want to move. It starts with `pat`.
+
+The base's collaborators are read with `schema.bases:read` too: no other scope is needed (see [Collaborators and roles](#collaborators-and-roles)).
 
 To bring record comments too, also give the token the scope `data.recordComments:read`. It is optional: without it, everything else is imported and the report says comments weren't (see [Comments](#comments)).
 
@@ -28,7 +30,7 @@ If Airtable refuses the token, or the token can't read a base you picked, the di
 
 ### Progress and cancelling
 
-The dialog's **Your imports** list shows each import with a progress bar, the tables, records, files and linked records so far, and an estimate of the time left. An import goes through four steps: "Creating tables, fields and views", "Importing records", "Linking records" and "Importing comments". It keeps running if you close the dialog or the tab, and the browser you started it from shows a notice with **Open base** when it ends. Finished imports stay in the list for 7 days.
+The dialog's **Your imports** list shows each import with a progress bar, the tables, records, files and linked records so far, and an estimate of the time left. An import goes through four steps: "Creating tables, fields and views", "Importing records", "Linking records" and "Importing comments". When the comments are in, the base's collaborators are read and applied in one last request. The import keeps running if you close the dialog or the tab, and the browser you started it from shows a notice with **Open base** when it ends. Finished imports stay in the list for 7 days.
 
 Airtable allows 5 requests a second, and OpenRows reads 100 records per request, so large bases take a while. Comments take longer still: Airtable's API lists them one record at a time, so the comments step makes at least one request for every imported record, about 5 records a second (10,000 records take about 35 minutes). Without the comments scope this step ends after one request. An import can run for up to 24 hours: if the comments step is still going then, it stops, the import finishes without the remaining records' comments, and the report says so.
 
@@ -46,6 +48,7 @@ When an import ends, a summary line says what needed attention, and **Import rep
 | Files not copied | Attachments that couldn't be copied |
 | Views not imported | Views that couldn't be created, with the reason (a form, or a calendar in a table without a date field) |
 | View settings not imported | Each view that was created: the fields chosen for it here and the settings Airtable's API doesn't share |
+| Collaborators | Workspace members given a base role (their email, Airtable's permission level, their access before and the base role now), how many members already had that access, people who aren't workspace members, levels that weren't applied and why, user groups, open Airtable invitations and interface-only people. It also says if Airtable's collaborators couldn't be read, and that table and field edit permissions weren't imported |
 | Comments | Why comments weren't imported (the token lacks `data.recordComments:read`), replies placed in the thread, comments by people who aren't members (with their names), mentions kept as plain names, reactions left out, comments without text, comments cut short, records with more than 1,000 comments, records Airtable didn't return comments for, and files attached to comments |
 
 It also counts links that were skipped and names tables cut short at 100,000 records.
@@ -135,6 +138,35 @@ Imported comments don't send notifications or emails, and don't count as new men
 
 If the token can't list comments, the import still finishes with everything else, and the report says once which scope to add. To bring the comments later, give the token `data.recordComments:read` and import the base again (into another new base). Airtable's API doesn't share a record's revision history, so that isn't imported.
 
+## Collaborators and roles
+
+At the end of an import, OpenRows reads the Airtable base's collaborators through Airtable's API ("Get base collaborators", with the `schema.bases:read` scope) and matches them to members of the workspace you imported into, by email (letter case doesn't matter). Someone listed both on the base and on its Airtable workspace counts once, with the higher of the two levels.
+
+Every workspace member can already open the new base with their workspace role. When someone's Airtable level is higher than that, they get a base role on the new base (see [Base collaborators](sharing.md#base-collaborators)):
+
+| Airtable permission (its API's name) | Base role on the new base |
+| --- | --- |
+| Owner (`owner`) | Creator (a base has no owner role; nobody becomes a workspace owner) |
+| Creator (`create`) | Creator |
+| Editor (`edit`) | Editor |
+| Commenter (`comment`) | Commenter |
+| Read only (`read`) | Read only |
+
+- A base role only ever raises access. Members whose workspace role is already as high (or higher) are left as they are, and so are workspace owners and the person who ran the import.
+- A role that would take a new editor seat past the workspace plan's limit isn't given; the report lists it.
+- Giving a base role sends no invitation, email or notification. Nobody's workspace role changes.
+
+Some people are only listed in the report, and get nothing:
+
+- **People who aren't workspace members.** OpenRows doesn't invite them, create accounts for them or add them to the base. Invite them yourself if they need access (see [Sharing and permissions](sharing.md)).
+- **Levels with no base role**, such as Airtable's "none" or access to interfaces only, and collaborators without an email.
+- **User groups.** OpenRows has no collaborator groups, so each group is listed with its level and whether it had the base or the whole Airtable workspace. Invite its members yourself.
+- **Open Airtable invitations and interface-only people**, when Airtable's answer includes them. No invitations are sent here, and interfaces aren't imported. Airtable's answer doesn't mark which collaborators are still invited, so someone with an open invitation who is listed as a collaborator is treated like any other collaborator: they get a base role only if they're already a workspace member.
+
+Roles are given only when the whole import succeeds, after the records, links and comments are in. A cancelled or failed import gives no roles. If Airtable won't share the collaborators (for example, the token can't read them), the import still finishes, nobody gets a base role, and the report says so once.
+
+**Table and field edit permissions** aren't imported: Airtable's API doesn't share who may edit a table or a field. Every table and field of the new base is editable by editors and above, as usual. Set the permissions again if you need them (see [Edit permissions](sharing.md#edit-permissions)).
+
 ## Views
 
 Airtable's API describes a view by its name and type, and a grid view also by its visible fields in their order. It doesn't share any other view setting: no filters, sorts, groups, row colours, manual record order or column widths, and not which field a kanban view stacks by, which date fields a calendar or timeline view uses, or a gallery's cover and card fields. So views come over like this:
@@ -177,8 +209,9 @@ Formulas that translate can still behave differently:
 - Record revision history. Comments come over only with the `data.recordComments:read` scope, without their files (see "Comments").
 - Interfaces, extensions and Airtable's sync.
 - Automations: rebuild them in OpenRows (see [Automations](automations.md)).
-- Collaborators, roles and permissions on the base, tables or fields: set them up again (see [Sharing and permissions](sharing.md)).
-- Share links and form views (see [Sharing](sharing.md) and [Forms](forms.md)).
+- Collaborators who aren't workspace members, user groups, and Airtable invitations: they're only listed in the report (see "Collaborators and roles").
+- Table and field edit permissions: Airtable's API doesn't share them. Set them up again (see [Sharing and permissions](sharing.md)).
+- Share links, invite links and form views (see [Sharing](sharing.md) and [Forms](forms.md)).
 - View settings Airtable's API doesn't share: filters, sorts, groups, row colours, manual record order, column widths, and the fields kanban, calendar, timeline and gallery views use (see "Views").
 - More than 100,000 records per table: the rest of a larger table is cut off and the report names it.
 
@@ -236,7 +269,7 @@ A CSV carries one table at a time and only cell text: no formulas, links between
 6. Re-upload the files listed under "Files not copied", and import the rest of any table cut short at 100,000 records.
 7. Fill in user cells for people who weren't workspace members during the import. Their comments came over without an author (headed by their name), and their reactions and mentions as plain names or not at all; this doesn't change when they join later.
 8. If the report says comments weren't imported, add the `data.recordComments:read` scope and import the base again. Download files attached to comments from Airtable if you need them.
-9. Share the base and set table and field permissions (see [Sharing and permissions](sharing.md)).
+9. Go through the report's "Collaborators": check the base roles given, invite the people who weren't workspace members and the members of Airtable's groups if they need the base, and set table and field permissions again (see [Sharing and permissions](sharing.md)).
 10. Rebuild automations, forms and share links.
 11. Move integrations to the OpenRows API: new address, token and ids.
 12. Delete half-filled bases from cancelled or failed imports, and revoke the Airtable token.

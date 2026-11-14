@@ -16,6 +16,11 @@ import { type SafeFetch, SafeFetchError, type SafeResponse } from '../lib/safe-f
  * a refusal there comes back as a status rather than an error, so the importer can go on without
  * them.
  *
+ * The base's collaborators (`GET /v0/meta/bases/{baseId}?include[]=collaborators`, Airtable's
+ * "Get base collaborators": `schema.bases:read`, any plan) are read once per import. Only
+ * `collaborators` is asked for: never invite links or interfaces, though either is parsed (and
+ * only reported) if Airtable sends it. A refusal comes back as a status, like comments'.
+ *
  * Attachments are downloaded from Airtable's file hosts only (`AIRTABLE_ATTACHMENT_HOSTS`:
  * dl.airtable.com and *.airtableusercontent.com), again through the SSRF-safe client, without
  * the token (Airtable's file URLs are signed), up to MAX_AIRTABLE_ATTACHMENT_BYTES.
@@ -143,6 +148,67 @@ export type AirtableCommentsPage =
   /** 404: the record is gone from Airtable. */
   | { status: 'missing' };
 
+/** Airtable's collaborator lists (https://airtable.com/developers/web/api/get-base-collaborators). */
+const MAX_COLLABORATORS = 10_000;
+const level = z.string().max(64);
+const airtableIndividualSchema = z.object({
+  email: z.string().max(320).nullish(),
+  userId: looseId.nullish(),
+  permissionLevel: level,
+});
+export type AirtableIndividual = z.infer<typeof airtableIndividualSchema>;
+const airtableGroupSchema = z.object({
+  groupId: looseId.nullish(),
+  name: z.string().max(1000).nullish(),
+  permissionLevel: level,
+});
+export type AirtableGroup = z.infer<typeof airtableGroupSchema>;
+const scoped = <T extends z.ZodType>(item: T) =>
+  z.object({
+    baseCollaborators: z.array(item).max(MAX_COLLABORATORS).nullish(),
+    workspaceCollaborators: z.array(item).max(MAX_COLLABORATORS).nullish(),
+  });
+const airtableInviteSchema = z.object({
+  invitedEmail: z.string().max(320).nullish(),
+  permissionLevel: level,
+});
+export const airtableCollaboratorsSchema = z
+  .object({
+    individualCollaborators: scoped(airtableIndividualSchema).nullish(),
+    /** Deprecated by Airtable for `individualCollaborators`: read only without it. */
+    collaborators: scoped(airtableIndividualSchema).nullish(),
+    groupCollaborators: scoped(airtableGroupSchema).nullish(),
+    /** Not asked for; only reported if Airtable sends it. Each interface's people are a list. */
+    interfaces: z
+      .record(
+        z.string().max(64),
+        z.object({
+          name: z.string().max(1000).nullish(),
+          individualCollaborators: z
+            .array(airtableIndividualSchema)
+            .max(MAX_COLLABORATORS)
+            .nullish(),
+          groupCollaborators: z.array(airtableGroupSchema).max(MAX_COLLABORATORS).nullish(),
+        })
+      )
+      .nullish(),
+    /** Not asked for; only its open email invitations are reported if Airtable sends it. */
+    inviteLinks: z
+      .object({
+        baseInviteLinks: z.array(airtableInviteSchema).max(MAX_COLLABORATORS).nullish(),
+        workspaceInviteLinks: z.array(airtableInviteSchema).max(MAX_COLLABORATORS).nullish(),
+      })
+      .nullish(),
+  })
+  .refine((c) => Boolean(c.individualCollaborators ?? c.collaborators), {
+    message: 'no collaborators',
+  });
+export type AirtableCollaborators = z.infer<typeof airtableCollaboratorsSchema>;
+export type AirtableCollaboratorsRead =
+  | { status: 'ok'; collaborators: AirtableCollaborators }
+  /** 403 or 404: the token can't read the base's collaborators (or the base). */
+  | { status: 'forbidden' };
+
 export interface AirtableClientDeps {
   http: SafeFetch;
   /** The Web API's origin (default https://api.airtable.com). */
@@ -165,6 +231,8 @@ export interface AirtableClient {
     recordId: string,
     offset?: string
   ): Promise<AirtableCommentsPage>;
+  /** The base's collaborators: people and groups, on the base and its workspace. */
+  collaborators(baseId: string): Promise<AirtableCollaboratorsRead>;
   /** A file from Airtable's file hosts: its bytes and declared type. */
   download(url: string, maxBytes: number): Promise<{ body: Uint8Array; contentType: string }>;
 }
@@ -318,6 +386,17 @@ export function createAirtableClient(token: string, deps: AirtableClientDeps): A
       if ('refused' in res) return { status: res.refused === 404 ? 'missing' : 'forbidden' };
       const page = parse(commentsPageSchema, res.body);
       return { status: 'ok', comments: page.comments, offset: page.offset ?? null };
+    },
+    async collaborators(baseId) {
+      if (!id('app').test(baseId)) throw new Error('airtable: bad base id');
+      const q = new URLSearchParams([['include[]', 'collaborators']]);
+      const res = await request(
+        `/v0/meta/bases/${baseId}?${q}`,
+        "the base's collaborators",
+        [403, 404]
+      );
+      if ('refused' in res) return { status: 'forbidden' };
+      return { status: 'ok', collaborators: parse(airtableCollaboratorsSchema, res.body) };
     },
     async download(raw, maxBytes) {
       let url: URL;
