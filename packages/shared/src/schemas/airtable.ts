@@ -2,13 +2,15 @@ import { z } from 'zod';
 
 /**
  * The Airtable importer: a workspace creator pastes an Airtable personal access token
- * (scopes `data.records:read` and `schema.bases:read`), picks bases, and each becomes a new base
+ * (scopes `data.records:read` and `schema.bases:read`, and optionally
+ * `data.recordComments:read` for record comments), picks bases, and each becomes a new base
  * filled by a background job: tables, fields (a type mapping, formulas translated where our
  * parser takes them), then the records. The token is only kept, encrypted, for the job; it is
  * never returned. adds linked records (a second pass once every table's records are in),
  * lookups, rollups and counts on them, attachments copied from Airtable's file hosts, the views
  * Airtable's API describes well enough to build (grid, kanban, calendar, gallery, timeline,
- * list), cancelling and the progress the dialog shows.
+ * list), record comments (a last pass, one request per record), cancelling and the progress the
+ * dialog shows.
  */
 
 /** Most bases one request imports. */
@@ -77,6 +79,59 @@ export const AirtableReportViewSchema = z.object({
 });
 export type AirtableReportView = z.infer<typeof AirtableReportViewSchema>;
 
+/** What the comments pass did: counts, and why some of it couldn't come over. */
+export const AirtableCommentsReportSchema = z.object({
+  /** Comments imported. */
+  imported: z.int().min(0),
+  /** Of those, threaded replies: they are in the record's thread in time order. */
+  replies: z.int().min(0),
+  /** Reactions imported. */
+  reactions: z.int().min(0),
+  /**
+   * Why comments weren't read (the token lacks `data.recordComments:read`, …), once for the
+   * base; null when they were.
+   */
+  unavailable: z.string().nullable(),
+  /** Airtable authors who aren't workspace members (name and email), each once. */
+  unmatchedAuthors: z.array(z.string()),
+  /** Comments by those authors: no author here, the body starts with their name. */
+  unmatchedAuthorComments: z.int().min(0),
+  /** Mentions kept as plain names: people who aren't members, user groups, app agents. */
+  plainMentions: z.int().min(0),
+  /** Reactions with an emoji OpenRows doesn't have. */
+  otherReactions: z.int().min(0),
+  /** Reactions by people who aren't workspace members. */
+  unmatchedReactions: z.int().min(0),
+  /** Files attached to comments: not copied (comments here have no files). */
+  attachments: z.array(z.object({ table: z.string(), filename: z.string() })),
+  /** Comments without text (once sanitized, or only files): left out. */
+  emptyComments: z.int().min(0),
+  /** Comments longer than a comment holds here: cut short. */
+  truncatedComments: z.int().min(0),
+  /** Records with more comments than a record holds (1,000): the oldest were left out. */
+  cappedRecords: z.int().min(0),
+  /** Records whose comments Airtable didn't return (the record was gone, an error, …). */
+  unreadRecords: z.int().min(0),
+});
+export type AirtableCommentsReport = z.infer<typeof AirtableCommentsReportSchema>;
+
+export const emptyAirtableCommentsReport = (): AirtableCommentsReport => ({
+  imported: 0,
+  replies: 0,
+  reactions: 0,
+  unavailable: null,
+  unmatchedAuthors: [],
+  unmatchedAuthorComments: 0,
+  plainMentions: 0,
+  otherReactions: 0,
+  unmatchedReactions: 0,
+  attachments: [],
+  emptyComments: 0,
+  truncatedComments: 0,
+  cappedRecords: 0,
+  unreadRecords: 0,
+});
+
 export const AirtableReportSchema = z.object({
   tables: z.array(
     z.object({
@@ -118,6 +173,8 @@ export const AirtableReportSchema = z.object({
    * share (filters, sorts, groups, …) and the fields chosen here in their place.
    */
   partialViews: z.array(AirtableReportViewSchema).default([]),
+  /** Record comments (reports stored before comments were imported have none). */
+  comments: AirtableCommentsReportSchema.default(emptyAirtableCommentsReport),
 });
 export type AirtableReport = z.infer<typeof AirtableReportSchema>;
 
@@ -130,10 +187,10 @@ export const AirtableImportSchema = z.object({
   name: z.string(),
   status: z.enum(['running', 'done', 'failed', 'cancelled']),
   /**
-   * `schema` while the tables, fields and views are created, `records` (with their files), then
-   * `links` while linked records are filled in.
+   * `schema` while the tables, fields and views are created, `records` (with their files),
+   * `links` while linked records are filled in, then `comments` while record comments are read.
    */
-  phase: z.enum(['schema', 'records', 'links']),
+  phase: z.enum(['schema', 'records', 'links', 'comments']),
   tables: z.int().min(0),
   tablesDone: z.int().min(0),
   records: z.int().min(0),
@@ -142,6 +199,9 @@ export const AirtableImportSchema = z.object({
   attachmentsFailed: z.int().min(0),
   /** Records whose links were written, in the links phase. */
   linkedRecords: z.int().min(0),
+  /** Records whose comments were read, and comments imported, in the comments phase. */
+  commentRecords: z.int().min(0),
+  comments: z.int().min(0),
   /** An estimate, 0 to 100 (100 once done). */
   percent: z.int().min(0).max(100),
   report: AirtableReportSchema,

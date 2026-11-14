@@ -5,7 +5,8 @@ import type { SafeFetch, SafeFetchInit, SafeResponse } from '../../lib/safe-fetc
  * A fake of Airtable's Web API for tests (#113): no live calls in CI. It answers from recorded
  * responses in this directory, in Airtable's shapes (`bases.json`: GET /v0/meta/bases;
  * `schema.json`: GET /v0/meta/bases/appFixtureBase001/tables; `records.json`: each table's
- * records, paged by 100 with `offset` like Airtable). It stands in for the SSRF-safe client, so
+ * records, paged by 100 with `offset` like Airtable; `comments.json`: record comments by record id,
+ * newest first, paged like GET /v0/{base}/{table}/{record}/comments). It stands in for the SSRF-safe client, so
  * the importer's real client code runs against it. Besides api.airtable.com it answers Airtable's
  * file hosts (#114: `FIXTURE_FILES`, a 404 for any other path) and refuses every other host.
  *
@@ -149,6 +150,20 @@ export function largeBase(companies: number, contacts: number) {
   return { schema, records, sizes, coId, ctId, companyOf };
 }
 
+export interface FakeAirtableOptions {
+  token?: string;
+  pageSize?: number;
+  large?: { companies: number; contacts: number };
+  /** Comments by record id, newest first, in place of `comments.json`. */
+  comments?: Record<string, unknown[]>;
+  /** Comments per page (Airtable's is 100). */
+  commentsPageSize?: number;
+  /** False: the token lacks `data.recordComments:read` (Airtable's 403 for comments). */
+  commentsScope?: boolean;
+  /** Another status for some records' comments (a 404, a 503, …). */
+  commentsStatus?: (recordId: string) => number | undefined;
+}
+
 export interface FakeRequest {
   url: string;
   method: string;
@@ -178,9 +193,7 @@ function response(status: number, body: unknown, url: string): SafeResponse {
   };
 }
 
-export function fakeAirtable(
-  opts: { token?: string; pageSize?: number; large?: { companies: number; contacts: number } } = {}
-): FakeAirtable {
+export function fakeAirtable(opts: FakeAirtableOptions = {}): FakeAirtable {
   const token = opts.token ?? FIXTURE_TOKEN;
   const pageSize = opts.pageSize ?? 100;
   const listed = read('bases.json') as { bases: unknown[] };
@@ -195,6 +208,7 @@ export function fakeAirtable(
     : listed;
   const schema = read('schema.json');
   const records = read('records.json') as Record<string, unknown[]>;
+  const comments = opts.comments ?? (read('comments.json') as Record<string, unknown[]>);
   const requests: FakeRequest[] = [];
   let limited = 0;
   let failing: number | null | undefined;
@@ -233,6 +247,35 @@ export function fakeAirtable(
     if (path === `/v0/meta/bases/${FIXTURE_BASE_ID}/tables`) return response(200, schema, url.href);
     if (large && path === `/v0/meta/bases/${LARGE_BASE_ID}/tables`) {
       return response(200, large.schema, url.href);
+    }
+    const c =
+      /^\/v0\/(app[A-Za-z0-9]{14})\/(tbl[A-Za-z0-9]{14})\/(rec[A-Za-z0-9]{14})\/comments$/.exec(
+        path
+      );
+    if (c && (c[1] === FIXTURE_BASE_ID || (large && c[1] === LARGE_BASE_ID))) {
+      if (opts.commentsScope === false) {
+        return response(
+          403,
+          { error: { type: 'INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND' } },
+          url.href
+        );
+      }
+      const known =
+        c[1] === FIXTURE_BASE_ID
+          ? (records[c[2] ?? ''] ?? []).some((r) => (r as { id: string }).id === c[3])
+          : Boolean(large?.records[c[2] ?? '']);
+      if (!known) return response(404, { error: 'NOT_FOUND' }, url.href);
+      const status = opts.commentsStatus?.(c[3] ?? '');
+      if (status) return response(status, { error: 'FAKE' }, url.href);
+      const list = comments[c[3] ?? ''] ?? [];
+      const start = Number(url.searchParams.get('offset')?.replace(/^c/, '') ?? '0');
+      const size = Math.min(
+        opts.commentsPageSize ?? 100,
+        Number(url.searchParams.get('pageSize') ?? '100')
+      );
+      const page = list.slice(start, start + size);
+      const offset = start + size < list.length ? `c${start + size}` : null;
+      return response(200, { comments: page, offset }, url.href);
     }
     const m = /^\/v0\/(app[A-Za-z0-9]{14})\/(tbl[A-Za-z0-9]{14})$/.exec(path);
     const generate = m && large && m[1] === LARGE_BASE_ID ? large.records[m[2] ?? ''] : undefined;

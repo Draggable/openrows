@@ -5,7 +5,7 @@ Bring your Airtable bases into OpenRows with the built-in importer, see what cha
 ## Before you start
 
 - You import into a workspace where you are an **owner** or **creator**. Each Airtable base becomes a new base there; nothing is written to your existing bases.
-- Invite your team first (see [Sharing and permissions](sharing.md)). Airtable's collaborator cells are matched to workspace members by email; people who aren't members yet are left out of those cells.
+- Invite your team first (see [Sharing and permissions](sharing.md)). Airtable's collaborator cells, comment authors, mentions and reactions are matched to workspace members by email; people who aren't members yet are left out of those cells, and their comments have no author here.
 - An import copies a base once. It doesn't keep the two in sync: importing the same base again creates another new base.
 
 ## Import your bases
@@ -13,6 +13,8 @@ Bring your Airtable bases into OpenRows with the built-in importer, see what cha
 ### Create an Airtable token
 
 At [airtable.com/create/tokens](https://airtable.com/create/tokens), create a personal access token with the scopes `data.records:read` and `schema.bases:read`, and give it access to the bases you want to move. It starts with `pat`.
+
+To bring record comments too, also give the token the scope `data.recordComments:read`. It is optional: without it, everything else is imported and the report says comments weren't (see [Comments](#comments)).
 
 OpenRows uses the token only for the import. It is kept encrypted while the import runs and deleted when it ends, or 24 hours after the start at the latest (an import still running then fails). You can revoke it at Airtable once you're done.
 
@@ -26,9 +28,9 @@ If Airtable refuses the token, or the token can't read a base you picked, the di
 
 ### Progress and cancelling
 
-The dialog's **Your imports** list shows each import with a progress bar, the tables, records, files and linked records so far, and an estimate of the time left. An import goes through three steps: "Creating tables, fields and views", "Importing records" and "Linking records". It keeps running if you close the dialog or the tab, and the browser you started it from shows a notice with **Open base** when it ends. Finished imports stay in the list for 7 days.
+The dialog's **Your imports** list shows each import with a progress bar, the tables, records, files and linked records so far, and an estimate of the time left. An import goes through four steps: "Creating tables, fields and views", "Importing records", "Linking records" and "Importing comments". It keeps running if you close the dialog or the tab, and the browser you started it from shows a notice with **Open base** when it ends. Finished imports stay in the list for 7 days.
 
-Airtable allows 5 requests a second, and OpenRows reads 100 records per request, so large bases take a while.
+Airtable allows 5 requests a second, and OpenRows reads 100 records per request, so large bases take a while. Comments take longer still: Airtable's API lists them one record at a time, so the comments step makes at least one request for every imported record, about 5 records a second (10,000 records take about 35 minutes). Without the comments scope this step ends after one request. An import can run for up to 24 hours: if the comments step is still going then, it stops, the import finishes without the remaining records' comments, and the report says so.
 
 **Cancel** stops a running import. The new base keeps what was imported so far. A cancelled or failed import leaves its half-filled base in place: delete it from the base menu if you don't want it.
 
@@ -44,6 +46,7 @@ When an import ends, a summary line says what needed attention, and **Import rep
 | Files not copied | Attachments that couldn't be copied |
 | Views not imported | Views that couldn't be created, with the reason (a form, or a calendar in a table without a date field) |
 | View settings not imported | Each view that was created: the fields chosen for it here and the settings Airtable's API doesn't share |
+| Comments | Why comments weren't imported (the token lacks `data.recordComments:read`), replies placed in the thread, comments by people who aren't members (with their names), mentions kept as plain names, reactions left out, comments without text, comments cut short, records with more than 1,000 comments, records Airtable didn't return comments for, and files attached to comments |
 
 It also counts links that were skipped and names tables cut short at 100,000 records.
 
@@ -115,6 +118,23 @@ Lookups, rollups and counts become live OpenRows fields once the fields they rea
 
 Files are copied from Airtable while their records are imported, up to 100 MB per file and 100 files per cell, with thumbnails for images. A file whose type doesn't match its contents is stored as a download, not shown as an image. Files that fail (too large, gone at Airtable, no storage left on the workspace's plan) are listed under "Files not copied"; the record is imported without them, so upload them again by hand.
 
+## Comments
+
+When the token has `data.recordComments:read`, each record's comments come over once its records and links are in, onto the matching OpenRows record (see [Comments](bases-and-tables.md#comments)):
+
+- **Authors** are matched by email to workspace members. A comment by someone who isn't a member has no author here (it shows "Former member"), and its text starts with the Airtable author's name and email, so the thread still reads right. The report lists those people.
+- **Times**: a comment keeps the time it was posted in Airtable, and the time it was last edited when Airtable has one.
+- **Text** is cleaned like any comment (no HTML) and cut at 10,000 characters (reported). Comments with no text left, such as one that only had a file, are left out and counted.
+- **Mentions** of workspace members are mentions here. Mentions of people who aren't members, of user groups and of apps become their plain name, such as `@Design team`.
+- **Reactions** come over when the emoji is one OpenRows has (👍 ❤️ 😄 🎉 👀 ✅, any skin tone) and the person reacting is a member. Other emoji and other people's reactions are left out and counted.
+- **Replies** in Airtable's threads become ordinary comments of the record's thread, in time order: OpenRows comments are one thread per record.
+- **Files** attached to comments aren't copied (comments here have no files, and Airtable's file links expire after 2 hours). The report lists them; download them from Airtable if you need them.
+- A record keeps at most 1,000 comments: for records with more, the newest 1,000 come over and the report counts the records.
+
+Imported comments don't send notifications or emails, and don't count as new mentions or replies.
+
+If the token can't list comments, the import still finishes with everything else, and the report says once which scope to add. To bring the comments later, give the token `data.recordComments:read` and import the base again (into another new base). Airtable's API doesn't share a record's revision history, so that isn't imported.
+
 ## Views
 
 Airtable's API describes a view by its name and type, and a grid view also by its visible fields in their order. It doesn't share any other view setting: no filters, sorts, groups, row colours, manual record order or column widths, and not which field a kanban view stacks by, which date fields a calendar or timeline view uses, or a gallery's cover and card fields. So views come over like this:
@@ -154,7 +174,7 @@ Formulas that translate can still behave differently:
 
 ## What isn't imported
 
-- Comments and record revision history.
+- Record revision history. Comments come over only with the `data.recordComments:read` scope, without their files (see "Comments").
 - Interfaces, extensions and Airtable's sync.
 - Automations: rebuild them in OpenRows (see [Automations](automations.md)).
 - Collaborators, roles and permissions on the base, tables or fields: set them up again (see [Sharing and permissions](sharing.md)).
@@ -214,10 +234,11 @@ A CSV carries one table at a time and only cell text: no formulas, links between
 4. Recreate rollups and lookups that kept Airtable's values.
 5. Go through "View settings not imported": check the stack, date and cover fields picked for kanban, calendar, timeline and gallery views, set filters, sorts, groups and row colours again, and create the forms and other views listed under "Views not imported".
 6. Re-upload the files listed under "Files not copied", and import the rest of any table cut short at 100,000 records.
-7. Fill in user cells for people who weren't workspace members during the import.
-8. Share the base and set table and field permissions (see [Sharing and permissions](sharing.md)).
-9. Rebuild automations, forms and share links.
-10. Move integrations to the OpenRows API: new address, token and ids.
-11. Delete half-filled bases from cancelled or failed imports, and revoke the Airtable token.
+7. Fill in user cells for people who weren't workspace members during the import. Their comments came over without an author (headed by their name), and their reactions and mentions as plain names or not at all; this doesn't change when they join later.
+8. If the report says comments weren't imported, add the `data.recordComments:read` scope and import the base again. Download files attached to comments from Airtable if you need them.
+9. Share the base and set table and field permissions (see [Sharing and permissions](sharing.md)).
+10. Rebuild automations, forms and share links.
+11. Move integrations to the OpenRows API: new address, token and ids.
+12. Delete half-filled bases from cancelled or failed imports, and revoke the Airtable token.
 
 Airtable is a trademark of Formagrid, Inc. OpenRows isn't affiliated with or endorsed by Airtable.

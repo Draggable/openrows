@@ -5,8 +5,9 @@ import { expect, test } from './helpers/test.js';
 // The Airtable importer against the whole Compose stack (E2E_STACK=1): the dev user
 // imports the recorded fixture base through Home's dialog from the stack's fake Airtable
 // (docker/airtable-fake.mjs, the allowlisted AIRTABLE_API_URL and attachment host in dev.yml);
-// the worker fills the base with its records, links, files and views, and the report lists
-// what didn't come over.
+// the worker fills the base with its records, links, files, views and record comments (one
+// request per record, so the comments pass adds about 30 seconds), and the report lists what
+// didn't come over.
 test.skip(!process.env['E2E_STACK'], 'needs the Compose stack (E2E_STACK=1)');
 
 const TOKEN = `patFixture0000001.${'a1b2c3d4'.repeat(8)}`;
@@ -18,7 +19,7 @@ interface Field {
 }
 
 test('imports the fixture base through the UI, with links, files and views', async ({ page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   await signInDevUser(page);
   const api = stackApi(page);
   const ws = await api.post<{ id: string }>('/api/workspaces', { name: `Airtable ${Date.now()}` });
@@ -35,9 +36,11 @@ test('imports the fixture base through the UI, with links, files and views', asy
     .getByRole('region', { name: 'Your Airtable imports' })
     .getByRole('listitem')
     .filter({ hasText: 'Product launch' });
-  await expect(item).toContainText('Done: 2 tables, 153 records', { timeout: 150_000 });
+  await expect(item).toContainText('Done: 2 tables, 153 records', { timeout: 270_000 });
   await expect(item).toContainText('6 views imported');
   await expect(item).toContainText('2 files not copied');
+  // The fixture's comments: their authors aren't members of this workspace.
+  await expect(item).toContainText('4 comments imported');
   await item.getByText('Import report').click();
   await expect(item).toContainText('Tasks › New task (form)');
   await expect(item).toContainText('Projects › Due dates (calendar): Records placed by "Due"');

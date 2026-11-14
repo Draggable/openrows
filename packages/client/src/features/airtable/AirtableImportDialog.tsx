@@ -25,6 +25,7 @@ import {
 } from '../../components/ui';
 import { watchImports } from './AirtableImportWatcher';
 import {
+  commentNotes,
   eta,
   hasReportLines,
   importCounts,
@@ -39,7 +40,8 @@ const message = (err: unknown, fallback: string) =>
 
 /**
  * "Import from Airtable" (workspace creators): paste an Airtable personal access token,
- * pick bases, and each becomes a new base the worker fills. The token lives in this dialog's
+ * pick bases, and each becomes a new base the worker fills (record comments too when the token
+ * has `data.recordComments:read`). The token lives in this dialog's
  * state only until the import starts (the server keeps it encrypted for the job, never shows it
  * again). Below, the imports you started here: a progress bar with the tables, records,
  * files and links so far and the time left, Cancel, then the report and a link to the base. A
@@ -105,7 +107,7 @@ export function AirtableImportDialog({
           <DialogTitle>Import from Airtable</DialogTitle>
           <DialogDescription>
             Each Airtable base becomes a new base here: tables, fields, records with their linked
-            records and attachments, and its views.
+            records and attachments, its views and, if the token allows, record comments.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto">
@@ -140,8 +142,10 @@ export function AirtableImportDialog({
                 >
                   airtable.com/create/tokens
                 </a>{' '}
-                with the scopes <code>data.records:read</code> and <code>schema.bases:read</code>.
-                It is only used for this import and deleted when it ends.
+                with the scopes <code>data.records:read</code> and <code>schema.bases:read</code>,
+                and <code>data.recordComments:read</code> to bring record comments too (Airtable
+                lists them one record at a time, so it takes longer). It is only used for this
+                import and deleted when it ends.
               </p>
               <Button type="submit" disabled={!looksLikeToken(token) || find.isPending}>
                 {find.isPending ? 'Finding bases…' : 'Find bases'}
@@ -352,6 +356,16 @@ function ImportItem({
               {plural(r.skippedLinks, 'link')} to records that weren't imported (or past 1,000 in a
               cell) were skipped.
             </p>
+          )}
+          {commentNotes(r).length > 0 && (
+            <div className="mt-2">
+              <p className="font-medium">Comments</p>
+              <ul className="list-disc pl-5 text-text-2">
+                {commentNotes(r).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
           )}
           {r.truncatedTables.length > 0 && (
             <p className="mt-2">

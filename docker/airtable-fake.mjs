@@ -16,6 +16,8 @@ const BASE_ID = 'appFixtureBase001';
 const read = (name) => JSON.parse(readFileSync(`${DIR}/${name}`, 'utf8'));
 const bases = read('bases.json');
 const schema = read('schema.json');
+// Record comments by record id, newest first (GET /v0/{base}/{table}/{record}/comments).
+const comments = read('comments.json');
 // Airtable's file URLs → this server's.
 const records = JSON.parse(
   JSON.stringify(read('records.json')).replace(
@@ -54,6 +56,15 @@ createServer((req, res) => {
   }
   if (path === '/v0/meta/bases') return json(res, 200, bases);
   if (path === `/v0/meta/bases/${BASE_ID}/tables`) return json(res, 200, schema);
+  const c =
+    /^\/v0\/(app[A-Za-z0-9]{14})\/(tbl[A-Za-z0-9]{14})\/(rec[A-Za-z0-9]{14})\/comments$/.exec(path);
+  if (c && c[1] === BASE_ID && records[c[2]]?.some((r) => r.id === c[3])) {
+    const all = comments[c[3]] ?? [];
+    const start = Number(url.searchParams.get('offset')?.replace(/^c/, '') ?? '0');
+    const size = Math.min(100, Number(url.searchParams.get('pageSize') ?? '100'));
+    const offset = start + size < all.length ? `c${start + size}` : null;
+    return json(res, 200, { comments: all.slice(start, start + size), offset });
+  }
   const m = /^\/v0\/(app[A-Za-z0-9]{14})\/(tbl[A-Za-z0-9]{14})$/.exec(path);
   const list = m && m[1] === BASE_ID ? records[m[2]] : undefined;
   if (list) {

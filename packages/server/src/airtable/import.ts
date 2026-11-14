@@ -2,6 +2,7 @@ import {
   type AirtableImport,
   type AirtableReport,
   type AttachmentValue,
+  emptyAirtableCommentsReport,
   getFieldType,
   MAX_AIRTABLE_TABLE_RECORDS,
   MAX_LINKS_PER_CELL,
@@ -54,6 +55,18 @@ import { createRecords, type RecordContext, updateRecords } from '../records/ser
 import { loadTable, MAX_TABLES_PER_BASE } from '../tables/service.js';
 import { type AirtableClient, type AirtableClientDeps, createAirtableClient } from './client.js';
 import {
+  COMMENTS_OUT_OF_TIME,
+  COMMENTS_SCOPE_MISSING,
+  COMMENTS_STOPPED,
+  COMMENTS_TOKEN_REJECTED,
+  type CommentReadOutcome,
+  MAX_COMMENT_FAILURES,
+  type RecordCommentsRead,
+  readFailure,
+  readRecordComments,
+  writeRecordComments,
+} from './comments.js';
+import {
   type AirtableFile,
   ATTACHMENT_CONCURRENCY,
   airtableFiles,
@@ -82,7 +95,12 @@ import { buildSchema, capped, type LinkPair, type TableState } from './schema.js
  * 3. Links, once every table's records are in: per link pair, from the side whose cells hold
  *    the fewest links, 100 records a transaction, Airtable's record ids mapped to ours through
  *    the record map and written through the RecordService (the inverse side, lookups, rollups
- *    and counts follow). The map is deleted when the job ends.
+ *    and counts follow).
+ * 4. Comments, when the token has `data.recordComments:read` (comments.ts): Airtable lists them
+ *    per record, so 25 records' comments are read (one request or more each), then written in
+ *    one transaction with the progress, straight into the threads (no outbox events or
+ *    notifications). A 403 on the first record means the token lacks the scope: the pass ends
+ *    with one report line, and the import still succeeds. The map is deleted when the job ends.
  *
  * Every step runs as the person who started it, with their live workspace role (a creator's),
  * and only ever in the job's own base. The token is decrypted for the job only, and cleared from
@@ -98,7 +116,7 @@ interface Input {
 }
 
 interface Progress {
-  phase: 'schema' | 'records' | 'links';
+  phase: 'schema' | 'records' | 'links' | 'comments';
   tables: TableState[];
   tableIndex: number;
   offset: string | null;
@@ -110,6 +128,16 @@ interface Progress {
   /** The last Airtable record id of the current pair's side whose links were written. */
   linkCursor: string | null;
   linkedRecords: number;
+  /** The table (index into `tables`) whose records' comments are being read. */
+  commentTable: number;
+  /** The last Airtable record id of that table whose comments were read. */
+  commentCursor: string | null;
+  commentRecords: number;
+  comments: number;
+  /** Whether Airtable listed comments at least once (a later 403 is that record's). */
+  commentsRead: boolean;
+  /** Records in a row whose comments couldn't be read. */
+  commentFailures: number;
   cancelled?: boolean;
   report: AirtableReport;
 }
@@ -126,6 +154,7 @@ const emptyReport = (): AirtableReport => ({
   views: 0,
   unsupportedViews: [],
   partialViews: [],
+  comments: emptyAirtableCommentsReport(),
 });
 
 const progressOf = (job: JobRow): Progress => {
@@ -142,21 +171,34 @@ const progressOf = (job: JobRow): Progress => {
     linkIndex: p.linkIndex ?? 0,
     linkCursor: p.linkCursor ?? null,
     linkedRecords: p.linkedRecords ?? 0,
+    commentTable: p.commentTable ?? 0,
+    commentCursor: p.commentCursor ?? null,
+    commentRecords: p.commentRecords ?? 0,
+    comments: p.comments ?? 0,
+    commentsRead: p.commentsRead ?? false,
+    commentFailures: p.commentFailures ?? 0,
     ...(p.cancelled ? { cancelled: true } : {}),
     report: { ...emptyReport(), ...p.report },
   };
 };
 
-/** How far along an import is, roughly: records weigh most, then links. */
+/**
+ * How far along an import is, roughly: records and comments weigh most (comments take a
+ * request per record), then links. Without the comments scope the last part goes at once.
+ */
 function percentOf(job: JobRow, p: Progress): number {
   if (job.status === 'done') return 100;
   if (p.phase === 'schema') return 2;
   if (p.phase === 'records') {
     const share = p.tables.length ? Math.min(p.tableIndex, p.tables.length) / p.tables.length : 1;
-    return Math.round(5 + 75 * share);
+    return Math.round(5 + 40 * share);
   }
-  const share = p.links.length ? Math.min(p.linkIndex, p.links.length) / p.links.length : 1;
-  return Math.min(99, Math.round(80 + 19 * share));
+  if (p.phase === 'links') {
+    const share = p.links.length ? Math.min(p.linkIndex, p.links.length) / p.links.length : 1;
+    return Math.round(45 + 10 * share);
+  }
+  const share = p.records ? Math.min(p.commentRecords, p.records) / p.records : 1;
+  return Math.min(99, Math.round(55 + 44 * share));
 }
 
 export function toAirtableImport(job: JobRow): AirtableImport {
@@ -172,13 +214,15 @@ export function toAirtableImport(job: JobRow): AirtableImport {
     phase: p.phase,
     tables: p.tables.length,
     tablesDone:
-      job.status === 'done' || p.phase === 'links'
+      job.status === 'done' || p.phase === 'links' || p.phase === 'comments'
         ? p.tables.length
         : Math.min(p.tableIndex, p.tables.length),
     records: p.records,
     attachments: p.attachments,
     attachmentsFailed: p.attachmentsFailed,
     linkedRecords: p.linkedRecords,
+    commentRecords: p.commentRecords,
+    comments: p.comments,
     percent: percentOf(job, p),
     report: {
       ...emptyReport(),
@@ -285,7 +329,7 @@ export interface AirtableRunDeps extends AirtableDeps {
 
 export interface AirtableRunOptions {
   lastAttempt?: boolean;
-  /** Called after each committed page (tests: a crash between pages). */
+  /** Called after each committed page or batch (tests: a crash between pages). */
   afterPage?: (records: number) => Promise<void> | void;
 }
 
@@ -377,6 +421,14 @@ interface Prepared {
 
 /** Most Airtable record ids kept for one link cell (ours take MAX_LINKS_PER_CELL). */
 const MAX_LINK_IDS = MAX_LINKS_PER_CELL + 1;
+
+/** Records whose comments are read before each write. */
+const COMMENT_BATCH = 25;
+/**
+ * Past this since the start, the comments pass stops (reported): the token is deleted at 24
+ * hours (`jobs_sweep`), which would fail an import whose records are all in.
+ */
+const COMMENTS_DEADLINE_MS = 23 * 60 * 60 * 1000;
 
 async function importBase(deps: AirtableRunDeps, job: JobRow, opts: AirtableRunOptions) {
   const { workspaceId, id: jobId, baseId } = job;
@@ -605,6 +657,140 @@ async function importBase(deps: AirtableRunDeps, job: JobRow, opts: AirtableRunO
         ...(batch.cursor
           ? { linkCursor: batch.cursor }
           : { linkCursor: null, linkIndex: current.linkIndex + 1 }),
+      };
+      await save(tx, next);
+      return next;
+    });
+    await opts.afterPage?.(progress.records);
+  }
+  if (progress.phase === 'links') {
+    progress = await step(async (tx, row) => {
+      const current = progressOf(row);
+      if (current.phase !== 'links') return current;
+      const next: Progress = {
+        ...current,
+        phase: 'comments',
+        commentTable: 0,
+        commentCursor: null,
+      };
+      await save(tx, next);
+      return next;
+    });
+  }
+
+  // 4. The comments, 25 records at a time.
+  while (
+    progress.phase === 'comments' &&
+    progress.commentTable < progress.tables.length &&
+    !progress.report.comments.unavailable
+  ) {
+    const table = progress.tables[progress.commentTable] as TableState;
+    const before = progress;
+    const map = airtableImportRecords;
+    const batch = await inScope(deps.db, { workspaceId, userId }, (tx) =>
+      tx
+        .select({ airtableId: map.airtableId, recordId: map.recordId })
+        .from(map)
+        .where(
+          and(
+            eq(map.jobId, jobId),
+            eq(map.tableId, table.tableId),
+            before.commentCursor ? gt(map.airtableId, before.commentCursor) : undefined
+          )
+        )
+        .orderBy(asc(map.airtableId))
+        .limit(COMMENT_BATCH)
+    );
+    // Read outside any transaction (Airtable takes 5 requests a second).
+    const read: { recordId: string; airtableId: string; result: RecordCommentsRead }[] = [];
+    let commentsRead = before.commentsRead;
+    let failures = before.commentFailures;
+    let unread = 0;
+    let unavailable: string | null = null;
+    for (const r of batch) {
+      if (Date.now() - job.createdAt.getTime() > COMMENTS_DEADLINE_MS) {
+        unavailable = COMMENTS_OUT_OF_TIME;
+        break;
+      }
+      let result: RecordCommentsRead | null = null;
+      let outcome: CommentReadOutcome;
+      try {
+        result = await readRecordComments(
+          airtable,
+          input.airtableBaseId,
+          table.airtableId,
+          r.airtableId
+        );
+        outcome = result.status === 'ok' ? 'read' : result.status;
+      } catch (err) {
+        outcome = readFailure(err);
+      }
+      if (outcome === 'rejected') unavailable = COMMENTS_TOKEN_REJECTED;
+      else if (outcome === 'forbidden' && !commentsRead) unavailable = COMMENTS_SCOPE_MISSING;
+      if (unavailable) break;
+      if (outcome === 'read') {
+        commentsRead = true;
+        failures = 0;
+      } else {
+        unread++;
+        if (outcome !== 'missing') failures++;
+      }
+      read.push({
+        recordId: r.recordId,
+        airtableId: r.airtableId,
+        result: result ?? { status: 'missing' },
+      });
+      if (failures >= MAX_COMMENT_FAILURES) {
+        unavailable = COMMENTS_STOPPED;
+        break;
+      }
+    }
+    progress = await step(async (tx, row) => {
+      const current = progressOf(row);
+      if (
+        current.commentTable !== before.commentTable ||
+        current.commentCursor !== before.commentCursor
+      ) {
+        return current;
+      }
+      const report = current.report;
+      const ours = await ownTable(tx, job, table.tableId);
+      const ok = read.flatMap((r) =>
+        r.result.status === 'ok' ? [{ ...r, result: r.result }] : []
+      );
+      // Records deleted meanwhile (in the new base, by someone) are left out.
+      const live = ok.length
+        ? await liveRecordIds(
+            { tx, table: ours },
+            ok.map((r) => r.recordId)
+          )
+        : new Set<string>();
+      let written = 0;
+      for (const r of ok) {
+        if (!live.has(r.recordId)) continue;
+        written += await writeRecordComments(
+          tx,
+          { workspaceId, baseId, tableId: ours.id, recordId: r.recordId },
+          table.name,
+          r.result,
+          people,
+          report.comments
+        );
+      }
+      report.comments.unreadRecords += unread;
+      if (unavailable) report.comments.unavailable = unavailable;
+      const last = read.at(-1)?.airtableId ?? null;
+      const tableDone = !unavailable && batch.length < COMMENT_BATCH;
+      const next: Progress = {
+        ...current,
+        report,
+        commentsRead,
+        commentFailures: failures,
+        commentRecords: current.commentRecords + read.length,
+        comments: current.comments + written,
+        ...(tableDone
+          ? { commentTable: current.commentTable + 1, commentCursor: null }
+          : { commentCursor: last ?? current.commentCursor }),
       };
       await save(tx, next);
       return next;

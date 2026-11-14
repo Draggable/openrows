@@ -1,0 +1,138 @@
+{
+  "recApollo00000000": [
+    {
+      "id": "comApollo0000004",
+      "createdTime": "2024-01-12T09:00:00.000Z",
+      "lastUpdatedTime": null,
+      "text": "",
+      "author": { "id": "usrAda0000000001", "email": "ada@airtable-fixture.test", "name": "Ada" },
+      "attachments": [
+        {
+          "id": "attComment000001",
+          "filename": "screenshot.png",
+          "url": "https://v5.airtableusercontent.com/v3/u/comment-screenshot",
+          "type": "image/png",
+          "size": 1024
+        }
+      ]
+    },
+    {
+      "id": "comApollo0000003",
+      "createdTime": "2024-01-11T09:00:00.000Z",
+      "lastUpdatedTime": null,
+      "text": "FYI @[ugpDesign0000001] and @[aagLaunchBot00001]: the launch moved.",
+      "author": { "id": "usrAda0000000001", "email": "ada@airtable-fixture.test", "name": "Ada" },
+      "mentioned": {
+        "ugpDesign0000001": {
+          "type": "userGroup",
+          "id": "ugpDesign0000001",
+          "displayName": "Design team"
+        },
+        "aagLaunchBot00001": {
+          "type": "appAgent",
+          "id": "aagLaunchBot00001",
+          "displayName": "Launch bot"
+        }
+      }
+    },
+    {
+      "id": "comApollo0000002",
+      "createdTime": "2024-01-10T10:30:00.000Z",
+      "lastUpdatedTime": "2024-01-10T11:00:00.000Z",
+      "text": "Looks good to me, @[usrAda0000000001]! Notes attached.",
+      "parentCommentId": "comApollo0000001",
+      "author": {
+        "id": "usrGrace00000001",
+        "email": "grace@airtable-fixture.test",
+        "name": "Grace Hopper"
+      },
+      "mentioned": {
+        "usrAda0000000001": {
+          "type": "user",
+          "id": "usrAda0000000001",
+          "email": "ada@airtable-fixture.test",
+          "displayName": "Ada"
+        }
+      },
+      "reactions": [
+        {
+          "emoji": { "unicodeCharacter": "1f44d-1f3fd" },
+          "reactingUser": {
+            "userId": "usrAda0000000001",
+            "email": "ada@airtable-fixture.test",
+            "name": "Ada"
+          }
+        }
+      ],
+      "attachments": [
+        {
+          "id": "attComment000002",
+          "filename": "review-notes.pdf",
+          "url": "https://v5.airtableusercontent.com/v3/u/comment-review-notes",
+          "type": "application/pdf",
+          "size": 2048
+        }
+      ]
+    },
+    {
+      "id": "comApollo0000001",
+      "createdTime": "2024-01-10T09:00:00.000Z",
+      "lastUpdatedTime": null,
+      "text": "Kickoff notes are in the **brief**. @[usrGrace00000001] can you review?",
+      "author": { "id": "usrAda0000000001", "email": "ada@airtable-fixture.test", "name": "Ada" },
+      "mentioned": {
+        "usrGrace00000001": {
+          "type": "user",
+          "id": "usrGrace00000001",
+          "email": "grace@airtable-fixture.test",
+          "displayName": "Grace Hopper"
+        }
+      },
+      "reactions": [
+        {
+          "emoji": { "unicodeCharacter": "👍" },
+          "reactingUser": {
+            "userId": "usrAda0000000001",
+            "email": "ada@airtable-fixture.test",
+            "name": "Ada"
+          }
+        },
+        {
+          "emoji": { "unicodeCharacter": "🚀" },
+          "reactingUser": {
+            "userId": "usrAda0000000001",
+            "email": "ada@airtable-fixture.test",
+            "name": "Ada"
+          }
+        },
+        {
+          "emoji": { "unicodeCharacter": "❤️" },
+          "reactingUser": {
+            "userId": "usrGrace00000001",
+            "email": "grace@airtable-fixture.test",
+            "name": "Grace Hopper"
+          }
+        }
+      ]
+    }
+  ],
+  "recHermes00000000": [
+    {
+      "id": "comHermes0000001",
+      "createdTime": "2024-01-15T08:00:00.000Z",
+      "lastUpdatedTime": null,
+      "text": "<script>alert(1)</script>Ship it 🎉",
+      "author": { "id": "usrAda0000000001", "email": "ada@airtable-fixture.test", "name": "Ada" },
+      "reactions": [
+        {
+          "emoji": { "unicodeCharacter": "U+1F389" },
+          "reactingUser": {
+            "userId": "usrAda0000000001",
+            "email": "ada@airtable-fixture.test",
+            "name": "Ada"
+          }
+        }
+      ]
+    }
+  ]
+}

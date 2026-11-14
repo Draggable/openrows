@@ -5,8 +5,8 @@ import { expect, test } from './helpers/test.js';
 
 // "Import from Airtable" on Home against the mocked API: paste a token, pick a
 // base, start the import, watch its progress bar, see it finish (a toast too) and read its
-// report; cancel a running one. The token goes only in request bodies, and is cleared from the
-// dialog once the import starts.
+// report (comments too); cancel a running one. The token goes only in request bodies, and is
+// cleared from the dialog once the import starts.
 
 const TOKEN = `patE2eFixture0001.${'ab12'.repeat(16)}`;
 const NEW_BASE = '00000002-0000-4000-8000-0000000000a1';
@@ -45,6 +45,22 @@ const report = {
       message: 'Records placed by "Due".',
     },
   ],
+  comments: {
+    imported: 4,
+    replies: 1,
+    reactions: 3,
+    unavailable: null,
+    unmatchedAuthors: ['Grace Hopper (grace@example.test)'],
+    unmatchedAuthorComments: 1,
+    plainMentions: 0,
+    otherReactions: 0,
+    unmatchedReactions: 0,
+    attachments: [{ table: 'Projects', filename: 'notes.pdf' }],
+    emptyComments: 0,
+    truncatedComments: 0,
+    cappedRecords: 0,
+    unreadRecords: 0,
+  },
 };
 
 type Status = 'running' | 'done' | 'cancelled';
@@ -57,16 +73,30 @@ function job(status: Status) {
     airtableBaseId: 'appFixtureBase001',
     name: 'Product launch',
     status,
-    phase: running ? 'records' : 'links',
+    phase: running ? 'records' : 'comments',
     tables: 2,
     tablesDone: running ? 1 : 2,
     records: running ? 100 : 153,
     attachments: running ? 2 : 3,
     attachmentsFailed: running ? 0 : 1,
     linkedRecords: running ? 0 : 85,
+    commentRecords: running ? 0 : 153,
+    comments: running ? 0 : 4,
     percent: status === 'done' ? 100 : 43,
     report: running
-      ? { ...report, tables: [], unsupportedFields: [], untranslatedFormulas: [] }
+      ? {
+          ...report,
+          tables: [],
+          unsupportedFields: [],
+          untranslatedFormulas: [],
+          comments: {
+            ...report.comments,
+            imported: 0,
+            replies: 0,
+            unmatchedAuthors: [],
+            attachments: [],
+          },
+        }
       : report,
     error:
       status === 'cancelled' ? 'You cancelled the import. The base keeps what was imported.' : null,
@@ -170,6 +200,15 @@ test('imports an Airtable base and shows the report', async ({ page }) => {
   await expect(item).toContainText('Projects › New project (form): Not imported.');
   await expect(item).toContainText('View settings not imported');
   await expect(item).toContainText('Projects › Due dates (calendar): Records placed by "Due".');
+  // Comments: the reply in the thread, a non-member's comments, files not copied.
+  await expect(item).toContainText('4 comments imported');
+  await expect(item).toContainText("1 reply to comments is in the record's thread in time order.");
+  await expect(item).toContainText(
+    "start with the author's name: Grace Hopper (grace@example.test)"
+  );
+  await expect(item).toContainText(
+    "Files attached to comments aren't copied: notes.pdf (Projects)."
+  );
   // The toast says it's done (the watcher), with a way to the base.
   await expect(page.getByText('Airtable import done: Product launch')).toBeVisible({
     timeout: 15_000,
