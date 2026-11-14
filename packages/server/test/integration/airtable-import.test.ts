@@ -5,6 +5,7 @@ import {
   mentionToken,
   type RecordData,
   type TableMeta,
+  type UserRole,
 } from '@openrows/shared';
 import { sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -16,8 +17,10 @@ import {
   LARGE_BASE_ID,
   PNG_1PX,
 } from '../../src/airtable/__fixtures__/fake.js';
+import { COLLABORATORS_FORBIDDEN } from '../../src/airtable/collaborators.js';
 import { SESSION_COOKIE } from '../../src/auth/session-token.js';
 import type { users } from '../../src/db/index.js';
+import { memoryTransport } from '../../src/email/transport.js';
 import { sweepJobs } from '../../src/jobs/status.js';
 import { testApp } from '../helpers/app.js';
 import { useTestDb } from '../helpers/db.js';
@@ -30,6 +33,7 @@ import {
   createWorkspace,
 } from '../helpers/factories.js';
 import { MemoryObjectStore } from '../helpers/object-store.js';
+import { planEdition } from '../helpers/plans.js';
 
 /**
  * The Airtable importer against the recorded-fixture fake of Airtable's API: the token
@@ -48,6 +52,7 @@ describe('Airtable import', () => {
   let fake: ReturnType<typeof fakeAirtable>;
   let app: ReturnType<typeof testApp>;
   let store: MemoryObjectStore;
+  const mailbox = memoryTransport();
   const instant = async () => {};
 
   const request = (method: string, path: string, body?: unknown, cookie = ownerCookie) =>
@@ -137,6 +142,7 @@ describe('Airtable import', () => {
       db: t.appDb,
       airtable: { http: fake.http, sleep: instant },
       objectStore: store,
+      email: mailbox,
     });
     ({
       workspace: { id: workspaceId },
@@ -626,6 +632,44 @@ describe('Airtable import', () => {
     expect(done.report.skippedCells).toBe(4);
     expect(done.report.truncatedTables).toEqual([]);
 
+    // Collaborators: Ada (a workspace editor, Airtable's "create") is a creator of the new base;
+    // the others aren't members, and are only listed. Nobody was invited or emailed.
+    expect(done.report.collaborators).toEqual({
+      unavailable: null,
+      raised: [
+        {
+          email: 'ada@airtable-fixture.test',
+          name: 'Ada',
+          level: 'create',
+          role: 'creator',
+          previous: 'editor',
+        },
+      ],
+      unchanged: 0,
+      notMembers: [
+        { email: 'linus@airtable-fixture.test', level: 'comment' },
+        { email: 'grace@airtable-fixture.test', level: 'owner' },
+      ],
+      notApplied: [
+        {
+          email: 'katherine@airtable-fixture.test',
+          level: 'none',
+          message: expect.stringContaining('no access'),
+        },
+      ],
+      groups: [
+        { name: 'Design team', level: 'edit', scope: 'base' },
+        { name: 'Everyone', level: 'read', scope: 'workspace' },
+      ],
+      invitations: [],
+      interfaceOnly: [],
+    });
+    const { rows: baseRoles } = await t.db.execute<{ user_id: string; role: string }>(
+      sql`SELECT user_id::text, role FROM base_members WHERE base_id = ${job.baseId}`
+    );
+    expect(baseRoles).toEqual([{ user_id: ada.id, role: 'creator' }]);
+    expect(mailbox.sent).toEqual([]);
+
     // The job wrote only into its own base.
     const tablesAfter = await t.db.execute<{ n: number }>(
       sql`SELECT count(*)::int AS n FROM tables WHERE base_id = ${bystander.id}`
@@ -909,5 +953,366 @@ describe('Airtable import', () => {
       await request('GET', `/api/workspaces/${workspaceId}/airtable/imports`, undefined, cookie)
     );
     expect(list.imports).toEqual([]);
+  });
+});
+
+/**
+ * Airtable's collaborators onto the imported base: only people who are already workspace
+ * members are ever given a base role (when it raises their access), silently; everyone else is
+ * listed. No invitations, emails, accounts, workspace role changes or notifications.
+ */
+describe('Airtable import: collaborators and roles', () => {
+  const t = useTestDb();
+  const instant = async () => {};
+  const at = (name: string) => `${name}@collab-fixture.test`;
+  const level = (name: string, permissionLevel: string) => ({
+    createdTime: '2024-01-01T00:00:00.000Z',
+    email: at(name),
+    grantedByUserId: 'usrSomeone000001',
+    permissionLevel,
+    userId: `usr${name.padEnd(13, '0').slice(0, 13)}`,
+  });
+  /** Airtable's answer for the cases below. */
+  const answer = {
+    id: FIXTURE_BASE_ID,
+    name: 'Product launch',
+    permissionLevel: 'owner',
+    workspaceId: 'wspFixture0000001',
+    createdTime: '2023-11-02T08:00:00.000Z',
+    individualCollaborators: {
+      baseCollaborators: [
+        level('boss', 'owner'),
+        level('importer', 'owner'),
+        level('ed', 'create'),
+        level('ro', 'comment'),
+        level('cr', 'read'),
+        level('nobody', 'none'),
+        level('pending', 'edit'),
+        level('stranger', 'edit'),
+      ],
+      workspaceCollaborators: [
+        level('com', 'edit'),
+        level('ro', 'read'),
+        { ...level('ED', 'edit') },
+      ],
+    },
+    groupCollaborators: {
+      baseCollaborators: [
+        {
+          createdTime: '2024-01-01T00:00:00.000Z',
+          groupId: 'ugpDesign0000001',
+          name: 'Design team',
+          permissionLevel: 'edit',
+        },
+      ],
+      workspaceCollaborators: [
+        {
+          createdTime: '2024-01-01T00:00:00.000Z',
+          groupId: 'ugpEveryone00001',
+          name: 'Everyone',
+          permissionLevel: 'read',
+        },
+      ],
+    },
+    // Neither is asked for; if Airtable sends them anyway, they are only listed.
+    inviteLinks: {
+      baseInviteLinks: [
+        {
+          createdTime: '2024-01-01T00:00:00.000Z',
+          id: 'invPending000001',
+          invitedEmail: at('pending'),
+          permissionLevel: 'edit',
+          referredByUserId: 'usrSomeone000001',
+          restrictedToEmailDomains: [],
+          type: 'singleUse',
+        },
+        {
+          createdTime: '2024-01-01T00:00:00.000Z',
+          id: 'invShared0000001',
+          invitedEmail: null,
+          permissionLevel: 'read',
+          referredByUserId: 'usrSomeone000001',
+          restrictedToEmailDomains: [],
+          type: 'multiUse',
+        },
+      ],
+      workspaceInviteLinks: [],
+    },
+    interfaces: {
+      pbdLaunch0000001: {
+        id: 'pbdLaunch0000001',
+        name: 'Launch dashboard',
+        createdTime: '2024-01-01T00:00:00.000Z',
+        firstPublishTime: null,
+        individualCollaborators: [level('iface', 'read')],
+        groupCollaborators: [],
+        inviteLinks: [],
+      },
+    },
+  };
+
+  let workspaceId: string;
+  let importer: typeof users.$inferSelect;
+  let cookie: string;
+  const people: Record<string, typeof users.$inferSelect> = {};
+
+  beforeAll(async () => {
+    const boss = await createUser(t.db, { email: at('boss'), name: 'Boss' });
+    ({
+      workspace: { id: workspaceId },
+    } = await createWorkspace(t.db, { owner: boss }));
+    people['boss'] = boss;
+    importer = await addMember(
+      t.db,
+      workspaceId,
+      'creator',
+      await createUser(t.db, { email: at('importer'), name: 'Importer' })
+    );
+    people['importer'] = importer;
+    cookie = await createSession(t.db, importer);
+    const roles: [string, UserRole][] = [
+      ['ed', 'editor'],
+      ['com', 'commenter'],
+      ['ro', 'read_only'],
+      ['cr', 'creator'],
+      ['nobody', 'editor'],
+      ['pending', 'read_only'],
+      ['iface', 'read_only'],
+    ];
+    for (const [name, role] of roles) {
+      people[name] = await addMember(
+        t.db,
+        workspaceId,
+        role,
+        await createUser(t.db, { email: at(name), name })
+      );
+    }
+  });
+
+  /** Imports the fixture base through `airtable` (as the importer) and runs the job. */
+  async function run(
+    airtable: ReturnType<typeof fakeAirtable>,
+    opts: {
+      edition?: ReturnType<typeof planEdition>['edition'];
+      afterStart?: (id: string, app: ReturnType<typeof testApp>) => void;
+    } = {}
+  ) {
+    const mailbox = memoryTransport();
+    const app = testApp({
+      db: t.appDb,
+      airtable: { http: airtable.http, sleep: instant },
+      email: mailbox,
+      ...(opts.edition ? { edition: opts.edition } : {}),
+    });
+    const headers = {
+      origin: app.config.appUrl,
+      cookie: `${SESSION_COOKIE}=${cookie}`,
+      'content-type': 'application/json',
+    };
+    const res = await app.app.request(`/api/workspaces/${workspaceId}/airtable/imports`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ token: FIXTURE_TOKEN, baseIds: [FIXTURE_BASE_ID] }),
+    });
+    expect(res.status).toBe(201);
+    const id = ((await res.json()) as { imports: AirtableImport[] }).imports[0]?.id ?? '';
+    opts.afterStart?.(id, app);
+    await app.runJob(id);
+    const get = await app.app.request(`/api/workspaces/${workspaceId}/airtable/imports/${id}`, {
+      headers,
+    });
+    const done = (await get.json()) as AirtableImport;
+    const { rows } = await t.db.execute<{ email: string; role: string }>(
+      sql`SELECT u.email, bm.role FROM base_members bm JOIN users u ON u.id = bm.user_id
+           WHERE bm.base_id = ${done.baseId} ORDER BY u.email`
+    );
+    return {
+      app,
+      mailbox,
+      done,
+      baseRoles: Object.fromEntries(rows.map((r) => [r.email, r.role])),
+    };
+  }
+
+  /** What must never change: accounts, workspace roles, invitations, notifications. */
+  async function snapshot() {
+    const { rows } = await t.db.execute<{
+      users: number;
+      members: string;
+      invitations: number;
+      notifications: number;
+      access: number;
+    }>(sql`
+      SELECT (SELECT count(*)::int FROM users) AS users,
+             (SELECT string_agg(user_id::text || ':' || role, ',' ORDER BY user_id)
+                FROM workspace_members WHERE workspace_id = ${workspaceId}) AS members,
+             (SELECT count(*)::int FROM workspace_invitations) AS invitations,
+             (SELECT count(*)::int FROM notifications) AS notifications,
+             (SELECT count(*)::int FROM outbox WHERE kind LIKE 'member.%' OR kind LIKE 'baseMember.%') AS access`);
+    return rows[0];
+  }
+
+  it('raises workspace members to their Airtable level on the new base, and only lists everyone else', async () => {
+    const before = await snapshot();
+    const fake = fakeAirtable({ collaborators: answer });
+    const { app, mailbox, done, baseRoles } = await run(fake);
+    expect(done).toMatchObject({ status: 'done', error: null, records: 153 });
+
+    // Raised: an editor to creator ("create"), a commenter to editor (workspace "edit" only), a
+    // read-only member to commenter (base "comment" beats workspace "read"). Nobody else.
+    expect(baseRoles).toEqual({
+      [at('com')]: 'editor',
+      [at('ed')]: 'creator',
+      [at('ro')]: 'commenter',
+    });
+    const c = done.report.collaborators;
+    expect(c?.unavailable).toBeNull();
+    expect(c?.raised).toEqual([
+      { email: at('ed'), name: 'ed', level: 'create', role: 'creator', previous: 'editor' },
+      { email: at('ro'), name: 'ro', level: 'comment', role: 'commenter', previous: 'read_only' },
+      { email: at('com'), name: 'com', level: 'edit', role: 'editor', previous: 'commenter' },
+    ]);
+    // The workspace owner (never a base role), the importer, and a creator listed as "read".
+    expect(c?.unchanged).toBe(3);
+    expect(baseRoles[at('boss')]).toBeUndefined();
+    expect(baseRoles[at('importer')]).toBeUndefined();
+    expect(baseRoles[at('cr')]).toBeUndefined();
+    // Not a member: listed, not invited, no account.
+    expect(c?.notMembers).toEqual([{ email: at('stranger'), level: 'edit' }]);
+    // An unknown level: not applied.
+    expect(c?.notApplied).toEqual([
+      { email: at('nobody'), level: 'none', message: expect.stringContaining('no access') },
+    ]);
+    expect(baseRoles[at('nobody')]).toBeUndefined();
+    // Groups, an open invitation and an interface-only person: listed only, even when a member.
+    expect(c?.groups).toEqual([
+      { name: 'Design team', level: 'edit', scope: 'base' },
+      { name: 'Everyone', level: 'read', scope: 'workspace' },
+    ]);
+    expect(c?.invitations).toEqual([{ email: at('pending'), level: 'edit' }]);
+    expect(c?.interfaceOnly).toEqual([
+      { email: at('iface'), level: 'read', interface: 'Launch dashboard' },
+    ]);
+    expect(baseRoles[at('pending')]).toBeUndefined();
+    expect(baseRoles[at('iface')]).toBeUndefined();
+
+    // No accounts, workspace roles, invitations, notifications, access events or emails.
+    expect(await snapshot()).toEqual(before);
+    expect(mailbox.sent).toEqual([]);
+    const { rows: strangers } = await t.db.execute(
+      sql`SELECT 1 FROM users WHERE lower(email) = ${at('stranger')}`
+    );
+    expect(strangers).toEqual([]);
+    // Collaborators only: never invite links or interfaces.
+    const asked = fake.requests.filter((r) => /\/v0\/meta\/bases\/app[^/]+\?/.test(r.url));
+    expect(asked.map((r) => new URL(r.url).search)).toEqual(['?include%5B%5D=collaborators']);
+
+    // The raised editor reaches the base as a creator now; the base's collaborators say so.
+    const edCookie = await createSession(t.db, people['ed'] as typeof users.$inferSelect);
+    const list = await app.app.request(`/api/bases/${done.baseId}/collaborators`, {
+      headers: { cookie: `${SESSION_COOKIE}=${edCookie}` },
+    });
+    expect(list.status).toBe(200);
+    const { collaborators } = (await list.json()) as {
+      collaborators: { email: string; role: string }[];
+    };
+    expect(collaborators.find((x) => x.email === at('ed'))?.role).toBe('creator');
+  });
+
+  it("finishes the import when Airtable won't share the collaborators, and says so once", async () => {
+    for (const status of [403, 503]) {
+      const before = await snapshot();
+      const { done, baseRoles } = await run(
+        fakeAirtable({ collaborators: answer, collaboratorsStatus: status })
+      );
+      expect(done).toMatchObject({ status: 'done', error: null, records: 153 });
+      expect(done.report.collaborators).toMatchObject({
+        unavailable:
+          status === 403
+            ? COLLABORATORS_FORBIDDEN
+            : expect.stringContaining("Airtable didn't answer (503)"),
+        raised: [],
+        notMembers: [],
+      });
+      expect(baseRoles).toEqual({});
+      expect(await snapshot()).toEqual(before);
+    }
+    // An answer of another shape: the same.
+    const { done } = await run(
+      fakeAirtable({ collaborators: { id: FIXTURE_BASE_ID, individualCollaborators: 'x' } })
+    );
+    expect(done.status).toBe('done');
+    expect(done.report.collaborators?.unavailable).toContain('unexpected answer');
+  });
+
+  it('gives no base roles when the import is cancelled before it ends', async () => {
+    let cancel: () => Promise<void> = async () => {};
+    const fake = fakeAirtable({ collaborators: answer, onCollaborators: () => cancel() });
+    const { done, baseRoles } = await run(fake, {
+      afterStart: (id, app) => {
+        cancel = async () => {
+          const res = await app.app.request(
+            `/api/workspaces/${workspaceId}/airtable/imports/${id}/cancel`,
+            {
+              method: 'POST',
+              headers: { origin: app.config.appUrl, cookie: `${SESSION_COOKIE}=${cookie}` },
+            }
+          );
+          expect(res.status).toBe(200);
+        };
+      },
+    });
+    // Cancelled after the collaborators were read, before they were applied.
+    expect(done.status).toBe('cancelled');
+    expect(done.report.collaborators).toBeNull();
+    expect(baseRoles).toEqual({});
+  });
+
+  it('gives no base roles when the import fails', async () => {
+    const refusing = fakeAirtable({
+      token: `patSomeoneElse001.${'0'.repeat(64)}`,
+      collaborators: answer,
+    });
+    const app = testApp({ db: t.appDb, airtable: { http: fakeAirtable().http, sleep: instant } });
+    const res = await app.app.request(`/api/workspaces/${workspaceId}/airtable/imports`, {
+      method: 'POST',
+      headers: {
+        origin: app.config.appUrl,
+        cookie: `${SESSION_COOKIE}=${cookie}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ token: FIXTURE_TOKEN, baseIds: [FIXTURE_BASE_ID] }),
+    });
+    const id = ((await res.json()) as { imports: AirtableImport[] }).imports[0]?.id ?? '';
+    const worker = testApp({ db: t.appDb, airtable: { http: refusing.http, sleep: instant } });
+    await worker.runJob(id);
+    const { rows } = await t.db.execute<{ status: string; base_id: string }>(
+      sql`SELECT status, base_id::text FROM jobs WHERE id = ${id}`
+    );
+    expect(rows[0]?.status).toBe('failed');
+    const { rows: roles } = await t.db.execute(
+      sql`SELECT 1 FROM base_members WHERE base_id = ${rows[0]?.base_id ?? ''}::uuid`
+    );
+    expect(roles).toEqual([]);
+  });
+
+  it("keeps to the plan's editor seats: a raise past them is listed, the rest still apply", async () => {
+    // Base roles given by the tests above would hold seats: start from none.
+    await t.db.execute(sql`DELETE FROM base_members WHERE workspace_id = ${workspaceId}`);
+    const plans = planEdition();
+    // Owner, importer, editor, creator and the "none" editor: every seat is taken.
+    plans.set(workspaceId, { limits: { editorsPerWorkspace: 5 } });
+    const { done, baseRoles } = await run(fakeAirtable({ collaborators: answer }), {
+      edition: plans.edition,
+    });
+    expect(done.status).toBe('done');
+    // The editor holds a seat already, the commenter role takes none; the commenter → editor
+    // raise would take a new one.
+    expect(baseRoles).toEqual({ [at('ed')]: 'creator', [at('ro')]: 'commenter' });
+    expect(done.report.collaborators?.notApplied).toContainEqual({
+      email: at('com'),
+      level: 'edit',
+      message: expect.stringContaining('Not given the editor role'),
+    });
   });
 });

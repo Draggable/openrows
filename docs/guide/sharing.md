@@ -60,6 +60,7 @@ To give someone access to one base without adding them to the whole workspace, o
 - For workspace members, you can only pick their workspace role or higher. **Reset to workspace role** drops the raise.
 - For base-only collaborators, **Remove from base** takes away their access.
 - Base-only collaborators have no workspace role, so they don't see the workspace's Members page.
+- An import from Airtable can raise workspace members on the new base to their Airtable level. It never invites anyone or sends email (see [Moving from Airtable](airtable-migration.md#collaborators-and-roles)).
 
 ## Interface-only collaborators
 

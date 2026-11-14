@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { USER_ROLES } from '../constants/index.js';
+import { BaseRoleSchema } from './base.js';
 
 /**
  * The Airtable importer: a workspace creator pastes an Airtable personal access token
@@ -10,7 +12,9 @@ import { z } from 'zod';
  * lookups, rollups and counts on them, attachments copied from Airtable's file hosts, the views
  * Airtable's API describes well enough to build (grid, kanban, calendar, gallery, timeline,
  * list), record comments (a last pass, one request per record), cancelling and the progress the
- * dialog shows.
+ * dialog shows. At the end, Airtable's base collaborators are matched to workspace members by
+ * email: a member whose access here is lower gets a base role (never an invitation or email);
+ * everyone else is only reported.
  */
 
 /** Most bases one request imports. */
@@ -132,6 +136,83 @@ export const emptyAirtableCommentsReport = (): AirtableCommentsReport => ({
   unreadRecords: 0,
 });
 
+/**
+ * The base role an Airtable permission level becomes on the imported base. Airtable's base
+ * owners become creators: OpenRows has no base-level owner, and an import never makes anyone a
+ * workspace owner. Other levels (`none`, interface-only access, …) aren't applied.
+ */
+export const AIRTABLE_LEVEL_ROLES = {
+  owner: 'creator',
+  create: 'creator',
+  edit: 'editor',
+  comment: 'commenter',
+  read: 'read_only',
+} as const satisfies Record<string, z.infer<typeof BaseRoleSchema>>;
+
+const airtablePersonLine = z.object({
+  email: z.string(),
+  /** Airtable's permission level (`create`, `edit`, …). */
+  level: z.string(),
+});
+
+/**
+ * What the import did with the Airtable base's collaborators (Airtable's "Get base
+ * collaborators", read once at the end of a successful import). Only workspace members already
+ * in the workspace are ever given a base role, at most creator, without emails or notifications;
+ * everyone else is only listed. Nobody is invited.
+ */
+export const AirtableCollaboratorsReportSchema = z.object({
+  /** Why Airtable's collaborators couldn't be read, once; null when they were. */
+  unavailable: z.string().nullable(),
+  /** Workspace members given a base role on the new base: their access was lower. */
+  raised: z.array(
+    airtablePersonLine.extend({
+      name: z.string().nullable(),
+      /** The base role given. */
+      role: BaseRoleSchema,
+      /** Their access to the base before (their workspace role). */
+      previous: z.enum([...USER_ROLES]),
+    })
+  ),
+  /**
+   * Workspace members left as they were: their access already matched or beat the Airtable level
+   * (workspace owners, and the person who ran the import, always).
+   */
+  unchanged: z.int().min(0),
+  /** People who aren't workspace members: listed only, nobody was invited or added. */
+  notMembers: z.array(airtablePersonLine),
+  /**
+   * People whose level wasn't applied, and why: a level with no base role here (`none`,
+   * interface-only access, …), no email, or a role that couldn't be given.
+   */
+  notApplied: z.array(airtablePersonLine.extend({ message: z.string() })),
+  /** Airtable's user groups (OpenRows has none): listed only. */
+  groups: z.array(
+    z.object({
+      name: z.string(),
+      level: z.string(),
+      /** Where the group had access in Airtable. */
+      scope: z.enum(['base', 'workspace', 'interface']),
+    })
+  ),
+  /** Invitations still open in Airtable: listed only, no invitations are sent here. */
+  invitations: z.array(airtablePersonLine),
+  /** People with access to one of the base's interfaces only: listed only. */
+  interfaceOnly: z.array(airtablePersonLine.extend({ interface: z.string() })),
+});
+export type AirtableCollaboratorsReport = z.infer<typeof AirtableCollaboratorsReportSchema>;
+
+export const emptyAirtableCollaboratorsReport = (): AirtableCollaboratorsReport => ({
+  unavailable: null,
+  raised: [],
+  unchanged: 0,
+  notMembers: [],
+  notApplied: [],
+  groups: [],
+  invitations: [],
+  interfaceOnly: [],
+});
+
 export const AirtableReportSchema = z.object({
   tables: z.array(
     z.object({
@@ -175,6 +256,11 @@ export const AirtableReportSchema = z.object({
   partialViews: z.array(AirtableReportViewSchema).default([]),
   /** Record comments (reports stored before comments were imported have none). */
   comments: AirtableCommentsReportSchema.default(emptyAirtableCommentsReport),
+  /**
+   * Collaborators and roles: null until the import ends (and in reports stored before
+   * collaborators were read).
+   */
+  collaborators: AirtableCollaboratorsReportSchema.nullable().default(null),
 });
 export type AirtableReport = z.infer<typeof AirtableReportSchema>;
 

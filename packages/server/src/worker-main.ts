@@ -141,6 +141,8 @@ export async function startWorkerProcess(options: WorkerStartOptions = {}): Prom
           origin: config.airtable.apiUrl,
           attachmentHosts: config.airtable.attachmentHosts,
           scanFiles: config.clamav !== undefined,
+          // Base roles given from Airtable's collaborators go to the audit log.
+          audit: edition.audit,
         },
         // Notification emails and digests, moved here from the API process.
         notifications: {

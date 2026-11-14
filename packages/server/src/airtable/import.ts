@@ -2,6 +2,7 @@ import {
   type AirtableImport,
   type AirtableReport,
   type AttachmentValue,
+  emptyAirtableCollaboratorsReport,
   emptyAirtableCommentsReport,
   getFieldType,
   MAX_AIRTABLE_TABLE_RECORDS,
@@ -27,7 +28,7 @@ import {
   type Transaction,
 } from '../db/index.js';
 import { ossEntitlements } from '../edition/oss.js';
-import type { EntitlementsProvider } from '../edition/types.js';
+import type { AuditSink, EntitlementsProvider } from '../edition/types.js';
 import {
   type FieldRow,
   fieldType,
@@ -54,6 +55,11 @@ import type { SafeFetch } from '../lib/safe-fetch/index.js';
 import { createRecords, type RecordContext, updateRecords } from '../records/service.js';
 import { loadTable, MAX_TABLES_PER_BASE } from '../tables/service.js';
 import { type AirtableClient, type AirtableClientDeps, createAirtableClient } from './client.js';
+import {
+  applyCollaborators,
+  COLLABORATORS_NOT_APPLIED,
+  readCollaborators,
+} from './collaborators.js';
 import {
   COMMENTS_OUT_OF_TIME,
   COMMENTS_SCOPE_MISSING,
@@ -101,6 +107,11 @@ import { buildSchema, capped, type LinkPair, type TableState } from './schema.js
  *    one transaction with the progress, straight into the threads (no outbox events or
  *    notifications). A 403 on the first record means the token lacks the scope: the pass ends
  *    with one report line, and the import still succeeds. The map is deleted when the job ends.
+ * 5. Collaborators (collaborators.ts), once everything else is in: Airtable's base collaborators
+ *    are read (one request), and in the transaction that finishes the job, workspace members whose
+ *    access is lower than their Airtable level get a base role. Nobody is invited or emailed;
+ *    everyone else is listed in the report. A cancelled or failed import never gets here, and a
+ *    refused or failed read only adds a report line.
  *
  * Every step runs as the person who started it, with their live workspace role (a creator's),
  * and only ever in the job's own base. The token is decrypted for the job only, and cleared from
@@ -155,6 +166,7 @@ const emptyReport = (): AirtableReport => ({
   unsupportedViews: [],
   partialViews: [],
   comments: emptyAirtableCommentsReport(),
+  collaborators: null,
 });
 
 const progressOf = (job: JobRow): Progress => {
@@ -259,6 +271,8 @@ export interface AirtableDeps {
    * scan sweep scans them, like uploads.
    */
   scanFiles?: boolean | undefined;
+  /** The edition's audit log: base roles given from Airtable's collaborators are recorded. */
+  audit?: AuditSink | undefined;
 }
 
 export function airtableClient(deps: AirtableDeps, token: string) {
@@ -798,10 +812,46 @@ async function importBase(deps: AirtableRunDeps, job: JobRow, opts: AirtableRunO
     await opts.afterPage?.(progress.records);
   }
 
+  // 5. The collaborators: read now, applied with the job's end (a cancel since skips them).
+  const collaborators = await readCollaborators(airtable, input.airtableBaseId);
+  if ('err' in collaborators) {
+    deps.logger.warn(
+      { err: collaborators.err, airtableImportId: jobId },
+      'airtable collaborators not read'
+    );
+  }
   await step(async (tx, row) => {
     const p = progressOf(row);
+    const report = p.report;
+    if ('plan' in collaborators) {
+      const ctx = {
+        tx,
+        workspaceId,
+        baseId,
+        userId,
+        entitlements: await plan(tx),
+        audit: deps.audit,
+      };
+      // In a savepoint: anything unexpected gives nobody a role, and the import still ends.
+      try {
+        report.collaborators = await tx.transaction((sp) =>
+          applyCollaborators({ ...ctx, tx: sp as Transaction }, collaborators.plan)
+        );
+      } catch (err) {
+        deps.logger.error({ err, airtableImportId: jobId }, 'airtable collaborators not applied');
+        report.collaborators = {
+          ...collaborators.plan.report,
+          unavailable: COLLABORATORS_NOT_APPLIED,
+        };
+      }
+    } else {
+      report.collaborators = {
+        ...emptyAirtableCollaboratorsReport(),
+        unavailable: collaborators.unavailable,
+      };
+    }
     await tx.delete(airtableImportRecords).where(eq(airtableImportRecords.jobId, jobId));
-    await finishJob(tx, jobId, p.report);
+    await finishJob(tx, jobId, report);
   });
   deps.logger.info(
     { airtableImportId: jobId, baseId, tables: progress.tables.length, records: progress.records },

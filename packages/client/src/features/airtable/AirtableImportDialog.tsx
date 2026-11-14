@@ -25,6 +25,7 @@ import {
 } from '../../components/ui';
 import { watchImports } from './AirtableImportWatcher';
 import {
+  collaboratorSections,
   commentNotes,
   eta,
   hasReportLines,
@@ -41,7 +42,7 @@ const message = (err: unknown, fallback: string) =>
 /**
  * "Import from Airtable" (workspace creators): paste an Airtable personal access token,
  * pick bases, and each becomes a new base the worker fills (record comments too when the token
- * has `data.recordComments:read`). The token lives in this dialog's
+ * has `data.recordComments:read`; Airtable's collaborators matched to members, never invited). The token lives in this dialog's
  * state only until the import starts (the server keeps it encrypted for the job, never shows it
  * again). Below, the imports you started here: a progress bar with the tables, records,
  * files and links so far and the time left, Cancel, then the report and a link to the base. A
@@ -107,7 +108,9 @@ export function AirtableImportDialog({
           <DialogTitle>Import from Airtable</DialogTitle>
           <DialogDescription>
             Each Airtable base becomes a new base here: tables, fields, records with their linked
-            records and attachments, its views and, if the token allows, record comments.
+            records and attachments, its views and, if the token allows, record comments. Its
+            collaborators who are already workspace members get their Airtable access on the new
+            base; nobody is invited or emailed.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto">
@@ -372,6 +375,17 @@ function ImportItem({
               Tables cut short at 100,000 records: {r.truncatedTables.join(', ')}
             </p>
           )}
+          {collaboratorSections(r).map((section) => (
+            <div key={section.title} className="mt-2">
+              <p className="font-medium">{section.title}</p>
+              <ul className="list-disc pl-5 text-text-2">
+                {section.lines.map((line, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: lines can repeat.
+                  <li key={`${section.title}.${i}`}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </details>
       )}
     </li>
