@@ -34,6 +34,7 @@ import {
   looksLikeToken,
   plural,
   reportSummary,
+  shareSections,
 } from './model';
 
 const message = (err: unknown, fallback: string) =>
@@ -42,7 +43,9 @@ const message = (err: unknown, fallback: string) =>
 /**
  * "Import from Airtable" (workspace creators): paste an Airtable personal access token,
  * pick bases, and each becomes a new base the worker fills (record comments too when the token
- * has `data.recordComments:read`; Airtable's collaborators matched to members, never invited). The token lives in this dialog's
+ * has `data.recordComments:read`; Airtable's collaborators matched to members, never invited;
+ * Airtable's share links listed in the report with `workspacesAndBases.shares:manage`, never
+ * recreated). The token lives in this dialog's
  * state only until the import starts (the server keeps it encrypted for the job, never shows it
  * again). Below, the imports you started here: a progress bar with the tables, records,
  * files and links so far and the time left, Cancel, then the report and a link to the base. A
@@ -110,7 +113,8 @@ export function AirtableImportDialog({
             Each Airtable base becomes a new base here: tables, fields, records with their linked
             records and attachments, its views and, if the token allows, record comments. Its
             collaborators who are already workspace members get their Airtable access on the new
-            base; nobody is invited or emailed.
+            base; nobody is invited or emailed. Share links are only listed in the report: none are
+            created or published here.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto">
@@ -147,8 +151,11 @@ export function AirtableImportDialog({
                 </a>{' '}
                 with the scopes <code>data.records:read</code> and <code>schema.bases:read</code>,
                 and <code>data.recordComments:read</code> to bring record comments too (Airtable
-                lists them one record at a time, so it takes longer). It is only used for this
-                import and deleted when it ends.
+                lists them one record at a time, so it takes longer). Optionally, add{' '}
+                <code>workspacesAndBases.shares:manage</code> to list the base's share links in the
+                report: they're only read, never changed in Airtable or recreated here. Without it,
+                everything else still imports. The token is only used for this import and deleted
+                when it ends.
               </p>
               <Button type="submit" disabled={!looksLikeToken(token) || find.isPending}>
                 {find.isPending ? 'Finding bases…' : 'Find bases'}
@@ -375,7 +382,7 @@ function ImportItem({
               Tables cut short at 100,000 records: {r.truncatedTables.join(', ')}
             </p>
           )}
-          {collaboratorSections(r).map((section) => (
+          {[...collaboratorSections(r), ...shareSections(r)].map((section) => (
             <div key={section.title} className="mt-2">
               <p className="font-medium">{section.title}</p>
               <ul className="list-disc pl-5 text-text-2">

@@ -7,7 +7,9 @@ import type { SafeFetch, SafeFetchInit, SafeResponse } from '../../lib/safe-fetc
  * `schema.json`: GET /v0/meta/bases/appFixtureBase001/tables; `records.json`: each table's
  * records, paged by 100 with `offset` like Airtable; `comments.json`: record comments by record id,
  * newest first, paged like GET /v0/{base}/{table}/{record}/comments; `collaborators.json`: GET
- * /v0/meta/bases/appFixtureBase001?include[]=collaborators, refused with any other `include`). It stands in for the SSRF-safe client, so
+ * /v0/meta/bases/appFixtureBase001?include[]=collaborators, refused with any other `include`;
+ * `shares.json`: GET /v0/meta/bases/appFixtureBase001/shares, Airtable's "List shares", which
+ * answers GET only). It stands in for the SSRF-safe client, so
  * the importer's real client code runs against it. Besides api.airtable.com it answers Airtable's
  * file hosts (#114: `FIXTURE_FILES`, a 404 for any other path) and refuses every other host.
  *
@@ -169,6 +171,10 @@ export interface FakeAirtableOptions {
   collaboratorsStatus?: number;
   /** Called before the collaborators answer (tests: a cancel meanwhile). */
   onCollaborators?: () => Promise<void> | void;
+  /** The base's List shares answer, in place of `shares.json`. */
+  shares?: unknown;
+  /** Another status for the shares request (403: no `workspacesAndBases.shares:manage`, …). */
+  sharesStatus?: number;
 }
 
 export interface FakeRequest {
@@ -217,6 +223,7 @@ export function fakeAirtable(opts: FakeAirtableOptions = {}): FakeAirtable {
   const records = read('records.json') as Record<string, unknown[]>;
   const comments = opts.comments ?? (read('comments.json') as Record<string, unknown[]>);
   const collaborators = opts.collaborators ?? read('collaborators.json');
+  const shares = opts.shares ?? read('shares.json');
   const requests: FakeRequest[] = [];
   let limited = 0;
   let failing: number | null | undefined;
@@ -252,6 +259,14 @@ export function fakeAirtable(opts: FakeAirtableOptions = {}): FakeAirtable {
     }
     const path = url.pathname;
     if (path === '/v0/meta/bases') return response(200, bases, url.href);
+    if (path === `/v0/meta/bases/${FIXTURE_BASE_ID}/shares`) {
+      // Listed only: the importer never manages (PATCH) or deletes a share.
+      if ((init.method ?? 'GET') !== 'GET' || url.search) {
+        return response(422, { error: { type: 'INVALID_REQUEST_UNKNOWN' } }, url.href);
+      }
+      if (opts.sharesStatus) return response(opts.sharesStatus, { error: 'FAKE' }, url.href);
+      return response(200, shares, url.href);
+    }
     if (path === `/v0/meta/bases/${FIXTURE_BASE_ID}/tables`) return response(200, schema, url.href);
     if (large && path === `/v0/meta/bases/${LARGE_BASE_ID}/tables`) {
       return response(200, large.schema, url.href);

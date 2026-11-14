@@ -21,6 +21,12 @@ import { type SafeFetch, SafeFetchError, type SafeResponse } from '../lib/safe-f
  * `collaborators` is asked for: never invite links or interfaces, though either is parsed (and
  * only reported) if Airtable sends it. A refusal comes back as a status, like comments'.
  *
+ * The base's share links (`GET /v0/meta/bases/{baseId}/shares`, Airtable's "List shares": the
+ * optional `workspacesAndBases.shares:manage` scope) are listed once per import, only to describe
+ * them in the report. The scope also allows changing shares; this client only ever lists them.
+ * The answer isn't paged. A 401, 403 or 404 comes back as a status, and entries that don't parse
+ * are counted, not thrown.
+ *
  * Attachments are downloaded from Airtable's file hosts only (`AIRTABLE_ATTACHMENT_HOSTS`:
  * dl.airtable.com and *.airtableusercontent.com), again through the SSRF-safe client, without
  * the token (Airtable's file URLs are signed), up to MAX_AIRTABLE_ATTACHMENT_BYTES.
@@ -209,6 +215,34 @@ export type AirtableCollaboratorsRead =
   /** 403 or 404: the token can't read the base's collaborators (or the base). */
   | { status: 'forbidden' };
 
+/** Airtable's share links (https://airtable.com/developers/web/api/list-shares). */
+const MAX_SHARES = 10_000;
+const domains = z.array(z.string().max(255)).max(1000);
+/** One share. `shareTokenPrefix` is dropped: it is part of the link, and never kept. */
+export const airtableShareSchema = z.object({
+  shareId: looseId,
+  type: z.string().min(1).max(64),
+  state: z.string().min(1).max(64),
+  viewId: looseId.nullish(),
+  blockInstallationId: looseId.nullish(),
+  createdByUserId: looseId.nullish(),
+  createdTime: z.string().max(64).nullish(),
+  isPasswordProtected: z.boolean().nullish(),
+  restrictedToEmailDomains: domains.nullish(),
+  /** Omitted: no domain restriction. Empty: nobody can open the share. */
+  effectiveEmailDomainAllowList: domains.nullish(),
+  restrictedToEnterpriseMembers: z.boolean().nullish(),
+  canBeSynced: z.boolean().nullish(),
+});
+export type AirtableShare = z.infer<typeof airtableShareSchema>;
+const sharesSchema = z.object({ shares: z.array(z.unknown()).max(MAX_SHARES) });
+export type AirtableSharesRead =
+  | { status: 'ok'; shares: AirtableShare[]; unreadable: number }
+  /** 401: Airtable rejected the token for this request. */
+  | { status: 'rejected' }
+  /** 403 or 404: the token lacks the scope, or can't list this base's shares. */
+  | { status: 'forbidden' };
+
 export interface AirtableClientDeps {
   http: SafeFetch;
   /** The Web API's origin (default https://api.airtable.com). */
@@ -233,6 +267,8 @@ export interface AirtableClient {
   ): Promise<AirtableCommentsPage>;
   /** The base's collaborators: people and groups, on the base and its workspace. */
   collaborators(baseId: string): Promise<AirtableCollaboratorsRead>;
+  /** The base's share links (read only: never created, changed or deleted in Airtable). */
+  shares(baseId: string): Promise<AirtableSharesRead>;
   /** A file from Airtable's file hosts: its bytes and declared type. */
   download(url: string, maxBytes: number): Promise<{ body: Uint8Array; contentType: string }>;
 }
@@ -397,6 +433,24 @@ export function createAirtableClient(token: string, deps: AirtableClientDeps): A
       );
       if ('refused' in res) return { status: 'forbidden' };
       return { status: 'ok', collaborators: parse(airtableCollaboratorsSchema, res.body) };
+    },
+    async shares(baseId) {
+      if (!id('app').test(baseId)) throw new Error('airtable: bad base id');
+      const res = await request(
+        `/v0/meta/bases/${baseId}/shares`,
+        "the base's share links",
+        [401, 403, 404]
+      );
+      if ('refused' in res) return { status: res.refused === 401 ? 'rejected' : 'forbidden' };
+      const list = parse(sharesSchema, res.body).shares;
+      const shares: AirtableShare[] = [];
+      let unreadable = 0;
+      for (const entry of list) {
+        const parsed = airtableShareSchema.safeParse(entry);
+        if (parsed.success) shares.push(parsed.data);
+        else unreadable++;
+      }
+      return { status: 'ok', shares, unreadable };
     },
     async download(raw, maxBytes) {
       let url: URL;

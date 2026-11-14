@@ -283,11 +283,13 @@ export async function applyCollaborators(
 export async function readCollaborators(
   airtable: AirtableClient,
   airtableBaseId: string
-): Promise<{ plan: CollaboratorPlan } | { unavailable: string; err?: unknown }> {
+): Promise<
+  { plan: CollaboratorPlan; source: AirtableCollaborators } | { unavailable: string; err?: unknown }
+> {
   try {
     const read = await airtable.collaborators(airtableBaseId);
     if (read.status === 'forbidden') return { unavailable: COLLABORATORS_FORBIDDEN };
-    return { plan: planCollaborators(read.collaborators) };
+    return { plan: planCollaborators(read.collaborators), source: read.collaborators };
   } catch (err) {
     const detail =
       err instanceof AppError && err.detail

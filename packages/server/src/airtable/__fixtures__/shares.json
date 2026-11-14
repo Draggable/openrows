@@ -1,0 +1,67 @@
+{
+  "shares": [
+    {
+      "createdByUserId": "usrGrace00000001",
+      "createdTime": "2024-02-01T09:00:00.000Z",
+      "effectiveEmailDomainAllowList": ["airtable-fixture.test"],
+      "isPasswordProtected": true,
+      "restrictedToEmailDomains": ["airtable-fixture.test"],
+      "restrictedToEnterpriseMembers": false,
+      "shareId": "shrBaseFixture001",
+      "shareTokenPrefix": "shrBaseF",
+      "state": "enabled",
+      "type": "base"
+    },
+    {
+      "canBeSynced": true,
+      "createdByUserId": "usrAda0000000001",
+      "createdTime": "2024-02-02T09:00:00.000Z",
+      "isPasswordProtected": false,
+      "restrictedToEmailDomains": [],
+      "restrictedToEnterpriseMembers": false,
+      "shareId": "shrKanbanFixture1",
+      "shareTokenPrefix": "shrKanba",
+      "state": "enabled",
+      "type": "view",
+      "viewId": "viwProjKanban0001"
+    },
+    {
+      "createdByUserId": "usrAda0000000001",
+      "createdTime": "2024-02-03T09:00:00.000Z",
+      "isPasswordProtected": false,
+      "restrictedToEmailDomains": [],
+      "restrictedToEnterpriseMembers": false,
+      "shareId": "shrFormFixture001",
+      "shareTokenPrefix": "shrFormF",
+      "state": "enabled",
+      "type": "view",
+      "viewId": "viwTaskForm000001"
+    },
+    {
+      "canBeSynced": false,
+      "createdByUserId": "usrSomeoneElse01",
+      "createdTime": "2024-02-04T09:00:00.000Z",
+      "effectiveEmailDomainAllowList": [],
+      "isPasswordProtected": false,
+      "restrictedToEmailDomains": [],
+      "restrictedToEnterpriseMembers": true,
+      "shareId": "shrGridFixture001",
+      "shareTokenPrefix": "shrGridF",
+      "state": "disabled",
+      "type": "view",
+      "viewId": "viwProjGrid000001"
+    },
+    {
+      "blockInstallationId": "bliFixtureChart01",
+      "createdByUserId": "usrGrace00000001",
+      "createdTime": "2024-02-05T09:00:00.000Z",
+      "isPasswordProtected": false,
+      "restrictedToEmailDomains": [],
+      "restrictedToEnterpriseMembers": false,
+      "shareId": "shrBlockFixture01",
+      "shareTokenPrefix": "shrBlock",
+      "state": "disabled",
+      "type": "blockInstallation"
+    }
+  ]
+}

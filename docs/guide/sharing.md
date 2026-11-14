@@ -108,6 +108,8 @@ A share link gives anyone who has it a read-only copy of a view or a whole base,
 - **A view:** open the view's menu in the sidebar and choose **Share view**. Grid, kanban, calendar, gallery, timeline and list views can be shared. Visitors see the view's records and visible fields; hidden fields and other views stay private. Form views have **Share form** instead (see [Forms](forms.md)).
 - **A whole base:** click **Share** in the top bar and use **Share link to the whole base**. Visitors see every table as a tab and can pick among its shared views. Personal views and hidden fields stay private.
 
+A base imported from Airtable comes without its Airtable share links: the import report lists them, so you can recreate the ones you need here (see [Share links](airtable-migration.md#share-links) in Moving from Airtable).
+
 ### Creating a link
 
 Fill in the options, then click **Create link**:
