@@ -1,4 +1,11 @@
-import type { AirtableImport, RecordData, TableMeta } from '@openrows/shared';
+import {
+  type AirtableImport,
+  type Comment,
+  MAX_COMMENTS_PER_RECORD,
+  mentionToken,
+  type RecordData,
+  type TableMeta,
+} from '@openrows/shared';
 import { sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -27,8 +34,9 @@ import { MemoryObjectStore } from '../helpers/object-store.js';
 /**
  * The Airtable importer against the recorded-fixture fake of Airtable's API: the token
  * check, a base with every Airtable field type, formulas translated or kept as text, records
- * paged by 100, the report, the token never shown or logged and dropped after 24 hours, and the
- * job writing only into its own new base.
+ * paged by 100, record comments (authors, mentions, reactions, replies; without the scope,
+ * the rest still imports), the report, the token never shown or logged and dropped after 24
+ * hours, and the job writing only into its own new base.
  */
 describe('Airtable import', () => {
   const t = useTestDb();
@@ -83,6 +91,36 @@ describe('Airtable import', () => {
     return Promise.all(
       list.tables.map(async (x) => ok<TableMeta>(await request('GET', `/api/tables/${x.id}`)))
     );
+  }
+
+  async function commentsOf(tableId: string, recordId: string): Promise<Comment[]> {
+    const page = await ok<{ comments: Comment[] }>(
+      await request('GET', `/api/tables/${tableId}/records/${recordId}/comments?limit=100`)
+    );
+    return page.comments;
+  }
+
+  /** Starts an import of the fixture base on an app over another fake Airtable. */
+  async function importWith(
+    airtable: ReturnType<typeof fakeAirtable>,
+    baseIds = [FIXTURE_BASE_ID]
+  ) {
+    const other = testApp({
+      db: t.appDb,
+      airtable: { http: airtable.http, sleep: instant },
+      objectStore: store,
+    });
+    const res = await other.app.request(`/api/workspaces/${workspaceId}/airtable/imports`, {
+      method: 'POST',
+      headers: {
+        origin: other.config.appUrl,
+        cookie: `${SESSION_COOKIE}=${ownerCookie}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ token: FIXTURE_TOKEN, baseIds }),
+    });
+    const id = ((await ok<{ imports: AirtableImport[] }>(res, 201)).imports[0]?.id ?? '') as string;
+    return { app: other, id };
   }
 
   async function allRecords(tableId: string): Promise<RecordData[]> {
@@ -190,7 +228,7 @@ describe('Airtable import', () => {
     expect(done.error).toBeNull();
     expect(done.status).toBe('done');
     expect(done).toMatchObject({
-      phase: 'links',
+      phase: 'comments',
       tables: 2,
       tablesDone: 2,
       records: 153,
@@ -198,6 +236,9 @@ describe('Airtable import', () => {
       attachmentsFailed: 2,
       // Apollo's and Hermes' tasks, written from the Tasks side (one link per cell).
       linkedRecords: 85,
+      // Every record's comments were read; Apollo's and Hermes' have some.
+      commentRecords: 153,
+      comments: 4,
       percent: 100,
     });
 
@@ -396,6 +437,78 @@ describe('Airtable import', () => {
     expect(linkedToApollo.map((r) => r.id).sort()).toEqual(linkIds(cell('Tasks')));
     expect(taskRecords.filter((r) => !r.fields[project?.id ?? '']).length).toBe(65);
 
+    // Comments: oldest first, Airtable's times, the author matched by email, a non-member's
+    // comment headed by their name, mentions as tokens for members and plain names otherwise,
+    // the reply in the same thread, reactions with our emoji by members.
+    const thread = await commentsOf(projects.id, apollo.id);
+    expect(thread.map((c) => [c.authorId, c.body, c.createdAt, c.editedAt])).toEqual([
+      [
+        ada.id,
+        'Kickoff notes are in the **brief**. @Grace Hopper can you review?',
+        '2024-01-10T09:00:00.000Z',
+        null,
+      ],
+      [
+        null,
+        `**Grace Hopper (grace@airtable-fixture.test)**:\n\nLooks good to me, ${mentionToken(ada.id, 'Ada')}! Notes attached.`,
+        '2024-01-10T10:30:00.000Z',
+        '2024-01-10T11:00:00.000Z',
+      ],
+      [
+        ada.id,
+        'FYI @Design team and @Launch bot: the launch moved.',
+        '2024-01-11T09:00:00.000Z',
+        null,
+      ],
+    ]);
+    expect(thread.map((c) => c.mentions)).toEqual([[], [ada.id], []]);
+    expect(thread.map((c) => c.reactions)).toEqual([
+      [{ reaction: 'thumbsUp', userIds: [ada.id] }],
+      [{ reaction: 'thumbsUp', userIds: [ada.id] }],
+      [],
+    ]);
+    const hermesThread = await commentsOf(projects.id, hermes?.id ?? '');
+    expect(hermesThread).toHaveLength(1);
+    expect(hermesThread[0]?.body).toContain('Ship it 🎉');
+    expect(hermesThread[0]?.body).not.toContain('<script');
+    expect(hermesThread[0]?.reactions).toEqual([{ reaction: 'tada', userIds: [ada.id] }]);
+    // Old comments notify nobody: no notifications, no comment events (Ada is mentioned).
+    const { rows: noticed } = await t.db.execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM notifications WHERE base_id = ${job.baseId}`
+    );
+    expect(noticed[0]?.n).toBe(0);
+    const { rows: events } = await t.db.execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM outbox WHERE base_id = ${job.baseId} AND kind LIKE 'comment.%'`
+    );
+    expect(events[0]?.n).toBe(0);
+    // Comment attachments aren't copied, nor their URLs kept.
+    expect(fake.requests.some((r) => r.url.includes('comment-'))).toBe(false);
+    const { rows: bodies } = await t.db.execute<{ body: string }>(
+      sql`SELECT body FROM record_comments WHERE base_id = ${job.baseId}`
+    );
+    expect(bodies.some((b) => b.body.includes('airtableusercontent'))).toBe(false);
+    expect(done.report.comments).toEqual({
+      imported: 4,
+      replies: 1,
+      reactions: 3,
+      unavailable: null,
+      unmatchedAuthors: ['Grace Hopper (grace@airtable-fixture.test)'],
+      unmatchedAuthorComments: 1,
+      plainMentions: 3,
+      otherReactions: 1,
+      unmatchedReactions: 1,
+      attachments: [
+        { table: 'Projects', filename: 'screenshot.png' },
+        { table: 'Projects', filename: 'review-notes.pdf' },
+      ],
+      emptyComments: 1,
+      truncatedComments: 0,
+      cappedRecords: 0,
+      unreadRecords: 0,
+    });
+    // One request for each record's comments.
+    expect(fake.requests.filter((r) => r.url.includes('/comments')).length).toBe(153);
+
     // Views: the grid's visible fields in order, the kanban by the single select, the
     // calendar and timeline by the first date field, the gallery covered by the attachments;
     // the block view, the form and a calendar without a date field are listed.
@@ -456,7 +569,9 @@ describe('Airtable import', () => {
     expect(map[0]?.n).toBe(0);
     expect(taskRecords.map((r) => r.fields[taskPrimary?.id ?? ''])).toContain('Task 150 #150');
     expect(
-      fake.requests.filter((r) => r.url.includes('/tblTasks000000001')).map((r) => r.url)
+      fake.requests
+        .filter((r) => r.url.includes('/tblTasks000000001') && !r.url.includes('/comments'))
+        .map((r) => r.url)
     ).toHaveLength(2);
 
     // The report.
@@ -543,6 +658,95 @@ describe('Airtable import', () => {
       if (api) expect(r.authorization, r.url).toMatch(/^Bearer pat/);
       else expect(r.authorization, r.url).toBeUndefined();
     }
+  });
+
+  it('imports everything else when the token lacks the comments scope, and says so once', async () => {
+    const scopeless = fakeAirtable({ commentsScope: false });
+    const { app: other, id } = await importWith(scopeless);
+    await other.runJob(id);
+    const done = await getImport(id);
+    expect(done).toMatchObject({
+      status: 'done',
+      error: null,
+      records: 153,
+      linkedRecords: 85,
+      comments: 0,
+      percent: 100,
+    });
+    expect(done.report.comments.unavailable).toContain('data.recordComments:read');
+    expect(done.report.comments.imported).toBe(0);
+    // One refused request, not one per record.
+    expect(scopeless.requests.filter((r) => r.url.includes('/comments'))).toHaveLength(1);
+    const { rows } = await t.db.execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM record_comments WHERE base_id = ${done.baseId}`
+    );
+    expect(rows[0]?.n).toBe(0);
+  });
+
+  it("skips a record whose comments Airtable doesn't return, and stops when it keeps failing", async () => {
+    const flaky = fakeAirtable({
+      commentsStatus: (record) =>
+        record === 'recHermes00000000' ? 404 : record.startsWith('recTask') ? 503 : undefined,
+    });
+    const { app: other, id } = await importWith(flaky);
+    await other.runJob(id);
+    const done = await getImport(id);
+    expect(done).toMatchObject({ status: 'done', error: null, records: 153 });
+    // Apollo's comments came over; Hermes was gone at Airtable; 5 failures in a row end the pass.
+    expect(done.report.comments).toMatchObject({
+      imported: 3,
+      unreadRecords: 6,
+      unavailable: expect.stringContaining('Airtable stopped returning comments'),
+    });
+    expect(flaky.requests.filter((r) => r.url.includes('/comments'))).toHaveLength(8);
+  });
+
+  it("keeps a record's newest 1,000 comments and reports the rest", async () => {
+    const many = Array.from({ length: MAX_COMMENTS_PER_RECORD + 5 }, (_, i) => ({
+      id: `comMany${String(i).padStart(9, '0')}`,
+      // Newest first, a minute apart.
+      createdTime: new Date(Date.UTC(2024, 0, 1) + (2000 - i) * 60_000).toISOString(),
+      lastUpdatedTime: null,
+      text: `Comment ${i}`,
+      author: { id: 'usrAda0000000001', email: 'ada@airtable-fixture.test', name: 'Ada' },
+    }));
+    const busy = fakeAirtable({ comments: { recHermes00000000: many } });
+    const { app: other, id } = await importWith(busy);
+    await other.runJob(id);
+    const done = await getImport(id);
+    expect(done).toMatchObject({ status: 'done', comments: MAX_COMMENTS_PER_RECORD });
+    expect(done.report.comments).toMatchObject({
+      imported: MAX_COMMENTS_PER_RECORD,
+      cappedRecords: 1,
+    });
+    const { rows } = await t.db.execute<{ body: string }>(
+      sql`SELECT body FROM record_comments WHERE base_id = ${done.baseId} ORDER BY created_at`
+    );
+    expect(rows).toHaveLength(MAX_COMMENTS_PER_RECORD);
+    // Airtable lists the newest first: the oldest 5 were left out.
+    expect(rows[0]?.body).toBe(`Comment ${MAX_COMMENTS_PER_RECORD - 1}`);
+    expect(rows.at(-1)?.body).toBe('Comment 0');
+  });
+
+  it('cancels during the comments: it stops there, and keeps the comments written', async () => {
+    const { app: other, id } = await importWith(fakeAirtable());
+    const cancel = () =>
+      request('POST', `/api/workspaces/${workspaceId}/airtable/imports/${id}/cancel`);
+    let cancelled = false;
+    await other.runJob(id, {
+      afterPage: async () => {
+        const now = await getImport(id);
+        if (now.phase === 'comments' && now.commentRecords > 0 && !cancelled) {
+          cancelled = true;
+          await ok<AirtableImport>(await cancel());
+        }
+      },
+    });
+    const after = await getImport(id);
+    expect(after).toMatchObject({ status: 'cancelled', phase: 'comments', commentRecords: 3 });
+    // The first batch was Projects' 3 records: their comments are in, Tasks' never read.
+    expect(after.comments).toBe(4);
+    expect(await other.runJob(id)).toEqual({ status: 'gone' });
   });
 
   it('fails the job with a message when Airtable refuses the token later', async () => {

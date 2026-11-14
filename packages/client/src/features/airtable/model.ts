@@ -11,6 +11,9 @@ export function importProgress(i: AirtableImport): string {
   if (i.phase === 'links') {
     return `Linking records: ${plural(i.linkedRecords, 'record')} linked so far`;
   }
+  if (i.phase === 'comments') {
+    return `Importing comments: ${i.commentRecords.toLocaleString()} of ${plural(i.records, 'record')} read, ${plural(i.comments, 'comment')} so far`;
+  }
   return `Importing records: ${i.tablesDone} of ${plural(i.tables, 'table')}, ${plural(i.records, 'record')} so far`;
 }
 
@@ -24,6 +27,7 @@ export function importCounts(i: AirtableImport): string[] {
     );
   }
   if (i.linkedRecords) out.push(`${plural(i.linkedRecords, 'record')} linked`);
+  if (i.comments) out.push(plural(i.comments, 'comment'));
   return out;
 }
 
@@ -42,8 +46,8 @@ export function eta(i: AirtableImport, now: number): string | null {
   return `about ${plural(Math.round(minutes / 60), 'hour')} left`;
 }
 
-export function plural(n: number, word: string): string {
-  return `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
+export function plural(n: number, word: string, many = `${word}s`): string {
+  return `${n.toLocaleString()} ${n === 1 ? word : many}`;
 }
 
 /** The report's sections that have something in them, for the summary line. */
@@ -65,6 +69,69 @@ export function reportSummary(r: AirtableReport): string[] {
     out.push(`${plural(r.unsupportedViews.length, 'view')} not imported`);
   }
   if (r.truncatedTables.length) out.push(`${plural(r.truncatedTables.length, 'table')} cut short`);
+  if (r.comments.imported) out.push(`${plural(r.comments.imported, 'comment')} imported`);
+  if (r.comments.unavailable) {
+    out.push(r.comments.imported ? 'some comments not imported' : 'comments not imported');
+  }
+  return out;
+}
+
+/**
+ * The report's notes on comments, one sentence each: what came over differently, and what
+ * didn't.
+ */
+export function commentNotes(r: AirtableReport): string[] {
+  const c = r.comments;
+  const out: string[] = [];
+  if (c.unavailable) out.push(c.unavailable);
+  if (c.replies) {
+    out.push(
+      `${plural(c.replies, 'reply', 'replies')} to comments ${c.replies === 1 ? 'is' : 'are'} in the record's thread in time order.`
+    );
+  }
+  if (c.unmatchedAuthorComments) {
+    out.push(
+      `${plural(c.unmatchedAuthorComments, 'comment')} by people who aren't workspace members show "Former member" and start with the author's name: ${c.unmatchedAuthors.join(', ')}.`
+    );
+  }
+  if (c.plainMentions) {
+    out.push(
+      `${plural(c.plainMentions, 'mention')} of people who aren't members, user groups or apps ${c.plainMentions === 1 ? 'is kept as a plain name' : 'are kept as plain names'}.`
+    );
+  }
+  if (c.otherReactions) {
+    out.push(
+      `${plural(c.otherReactions, 'reaction')} with emoji OpenRows doesn't have ${c.otherReactions === 1 ? 'was' : 'were'} left out.`
+    );
+  }
+  if (c.unmatchedReactions) {
+    out.push(
+      `${plural(c.unmatchedReactions, 'reaction')} by people who aren't members ${c.unmatchedReactions === 1 ? 'was' : 'were'} left out.`
+    );
+  }
+  if (c.emptyComments) {
+    out.push(
+      `${plural(c.emptyComments, 'comment')} without text ${c.emptyComments === 1 ? 'was' : 'were'} left out.`
+    );
+  }
+  if (c.truncatedComments) {
+    out.push(
+      `${plural(c.truncatedComments, 'comment')} longer than 10,000 characters ${c.truncatedComments === 1 ? 'was' : 'were'} cut short.`
+    );
+  }
+  if (c.cappedRecords) {
+    out.push(
+      `${plural(c.cappedRecords, 'record')} had more than 1,000 comments: the oldest were left out.`
+    );
+  }
+  if (c.unreadRecords) {
+    out.push(`Airtable didn't return the comments of ${plural(c.unreadRecords, 'record')}.`);
+  }
+  if (c.attachments.length) {
+    out.push(
+      `Files attached to comments aren't copied: ${c.attachments.map((a) => `${a.filename} (${a.table})`).join(', ')}.`
+    );
+  }
   return out;
 }
 
@@ -78,7 +145,8 @@ export function hasReportLines(r: AirtableReport): boolean {
     r.failedAttachments.length > 0 ||
     r.unsupportedViews.length > 0 ||
     r.partialViews.length > 0 ||
-    r.skippedLinks > 0
+    r.skippedLinks > 0 ||
+    commentNotes(r).length > 0
   );
 }
 

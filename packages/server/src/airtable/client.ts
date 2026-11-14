@@ -12,6 +12,10 @@ import { type SafeFetch, SafeFetchError, type SafeResponse } from '../lib/safe-f
  * The token goes in the Authorization header only. Errors never carry it, nor Airtable's
  * answer: they say what the person can do about it.
  *
+ * Record comments (`data.recordComments:read`, optional) are listed per record, newest first;
+ * a refusal there comes back as a status rather than an error, so the importer can go on without
+ * them.
+ *
  * Attachments are downloaded from Airtable's file hosts only (`AIRTABLE_ATTACHMENT_HOSTS`:
  * dl.airtable.com and *.airtableusercontent.com), again through the SSRF-safe client, without
  * the token (Airtable's file URLs are signed), up to MAX_AIRTABLE_ATTACHMENT_BYTES.
@@ -85,6 +89,60 @@ const recordsPageSchema = z.object({
 });
 export type AirtableRecordsPage = z.infer<typeof recordsPageSchema>;
 
+/** Airtable's ids other than the record's: users, groups, comments (letters and digits). */
+const looseId = z.string().min(1).max(64);
+const person = z.object({
+  email: z.string().max(320).nullish(),
+  name: z.string().max(1000).nullish(),
+});
+/** A comment (https://airtable.com/developers/web/api/list-comments). Attachment URLs are dropped. */
+export const airtableCommentSchema = z.object({
+  id: looseId,
+  createdTime: z.string().max(64),
+  lastUpdatedTime: z.string().max(64).nullish(),
+  text: z.string().max(1_000_000),
+  author: person.extend({ id: looseId }),
+  parentCommentId: looseId.nullish(),
+  /** By id: `user` (with an email), `userGroup` or `appAgent`. */
+  mentioned: z
+    .record(
+      z.string().max(320),
+      z.object({
+        type: z.string().max(32),
+        id: looseId,
+        email: z.string().max(320).nullish(),
+        displayName: z.string().max(1000).nullish(),
+        name: z.string().max(1000).nullish(),
+      })
+    )
+    .nullish(),
+  reactions: z
+    .array(
+      z.object({
+        emoji: z.object({ unicodeCharacter: z.string().max(64) }),
+        reactingUser: person.extend({ userId: looseId }),
+      })
+    )
+    .max(10_000)
+    .nullish(),
+  /** Only the names: the URLs expire after 2 hours and are never kept. */
+  attachments: z
+    .array(z.object({ filename: z.string().max(1000) }))
+    .max(1000)
+    .nullish(),
+});
+export type AirtableComment = z.infer<typeof airtableCommentSchema>;
+const commentsPageSchema = z.object({
+  comments: z.array(airtableCommentSchema).max(100),
+  offset: offsetSchema.nullable(),
+});
+export type AirtableCommentsPage =
+  | { status: 'ok'; comments: AirtableComment[]; offset: string | null }
+  /** 403: the token lacks `data.recordComments:read` (or can no longer read the record). */
+  | { status: 'forbidden' }
+  /** 404: the record is gone from Airtable. */
+  | { status: 'missing' };
+
 export interface AirtableClientDeps {
   http: SafeFetch;
   /** The Web API's origin (default https://api.airtable.com). */
@@ -100,6 +158,13 @@ export interface AirtableClient {
   listBases(): Promise<AirtableBase[]>;
   tables(baseId: string): Promise<AirtableTable[]>;
   records(baseId: string, tableId: string, offset?: string): Promise<AirtableRecordsPage>;
+  /** A page of a record's comments, newest first (up to 100). */
+  comments(
+    baseId: string,
+    tableId: string,
+    recordId: string,
+    offset?: string
+  ): Promise<AirtableCommentsPage>;
   /** A file from Airtable's file hosts: its bytes and declared type. */
   download(url: string, maxBytes: number): Promise<{ body: Uint8Array; contentType: string }>;
 }
@@ -149,7 +214,12 @@ export function createAirtableClient(token: string, deps: AirtableClientDeps): A
   const fileHosts = deps.attachmentHosts ?? AIRTABLE_ATTACHMENT_HOSTS;
   let next = 0;
 
-  async function get(path: string, what: string): Promise<unknown> {
+  /** The parsed answer, or `{ refused }` for a status in `pass` (any other refusal throws). */
+  async function request(
+    path: string,
+    what: string,
+    pass: readonly number[]
+  ): Promise<{ body: unknown } | { refused: number }> {
     const url = new URL(path, origin);
     // Built from checked ids, but checked again: Airtable is the only host this client calls.
     if (url.origin !== origin) throw new Error("airtable: refused a URL off Airtable's API");
@@ -178,15 +248,22 @@ export function createAirtableClient(token: string, deps: AirtableClientDeps): A
         next = now() + AIRTABLE_MIN_INTERVAL_MS;
         continue;
       }
+      if (pass.includes(res.status)) return { refused: res.status };
       if (res.status !== 200) throw failure(res.status, what);
       try {
-        return JSON.parse(res.text());
+        return { body: JSON.parse(res.text()) as unknown };
       } catch {
         throw new AppError('SERVICE_UNAVAILABLE', {
           detail: 'Airtable sent an unreadable answer.',
         });
       }
     }
+  }
+
+  async function get(path: string, what: string): Promise<unknown> {
+    const res = await request(path, what, []);
+    if ('refused' in res) throw failure(res.refused, what);
+    return res.body;
   }
 
   function parse<T>(schema: z.ZodType<T>, data: unknown): T {
@@ -226,6 +303,21 @@ export function createAirtableClient(token: string, deps: AirtableClientDeps): A
       if (offset) q.set('offset', offset);
       const data = await get(`/v0/${baseId}/${tableId}?${q}`, "the base's records");
       return parse(recordsPageSchema, data);
+    },
+    async comments(baseId, tableId, recordId, offset) {
+      if (!id('app').test(baseId) || !id('tbl').test(tableId) || !id('rec').test(recordId)) {
+        throw new Error('airtable: bad base, table or record id');
+      }
+      const q = new URLSearchParams({ pageSize: '100' });
+      if (offset) q.set('offset', offset);
+      const res = await request(
+        `/v0/${baseId}/${tableId}/${recordId}/comments?${q}`,
+        "the records' comments",
+        [403, 404]
+      );
+      if ('refused' in res) return { status: res.refused === 404 ? 'missing' : 'forbidden' };
+      const page = parse(commentsPageSchema, res.body);
+      return { status: 'ok', comments: page.comments, offset: page.offset ?? null };
     },
     async download(raw, maxBytes) {
       let url: URL;

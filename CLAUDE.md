@@ -285,12 +285,17 @@ packages/
                              inverses, computed fields in rounds, then the views), views.ts
                              (Airtable's views → ours: the fields chosen and the report notes),
                              files.ts (attachments copied per page, sniffed, thumbnails),
+                             comments.ts (record comments per record with the optional
+                             `data.recordComments:read`: authors, mentions and reactions by
+                             members' emails, replies flattened, written straight to
+                             `record_comments` without outbox events or notifications),
                              import.ts (the request's new bases + encrypted-token jobs, the
                              worker's `airtable.import`: schema, records by page with Airtable's
                              creation times and creators, the record map
-                             `airtable_import_records`, the links pass; cancel), routes.ts;
-                             __fixtures__/ (the recorded-fixture fake of Airtable and a generated
-                             20k-record base, for tests)
+                             `airtable_import_records`, the links pass, the comments pass;
+                             cancel), routes.ts; __fixtures__/ (the recorded-fixture fake of
+                             Airtable with comments.json, and a generated 20k-record base, for
+                             tests)
     src/v1/                  the public REST API v1 (Airtable's shape, docs/api/v1.md):
                              routes.ts (resource routes on the base, then authorizeTable),
                              records.ts (names ⇄ ids, cells via the registry's apiValue, list,

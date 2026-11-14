@@ -1,6 +1,7 @@
-import type { AirtableImport } from '@openrows/shared';
+import { type AirtableImport, emptyAirtableCommentsReport } from '@openrows/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  commentNotes,
   eta,
   hasReportLines,
   importCounts,
@@ -22,6 +23,7 @@ const report = {
   views: 0,
   unsupportedViews: [],
   partialViews: [],
+  comments: emptyAirtableCommentsReport(),
 };
 
 const job = (over: Partial<AirtableImport>): AirtableImport => ({
@@ -37,6 +39,8 @@ const job = (over: Partial<AirtableImport>): AirtableImport => ({
   attachments: 0,
   attachmentsFailed: 0,
   linkedRecords: 0,
+  commentRecords: 0,
+  comments: 0,
   percent: 0,
   report,
   error: null,
@@ -62,6 +66,9 @@ describe('airtable import model', () => {
       'Done: 1 table, 1 record'
     );
     expect(importProgress(job({ status: 'failed' }))).toBe('Failed');
+    expect(
+      importProgress(job({ phase: 'comments', records: 1500, commentRecords: 250, comments: 1 }))
+    ).toBe('Importing comments: 250 of 1,500 records read, 1 comment so far');
   });
 
   it('counts tables, records, files and links', () => {
@@ -71,6 +78,7 @@ describe('airtable import model', () => {
       )
     ).toEqual(['1 of 2 tables', '10 records', '4 files (1 failed)']);
     expect(importCounts(job({ linkedRecords: 5 }))).toContain('5 records linked');
+    expect(importCounts(job({ comments: 12 }))).toContain('12 comments');
   });
 
   it('estimates the time left from the pace so far', () => {
@@ -121,6 +129,37 @@ describe('airtable import model', () => {
     expect(hasReportLines(partial)).toBe(true);
     // Notes on views that were created don't add to the summary line.
     expect(reportSummary(partial)).toEqual(['1 view imported']);
+  });
+
+  it('reports comments: what came over, what changed and what was left out', () => {
+    const comments = {
+      ...emptyAirtableCommentsReport(),
+      imported: 12,
+      replies: 2,
+      unmatchedAuthors: ['Grace Hopper (grace@example.test)'],
+      unmatchedAuthorComments: 3,
+      plainMentions: 1,
+      otherReactions: 2,
+      attachments: [{ table: 'Projects', filename: 'shot.png' }],
+    };
+    const withComments = { ...report, comments };
+    expect(reportSummary(withComments)).toEqual(['12 comments imported']);
+    expect(hasReportLines(withComments)).toBe(true);
+    expect(commentNotes(withComments)).toEqual([
+      "2 replies to comments are in the record's thread in time order.",
+      '3 comments by people who aren\'t workspace members show "Former member" and start with the author\'s name: Grace Hopper (grace@example.test).',
+      "1 mention of people who aren't members, user groups or apps is kept as a plain name.",
+      "2 reactions with emoji OpenRows doesn't have were left out.",
+      "Files attached to comments aren't copied: shot.png (Projects).",
+    ]);
+    // Without the scope: once, with the reason.
+    const missing = {
+      ...report,
+      comments: { ...emptyAirtableCommentsReport(), unavailable: 'Add data.recordComments:read.' },
+    };
+    expect(reportSummary(missing)).toEqual(['comments not imported']);
+    expect(commentNotes(missing)).toEqual(['Add data.recordComments:read.']);
+    expect(commentNotes(report)).toEqual([]);
   });
 
   it('recognizes personal access tokens', () => {
