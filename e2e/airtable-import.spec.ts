@@ -5,7 +5,7 @@ import { expect, test } from './helpers/test.js';
 
 // "Import from Airtable" on Home against the mocked API: paste a token, pick a
 // base, start the import, watch its progress bar, see it finish (a toast too) and read its
-// report (comments and collaborators too); cancel a running one. The token goes only in request bodies, and is
+// report (comments, collaborators and share links too); cancel a running one. The token goes only in request bodies, and is
 // cleared from the dialog once the import starts.
 
 const TOKEN = `patE2eFixture0001.${'ab12'.repeat(16)}`;
@@ -79,6 +79,36 @@ const report = {
     invitations: [],
     interfaceOnly: [],
   },
+  shares: {
+    unavailable: null,
+    note: 'No share links, form links or embeds were created.',
+    total: 1,
+    enabled: 1,
+    disabled: 0,
+    byType: { base: 0, view: 1, blockInstallation: 0, other: 0 },
+    viewsImported: 1,
+    viewsNotImported: 0,
+    unreadable: 0,
+    shares: [
+      {
+        shareId: 'shrE2eKanban0001',
+        type: 'view',
+        state: 'enabled',
+        airtableViewId: 'viwE2eKanban0001',
+        view: { tableId: IDS.table, table: 'Projects', viewId: IDS.view, name: 'By status' },
+        blockInstallationId: null,
+        isPasswordProtected: true,
+        restrictedToEmailDomains: [],
+        effectiveEmailDomainAllowList: null,
+        restrictedToEnterpriseMembers: false,
+        canBeSynced: true,
+        createdTime: '2024-02-02T09:00:00.000Z',
+        createdByUserId: 'usrAda0000000001',
+        createdByEmail: 'ada@example.test',
+        message: 'A link to the view "By status" in Projects.',
+      },
+    ],
+  },
 };
 
 type Status = 'running' | 'done' | 'cancelled';
@@ -115,6 +145,7 @@ function job(status: Status) {
             attachments: [],
           },
           collaborators: null,
+          shares: null,
         }
       : report,
     error:
@@ -237,6 +268,13 @@ test('imports an Airtable base and shows the report', async ({ page }) => {
   await expect(item).toContainText('grace@example.test (Airtable: owner)');
   await expect(item).toContainText('Design team, a base group (Airtable: edit)');
   await expect(item).toContainText("Airtable's API doesn't share table or field edit permissions");
+  // Share links: listed only, never recreated.
+  await expect(item).toContainText('1 Airtable share link listed, not recreated');
+  await expect(item).toContainText('Share links (listed, not recreated)');
+  await expect(item).toContainText('No share links, form links or embeds were created.');
+  await expect(item).toContainText(
+    'View link shrE2eKanban0001 (enabled, password, made by ada@example.test, 2024-02-02): A link to the view "By status" in Projects.'
+  );
   // The toast says it's done (the watcher), with a way to the base.
   await expect(page.getByText('Airtable import done: Product launch')).toBeVisible({
     timeout: 15_000,

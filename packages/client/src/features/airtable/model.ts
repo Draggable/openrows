@@ -1,4 +1,4 @@
-import type { AirtableImport, AirtableReport } from '@openrows/shared';
+import type { AirtableImport, AirtableReport, AirtableShareLine } from '@openrows/shared';
 import { ROLE_LABELS } from '../../app/names';
 
 /** How far an import is, in words. */
@@ -78,6 +78,9 @@ export function reportSummary(r: AirtableReport): string[] {
   if (c?.raised.length)
     out.push(`${plural(c.raised.length, 'person', 'people')} given a base role`);
   if (c?.unavailable) out.push('collaborators not read');
+  const s = r.shares;
+  if (s?.total) out.push(`${plural(s.total, 'Airtable share link')} listed, not recreated`);
+  if (s?.unavailable) out.push('share links not listed');
   return out;
 }
 
@@ -130,6 +133,58 @@ export function collaboratorSections(r: AirtableReport): { title: string; lines:
     },
   ];
   return sections.filter((s) => s.lines.length);
+}
+
+const SHARE_KINDS: Record<string, string> = {
+  base: 'Base link',
+  view: 'View link',
+  blockInstallation: 'Extension link',
+};
+
+function shareLine(l: AirtableShareLine): string {
+  const details = [l.state];
+  if (l.isPasswordProtected) details.push('password');
+  const domains = l.effectiveEmailDomainAllowList ?? l.restrictedToEmailDomains;
+  if (l.effectiveEmailDomainAllowList?.length === 0) details.push('nobody can open it');
+  else if (domains.length) details.push(`only ${domains.join(', ')}`);
+  if (l.restrictedToEnterpriseMembers) details.push('enterprise members only');
+  const by = l.createdByEmail ?? l.createdByUserId;
+  if (by) details.push(`made by ${by}`);
+  if (l.createdTime) details.push(l.createdTime.slice(0, 10));
+  const kind = SHARE_KINDS[l.type] ?? `"${l.type}" link`;
+  return `${kind} ${l.shareId} (${details.join(', ')}): ${l.message}`;
+}
+
+/**
+ * The report's Airtable share links: listed, never recreated (a new link here would be public at
+ * once, and Airtable's API doesn't give passwords).
+ */
+export function shareSections(r: AirtableReport): { title: string; lines: string[] }[] {
+  const s = r.shares;
+  if (!s) return [];
+  if (s.unavailable) return [{ title: 'Share links', lines: [s.unavailable] }];
+  if (!s.total && !s.unreadable) return [];
+  const kinds = [
+    s.byType.base && `${s.byType.base} to the base`,
+    s.byType.view &&
+      `${s.byType.view} to views (${s.viewsImported} of them imported, ${s.viewsNotImported} not)`,
+    s.byType.blockInstallation && `${s.byType.blockInstallation} to extensions`,
+    s.byType.other && `${s.byType.other} of other kinds`,
+  ].filter(Boolean);
+  const intro = [
+    `Airtable had ${plural(s.total, 'share link')}: ${s.enabled} enabled, ${s.disabled} disabled${kinds.length ? `; ${kinds.join(', ')}` : ''}.`,
+    s.note,
+  ];
+  if (s.unreadable) {
+    intro.push(
+      `${plural(s.unreadable, 'entry', 'entries')} in Airtable's answer couldn't be read and ${s.unreadable === 1 ? "isn't" : "aren't"} listed.`
+    );
+  }
+  const sections = [
+    { title: 'Share links (listed, not recreated)', lines: intro },
+    { title: 'Airtable share links', lines: s.shares.map(shareLine) },
+  ];
+  return sections.filter((x) => x.lines.length);
 }
 
 /**
@@ -203,7 +258,8 @@ export function hasReportLines(r: AirtableReport): boolean {
     r.partialViews.length > 0 ||
     r.skippedLinks > 0 ||
     commentNotes(r).length > 0 ||
-    Boolean(r.collaborators)
+    Boolean(r.collaborators) ||
+    shareSections(r).length > 0
   );
 }
 

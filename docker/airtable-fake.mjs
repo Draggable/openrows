@@ -20,6 +20,8 @@ const schema = read('schema.json');
 const comments = read('comments.json');
 // The base's collaborators (GET /v0/meta/bases/{base}?include[]=collaborators).
 const collaborators = read('collaborators.json');
+// The base's share links (GET /v0/meta/bases/{base}/shares, Airtable's "List shares"): read only.
+const shares = read('shares.json');
 // Airtable's file URLs → this server's.
 const records = JSON.parse(
   JSON.stringify(read('records.json')).replace(
@@ -58,6 +60,10 @@ createServer((req, res) => {
   }
   if (path === '/v0/meta/bases') return json(res, 200, bases);
   if (path === `/v0/meta/bases/${BASE_ID}/tables`) return json(res, 200, schema);
+  if (path === `/v0/meta/bases/${BASE_ID}/shares`) {
+    if (req.method !== 'GET') return json(res, 422, { error: { type: 'INVALID_REQUEST_UNKNOWN' } });
+    return json(res, 200, shares);
+  }
   if (path === `/v0/meta/bases/${BASE_ID}`) {
     const include = url.searchParams.getAll('include[]');
     if (include.length !== 1 || include[0] !== 'collaborators') {

@@ -51,12 +51,23 @@ export interface FieldState {
   link?: boolean;
 }
 
+/** One of the table's Airtable views, and the view made from it (null: not imported). */
+export interface ViewState {
+  airtableId: string;
+  name: string;
+  /** Airtable's view type. */
+  type: string;
+  viewId: string | null;
+}
+
 export interface TableState {
   airtableId: string;
   tableId: string;
   name: string;
   fields: FieldState[];
   records: number;
+  /** Its Airtable views (absent in progress stored before views were kept here). */
+  views?: ViewState[];
 }
 
 /** One side of a link: the field, its table and the table it links to. */
@@ -198,7 +209,14 @@ async function createTableFrom(
   const out: Built = {
     plan,
     table,
-    state: { airtableId: plan.airtableId, tableId: table.id, name: plan.name, fields, records: 0 },
+    state: {
+      airtableId: plan.airtableId,
+      tableId: table.id,
+      name: plan.name,
+      fields,
+      records: 0,
+      views: [],
+    },
     count: 1,
   };
   // Plain fields; links, formulas and computed fields come once every table exists.
@@ -534,9 +552,13 @@ async function createViews(
     options: parseOptions(fieldType(f), f.config),
   }));
   let spare = (await liveViews(tx, b.table.id, ctx.userId)).find((v) => v.type === 'grid');
+  const kept: ViewState[] = [];
+  b.state.views = kept;
   for (const v of source.views) {
     const name = v.name.trim().slice(0, 255) || 'View';
     const line = { table: b.plan.name, view: name, type: v.type };
+    const state: ViewState = { airtableId: v.id, name, type: v.type, viewId: null };
+    kept.push(state);
     const plan = planView(v, ours, ids);
     if (!plan.ok) {
       capped(report.unsupportedViews, { ...line, message: plan.message });
@@ -548,8 +570,10 @@ async function createViews(
       const sctx = { ...ctx, tx: sp };
       const row = reuse ?? (await createViewRow(sctx, b.table, name, plan.type));
       await updateView(sctx, row, { ...(reuse ? { name } : {}), ...plan.config }, rights);
+      return row.id;
     });
     if (made.ok) {
+      state.viewId = made.value;
       report.views++;
       capped(report.partialViews, { ...line, message: plan.note });
     } else {

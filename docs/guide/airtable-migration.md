@@ -18,6 +18,8 @@ The base's collaborators are read with `schema.bases:read` too: no other scope i
 
 To bring record comments too, also give the token the scope `data.recordComments:read`. It is optional: without it, everything else is imported and the report says comments weren't (see [Comments](#comments)).
 
+To list the base's share links in the report, also give the token the scope `workspacesAndBases.shares:manage`. It is optional too, and Airtable's "List shares" only answers when Airtable lets the token list the base's shares. OpenRows only reads that list, to describe what existed: it never changes, turns off or deletes a share in Airtable, and creates no links here (see [Share links](#share-links)).
+
 OpenRows uses the token only for the import. It is kept encrypted while the import runs and deleted when it ends, or 24 hours after the start at the latest (an import still running then fails). You can revoke it at Airtable once you're done.
 
 ### Pick bases and start
@@ -30,7 +32,7 @@ If Airtable refuses the token, or the token can't read a base you picked, the di
 
 ### Progress and cancelling
 
-The dialog's **Your imports** list shows each import with a progress bar, the tables, records, files and linked records so far, and an estimate of the time left. An import goes through four steps: "Creating tables, fields and views", "Importing records", "Linking records" and "Importing comments". When the comments are in, the base's collaborators are read and applied in one last request. The import keeps running if you close the dialog or the tab, and the browser you started it from shows a notice with **Open base** when it ends. Finished imports stay in the list for 7 days.
+The dialog's **Your imports** list shows each import with a progress bar, the tables, records, files and linked records so far, and an estimate of the time left. An import goes through four steps: "Creating tables, fields and views", "Importing records", "Linking records" and "Importing comments". When the comments are in, the base's collaborators are read and applied, and its share links are listed, in two last requests. The import keeps running if you close the dialog or the tab, and the browser you started it from shows a notice with **Open base** when it ends. Finished imports stay in the list for 7 days.
 
 Airtable allows 5 requests a second, and OpenRows reads 100 records per request, so large bases take a while. Comments take longer still: Airtable's API lists them one record at a time, so the comments step makes at least one request for every imported record, about 5 records a second (10,000 records take about 35 minutes). Without the comments scope this step ends after one request. An import can run for up to 24 hours: if the comments step is still going then, it stops, the import finishes without the remaining records' comments, and the report says so.
 
@@ -49,6 +51,7 @@ When an import ends, a summary line says what needed attention, and **Import rep
 | Views not imported | Views that couldn't be created, with the reason (a form, or a calendar in a table without a date field) |
 | View settings not imported | Each view that was created: the fields chosen for it here and the settings Airtable's API doesn't share |
 | Collaborators | Workspace members given a base role (their email, Airtable's permission level, their access before and the base role now), how many members already had that access, people who aren't workspace members, levels that weren't applied and why, user groups, open Airtable invitations and interface-only people. It also says if Airtable's collaborators couldn't be read, and that table and field edit permissions weren't imported |
+| Share links | Airtable's share links, listed but not recreated: how many, enabled and disabled, to the base, to views (and whether each view was imported) or to extensions. Each link has Airtable's share id, its state, whether it had a password, its email domain and enterprise restrictions, who made it and when, and the imported view it pointed at. It also says if the token couldn't list them |
 | Comments | Why comments weren't imported (the token lacks `data.recordComments:read`), replies placed in the thread, comments by people who aren't members (with their names), mentions kept as plain names, reactions left out, comments without text, comments cut short, records with more than 1,000 comments, records Airtable didn't return comments for, and files attached to comments |
 
 It also counts links that were skipped and names tables cut short at 100,000 records.
@@ -167,6 +170,19 @@ Roles are given only when the whole import succeeds, after the records, links an
 
 **Table and field edit permissions** aren't imported: Airtable's API doesn't share who may edit a table or a field. Every table and field of the new base is editable by editors and above, as usual. Set the permissions again if you need them (see [Edit permissions](sharing.md#edit-permissions)).
 
+## Share links
+
+With the `workspacesAndBases.shares:manage` scope, OpenRows reads the Airtable base's share links at the end of an import through Airtable's API ("List shares") and lists them in the report. It doesn't recreate them: no share link, form link or embed is created or published, so nothing in the new base is public after an import.
+
+- A new OpenRows link is public as soon as it's made, and Airtable's API gives neither a share's password (only whether it has one) nor a link that works here: Airtable's share id is listed only so you can find the link in Airtable.
+- For a link to a view, the report names the view imported from it. Links to views that weren't imported (forms, Gantt and extension views, views that couldn't be created) and links to extensions are listed with the reason.
+- Who made a link is shown by email when that person is among the base's collaborators; otherwise by Airtable's user id.
+- Nothing is changed in Airtable: links stay enabled or disabled there as they were.
+
+To have a link again, create it in OpenRows from the view's **Share view** or the base's **Share** dialog, and set a password, email domains and the other options there (see [Share links](sharing.md#share-links) and [Embeds](sharing.md#embeds)). For a form, build it again first (see [Forms](forms.md)).
+
+Share links are listed only when the whole import succeeds. If the token can't list them (it lacks the scope, or Airtable won't let it list the base's shares), everything else is still imported and the report says so once.
+
 ## Views
 
 Airtable's API describes a view by its name and type, and a grid view also by its visible fields in their order. It doesn't share any other view setting: no filters, sorts, groups, row colours, manual record order or column widths, and not which field a kanban view stacks by, which date fields a calendar or timeline view uses, or a gallery's cover and card fields. So views come over like this:
@@ -211,7 +227,7 @@ Formulas that translate can still behave differently:
 - Automations: rebuild them in OpenRows (see [Automations](automations.md)).
 - Collaborators who aren't workspace members, user groups, and Airtable invitations: they're only listed in the report (see "Collaborators and roles").
 - Table and field edit permissions: Airtable's API doesn't share them. Set them up again (see [Sharing and permissions](sharing.md)).
-- Share links, invite links and form views (see [Sharing](sharing.md) and [Forms](forms.md)).
+- Share links, form links and embeds: with the `workspacesAndBases.shares:manage` scope they're listed in the report, never recreated (see "Share links"). Invite links and form views aren't imported either (see [Sharing](sharing.md) and [Forms](forms.md)).
 - View settings Airtable's API doesn't share: filters, sorts, groups, row colours, manual record order, column widths, and the fields kanban, calendar, timeline and gallery views use (see "Views").
 - More than 100,000 records per table: the rest of a larger table is cut off and the report names it.
 
@@ -270,7 +286,7 @@ A CSV carries one table at a time and only cell text: no formulas, links between
 7. Fill in user cells for people who weren't workspace members during the import. Their comments came over without an author (headed by their name), and their reactions and mentions as plain names or not at all; this doesn't change when they join later.
 8. If the report says comments weren't imported, add the `data.recordComments:read` scope and import the base again. Download files attached to comments from Airtable if you need them.
 9. Go through the report's "Collaborators": check the base roles given, invite the people who weren't workspace members and the members of Airtable's groups if they need the base, and set table and field permissions again (see [Sharing and permissions](sharing.md)).
-10. Rebuild automations, forms and share links.
+10. Rebuild automations and forms, and go through the report's "Share links": recreate the links you still need with Share, with their passwords and email domains (see [Share links](sharing.md#share-links)).
 11. Move integrations to the OpenRows API: new address, token and ids.
 12. Delete half-filled bases from cancelled or failed imports, and revoke the Airtable token.
 

@@ -18,6 +18,11 @@ import {
   PNG_1PX,
 } from '../../src/airtable/__fixtures__/fake.js';
 import { COLLABORATORS_FORBIDDEN } from '../../src/airtable/collaborators.js';
+import {
+  SHARES_FORBIDDEN,
+  SHARES_NOT_RECREATED,
+  SHARES_TOKEN_REJECTED,
+} from '../../src/airtable/shares.js';
 import { SESSION_COOKIE } from '../../src/auth/session-token.js';
 import type { users } from '../../src/db/index.js';
 import { memoryTransport } from '../../src/email/transport.js';
@@ -520,9 +525,9 @@ describe('Airtable import', () => {
     // the block view, the form and a calendar without a date field are listed.
     const viewsOf = async (tableId: string) =>
       (
-        await ok<{ views: { name: string; type: string; config: Record<string, unknown> }[] }>(
-          await request('GET', `/api/tables/${tableId}/views`)
-        )
+        await ok<{
+          views: { id: string; name: string; type: string; config: Record<string, unknown> }[];
+        }>(await request('GET', `/api/tables/${tableId}/views`))
       ).views;
     const projectViews = await viewsOf(projects.id);
     expect(projectViews.map((v) => [v.name, v.type])).toEqual([
@@ -669,6 +674,42 @@ describe('Airtable import', () => {
     );
     expect(baseRoles).toEqual([{ user_id: ada.id, role: 'creator' }]);
     expect(mailbox.sent).toEqual([]);
+
+    // Share links: listed with one GET, view links matched to the imported views; none created.
+    expect(done.report.shares).toMatchObject({
+      unavailable: null,
+      note: SHARES_NOT_RECREATED,
+      total: 5,
+      enabled: 3,
+      disabled: 2,
+      byType: { base: 1, view: 3, blockInstallation: 1, other: 0 },
+      viewsImported: 2,
+      viewsNotImported: 1,
+      unreadable: 0,
+    });
+    expect(
+      done.report.shares?.shares.map((l) => [l.shareId, l.view?.viewId ?? null, l.createdByEmail])
+    ).toEqual([
+      ['shrBaseFixture001', null, 'grace@airtable-fixture.test'],
+      ['shrKanbanFixture1', projectViews[1]?.id, 'ada@airtable-fixture.test'],
+      ['shrFormFixture001', null, 'ada@airtable-fixture.test'],
+      ['shrGridFixture001', projectViews[0]?.id, null],
+      ['shrBlockFixture01', null, 'grace@airtable-fixture.test'],
+    ]);
+    expect(done.report.shares?.shares[1]?.view).toEqual({
+      tableId: projects.id,
+      table: 'Projects',
+      viewId: projectViews[1]?.id,
+      name: 'By status',
+    });
+    const asked = fake.requests.filter((r) => r.url.endsWith('/shares'));
+    expect(asked.map((r) => [r.method, new URL(r.url).pathname])).toEqual([
+      ['GET', `/v0/meta/bases/${FIXTURE_BASE_ID}/shares`],
+    ]);
+    const { rows: links } = await t.db.execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM shares WHERE base_id = ${job.baseId}`
+    );
+    expect(links[0]?.n).toBe(0);
 
     // The job wrote only into its own base.
     const tablesAfter = await t.db.execute<{ n: number }>(
@@ -1245,6 +1286,31 @@ describe('Airtable import: collaborators and roles', () => {
     expect(done.report.collaborators?.unavailable).toContain('unexpected answer');
   });
 
+  it("finishes the import when the token can't list share links, and says so once", async () => {
+    for (const [status, message] of [
+      [403, SHARES_FORBIDDEN],
+      [404, SHARES_FORBIDDEN],
+      [401, SHARES_TOKEN_REJECTED],
+      [503, expect.stringContaining("Airtable didn't answer (503)")],
+    ] as const) {
+      const before = await snapshot();
+      const fake = fakeAirtable({ collaborators: answer, sharesStatus: status });
+      const { done, baseRoles } = await run(fake);
+      expect(done).toMatchObject({ status: 'done', error: null, records: 153 });
+      // Everything else, the collaborators too, still came over.
+      expect(done.report.collaborators?.unavailable).toBeNull();
+      expect(baseRoles[at('ed')]).toBe('creator');
+      expect(done.report.shares).toMatchObject({ unavailable: message, total: 0, shares: [] });
+      expect(fake.requests.filter((r) => r.url.endsWith('/shares'))).toHaveLength(1);
+      const { rows } = await t.db.execute<{ n: number }>(
+        sql`SELECT count(*)::int AS n FROM shares WHERE base_id = ${done.baseId}`
+      );
+      expect(rows[0]?.n).toBe(0);
+      const after = await snapshot();
+      expect(after?.users).toBe(before?.users);
+    }
+  });
+
   it('gives no base roles when the import is cancelled before it ends', async () => {
     let cancel: () => Promise<void> = async () => {};
     const fake = fakeAirtable({ collaborators: answer, onCollaborators: () => cancel() });
@@ -1265,6 +1331,7 @@ describe('Airtable import: collaborators and roles', () => {
     // Cancelled after the collaborators were read, before they were applied.
     expect(done.status).toBe('cancelled');
     expect(done.report.collaborators).toBeNull();
+    expect(done.report.shares).toBeNull();
     expect(baseRoles).toEqual({});
   });
 

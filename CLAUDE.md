@@ -293,14 +293,19 @@ packages/
                              collaborators` only: levels → base roles, existing workspace members
                              raised through setBaseRole with the job's end, never invited or
                              emailed; everyone else, groups, invitations, interface-only people
-                             only reported),
+                             only reported), shares.ts (Airtable's "List shares" with the optional
+                             `workspacesAndBases.shares:manage`, read once at the end: report
+                             only, view links mapped to the imported views, never a share link,
+                             form link or embed created, nothing changed in Airtable; 401/403/404
+                             reported once),
                              import.ts (the request's new bases + encrypted-token jobs, the
                              worker's `airtable.import`: schema, records by page with Airtable's
                              creation times and creators, the record map
                              `airtable_import_records`, the links pass, the comments pass, the
-                             collaborators; cancel), routes.ts; __fixtures__/ (the
-                             recorded-fixture fake of Airtable with comments.json and
-                             collaborators.json, and a generated 20k-record base, for tests)
+                             collaborators, the share links; cancel), routes.ts; __fixtures__/ (the
+                             recorded-fixture fake of Airtable with comments.json,
+                             collaborators.json and shares.json, and a generated 20k-record base,
+                             for tests)
     src/v1/                  the public REST API v1 (Airtable's shape, docs/api/v1.md):
                              routes.ts (resource routes on the base, then authorizeTable),
                              records.ts (names ⇄ ids, cells via the registry's apiValue, list,

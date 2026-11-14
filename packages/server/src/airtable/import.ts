@@ -10,7 +10,7 @@ import {
   roleAllows,
   type UserRole,
 } from '@openrows/shared';
-import { and, asc, desc, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { storageUsage } from '../attachments/service.js';
 import type { ObjectStore } from '../attachments/storage.js';
@@ -26,6 +26,7 @@ import {
   type Database,
   jobs as jobsTable,
   type Transaction,
+  views as viewsTable,
 } from '../db/index.js';
 import { ossEntitlements } from '../edition/oss.js';
 import type { AuditSink, EntitlementsProvider } from '../edition/types.js';
@@ -83,6 +84,7 @@ import {
 } from './files.js';
 import { cellInput, planTables } from './mapping.js';
 import { buildSchema, capped, type LinkPair, type TableState } from './schema.js';
+import { airtableUserEmails, type KnownView, readShares, sharesReport } from './shares.js';
 
 /**
  * The Airtable importer's job. The request checks the token against Airtable,
@@ -112,6 +114,10 @@ import { buildSchema, capped, type LinkPair, type TableState } from './schema.js
  *    access is lower than their Airtable level get a base role. Nobody is invited or emailed;
  *    everyone else is listed in the report. A cancelled or failed import never gets here, and a
  *    refused or failed read only adds a report line.
+ * 6. Share links (shares.ts), with the collaborators: Airtable's "List shares" (one request, the
+ *    optional `workspacesAndBases.shares:manage` scope) is only described in the report, view
+ *    links matched to the views imported from them. Nothing is created or published here, and
+ *    nothing is changed in Airtable. A refused or failed list only adds a report line.
  *
  * Every step runs as the person who started it, with their live workspace role (a creator's),
  * and only ever in the job's own base. The token is decrypted for the job only, and cleared from
@@ -167,6 +173,7 @@ const emptyReport = (): AirtableReport => ({
   partialViews: [],
   comments: emptyAirtableCommentsReport(),
   collaborators: null,
+  shares: null,
 });
 
 const progressOf = (job: JobRow): Progress => {
@@ -820,9 +827,19 @@ async function importBase(deps: AirtableRunDeps, job: JobRow, opts: AirtableRunO
       'airtable collaborators not read'
     );
   }
+  // 6. The share links: listed now, described with the job's end. Never recreated.
+  const shares = await readShares(airtable, input.airtableBaseId);
+  if ('err' in shares) {
+    deps.logger.warn({ err: shares.err, airtableImportId: jobId }, 'airtable shares not listed');
+  }
   await step(async (tx, row) => {
     const p = progressOf(row);
     const report = p.report;
+    report.shares = sharesReport(
+      shares,
+      await knownViews(tx, p.tables),
+      airtableUserEmails('source' in collaborators ? collaborators.source : null)
+    );
     if ('plan' in collaborators) {
       const ctx = {
         tx,
@@ -1088,6 +1105,40 @@ async function liveRecordIds(
     SELECT id::text AS id FROM ${qualified(ctx.table)}
      WHERE id = ANY(${`{${ids.join(',')}}`}::uuid[]) AND deleted_at IS NULL`);
   return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * The import's Airtable views by Airtable id, each with the view made from it if it is still in
+ * the base (its current name).
+ */
+async function knownViews(
+  tx: Transaction,
+  tables: readonly TableState[]
+): Promise<Map<string, KnownView>> {
+  const made = tables.flatMap((t) => (t.views ?? []).flatMap((v) => (v.viewId ? [v.viewId] : [])));
+  const live = new Map<string, string>();
+  for (let i = 0; i < made.length; i += 1000) {
+    const rows = await tx
+      .select({ id: viewsTable.id, name: viewsTable.name })
+      .from(viewsTable)
+      .where(and(inArray(viewsTable.id, made.slice(i, i + 1000)), isNull(viewsTable.deletedAt)));
+    for (const r of rows) live.set(r.id, r.name);
+  }
+  const out = new Map<string, KnownView>();
+  for (const t of tables) {
+    for (const v of t.views ?? []) {
+      const name = v.viewId ? live.get(v.viewId) : undefined;
+      out.set(v.airtableId, {
+        table: t.name,
+        type: v.type,
+        name: v.name,
+        imported:
+          v.viewId && name !== undefined ? { tableId: t.tableId, viewId: v.viewId, name } : null,
+        ...(v.viewId && name === undefined ? { gone: true } : {}),
+      });
+    }
+  }
+  return out;
 }
 
 /** Workspace members by lower-cased email: who Airtable's collaborator cells can name. */

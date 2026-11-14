@@ -14,7 +14,8 @@ import { BaseRoleSchema } from './base.js';
  * list), record comments (a last pass, one request per record), cancelling and the progress the
  * dialog shows. At the end, Airtable's base collaborators are matched to workspace members by
  * email: a member whose access here is lower gets a base role (never an invitation or email);
- * everyone else is only reported.
+ * everyone else is only reported. With the optional `workspacesAndBases.shares:manage` scope,
+ * Airtable's share links are listed in the report too, never recreated.
  */
 
 /** Most bases one request imports. */
@@ -213,6 +214,73 @@ export const emptyAirtableCollaboratorsReport = (): AirtableCollaboratorsReport 
   interfaceOnly: [],
 });
 
+/**
+ * One Airtable share link (Airtable's "List shares"), as the report lists it. Only described:
+ * nothing is created here, and Airtable's `shareId` is never an OpenRows token.
+ */
+export const AirtableShareLineSchema = z.object({
+  /** Airtable's share id, to find the link in Airtable. */
+  shareId: z.string(),
+  /** `base`, `view`, `blockInstallation`, or another type Airtable sends, as it sends it. */
+  type: z.string(),
+  /** `enabled` or `disabled`, as Airtable reported it. */
+  state: z.string(),
+  /** Airtable's view id, for a link to a view. */
+  airtableViewId: z.string().nullable(),
+  /** The imported view a view link was to; null when it isn't a view link or wasn't imported. */
+  view: z
+    .object({ tableId: z.uuid(), table: z.string(), viewId: z.uuid(), name: z.string() })
+    .nullable(),
+  blockInstallationId: z.string().nullable(),
+  isPasswordProtected: z.boolean(),
+  restrictedToEmailDomains: z.array(z.string()),
+  /**
+   * The domains that can open it once every restriction applies; null when Airtable sent none
+   * (no domain restriction). Empty: nobody can open it.
+   */
+  effectiveEmailDomainAllowList: z.array(z.string()).nullable(),
+  restrictedToEnterpriseMembers: z.boolean(),
+  canBeSynced: z.boolean().nullable(),
+  createdTime: z.string().nullable(),
+  createdByUserId: z.string().nullable(),
+  /** Their email, when Airtable's collaborators answer named them. */
+  createdByEmail: z.string().nullable(),
+  /** What it linked to here, and what to do to have one again. */
+  message: z.string(),
+});
+export type AirtableShareLine = z.infer<typeof AirtableShareLineSchema>;
+
+/**
+ * Airtable's share links (Airtable's "List shares", the optional
+ * `workspacesAndBases.shares:manage` scope, read once at the end of a successful import). Report
+ * only: no share link, form link or embed is created or published, nothing is changed in
+ * Airtable.
+ */
+export const AirtableSharesReportSchema = z.object({
+  /** Why Airtable's share links weren't listed, once; null when they were. */
+  unavailable: z.string().nullable(),
+  /** Why none were recreated. */
+  note: z.string(),
+  total: z.int().min(0),
+  enabled: z.int().min(0),
+  disabled: z.int().min(0),
+  byType: z.object({
+    base: z.int().min(0),
+    view: z.int().min(0),
+    blockInstallation: z.int().min(0),
+    other: z.int().min(0),
+  }),
+  /** View links whose view was imported (the line names it). */
+  viewsImported: z.int().min(0),
+  /** View links whose view wasn't imported (a form, a view left out, an unknown id). */
+  viewsNotImported: z.int().min(0),
+  /** Entries in Airtable's answer that couldn't be read: left out. */
+  unreadable: z.int().min(0),
+  /** Each link, up to MAX_AIRTABLE_REPORT_ITEMS. */
+  shares: z.array(AirtableShareLineSchema),
+});
+export type AirtableSharesReport = z.infer<typeof AirtableSharesReportSchema>;
+
 export const AirtableReportSchema = z.object({
   tables: z.array(
     z.object({
@@ -261,6 +329,11 @@ export const AirtableReportSchema = z.object({
    * collaborators were read).
    */
   collaborators: AirtableCollaboratorsReportSchema.nullable().default(null),
+  /**
+   * Airtable's share links, listed only: null until the import ends (and in reports stored
+   * before share links were listed).
+   */
+  shares: AirtableSharesReportSchema.nullable().default(null),
 });
 export type AirtableReport = z.infer<typeof AirtableReportSchema>;
 

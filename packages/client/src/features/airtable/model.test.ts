@@ -14,6 +14,7 @@ import {
   importProgress,
   looksLikeToken,
   reportSummary,
+  shareSections,
   watchedImports,
 } from './model';
 
@@ -31,6 +32,7 @@ const report = {
   partialViews: [],
   comments: emptyAirtableCommentsReport(),
   collaborators: null,
+  shares: null,
 };
 
 const job = (over: Partial<AirtableImport>): AirtableImport => ({
@@ -121,6 +123,86 @@ describe('airtable import model', () => {
       { title: 'Collaborators', lines: ["Couldn't read.", EDIT_PERMISSIONS_NOTE] },
     ]);
     expect(reportSummary(unread)).toContain('collaborators not read');
+  });
+
+  it("lists Airtable's share links as not recreated, or says once why they weren't listed", () => {
+    expect(shareSections(report)).toEqual([]);
+    const shares = {
+      unavailable: null,
+      note: 'None were recreated.',
+      total: 3,
+      enabled: 2,
+      disabled: 1,
+      byType: { base: 1, view: 2, blockInstallation: 0, other: 0 },
+      viewsImported: 1,
+      viewsNotImported: 1,
+      unreadable: 1,
+      shares: [
+        {
+          shareId: 'shrBase000000001',
+          type: 'base',
+          state: 'enabled',
+          airtableViewId: null,
+          view: null,
+          blockInstallationId: null,
+          isPasswordProtected: true,
+          restrictedToEmailDomains: ['example.test'],
+          effectiveEmailDomainAllowList: ['example.test'],
+          restrictedToEnterpriseMembers: false,
+          canBeSynced: null,
+          createdTime: '2024-02-01T09:00:00.000Z',
+          createdByUserId: 'usrGrace00000001',
+          createdByEmail: 'grace@example.test',
+          message: 'A link to the whole base.',
+        },
+        {
+          shareId: 'shrView000000001',
+          type: 'view',
+          state: 'disabled',
+          airtableViewId: 'viwForm000000001',
+          view: null,
+          blockInstallationId: null,
+          isPasswordProtected: false,
+          restrictedToEmailDomains: [],
+          effectiveEmailDomainAllowList: [],
+          restrictedToEnterpriseMembers: true,
+          canBeSynced: false,
+          createdTime: null,
+          createdByUserId: 'usrSomeone000001',
+          createdByEmail: null,
+          message: "A link to the form. Form views aren't imported.",
+        },
+      ],
+    };
+    const r = { ...report, shares };
+    expect(shareSections(r)).toEqual([
+      {
+        title: 'Share links (listed, not recreated)',
+        lines: [
+          'Airtable had 3 share links: 2 enabled, 1 disabled; 1 to the base, 2 to views (1 of them imported, 1 not).',
+          'None were recreated.',
+          "1 entry in Airtable's answer couldn't be read and isn't listed.",
+        ],
+      },
+      {
+        title: 'Airtable share links',
+        lines: [
+          'Base link shrBase000000001 (enabled, password, only example.test, made by grace@example.test, 2024-02-01): A link to the whole base.',
+          "View link shrView000000001 (disabled, nobody can open it, enterprise members only, made by usrSomeone000001): A link to the form. Form views aren't imported.",
+        ],
+      },
+    ]);
+    expect(reportSummary(r)).toContain('3 Airtable share links listed, not recreated');
+    expect(hasReportLines(r)).toBe(true);
+
+    const none = { ...report, shares: { ...shares, total: 0, unreadable: 0, shares: [] } };
+    expect(shareSections(none)).toEqual([]);
+    expect(hasReportLines(none)).toBe(false);
+    const refused = { ...none, shares: { ...none.shares, unavailable: "The token can't list." } };
+    expect(shareSections(refused)).toEqual([
+      { title: 'Share links', lines: ["The token can't list."] },
+    ]);
+    expect(reportSummary(refused)).toContain('share links not listed');
   });
 
   it('describes progress', () => {
