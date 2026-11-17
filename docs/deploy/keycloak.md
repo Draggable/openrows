@@ -26,7 +26,7 @@ then set:
 | --- | --- | --- |
 | Display name | `displayName` | `OpenRows` |
 | Require SSL | `sslRequired` | `external` |
-| Themes | `loginTheme`, `emailTheme` | `openrows` (`docker/keycloak/themes/openrows`, mounted at `/opt/keycloak/themes/openrows`, as `docker/dev.yml` does; Realm settings → Themes) |
+| Themes | `loginTheme`, `emailTheme` | `openrows` (`docker/keycloak/themes/openrows`, mounted at `/opt/keycloak/themes/openrows`, as `docker/dev.yml` does; Realm settings → Themes). Its registration page shows the configured identity providers, as its sign-in page does |
 | User registration | `registrationAllowed` | on |
 | Email as username | `registrationEmailAsUsername` | on |
 | Login with email | `loginWithEmailAllowed` | on |
