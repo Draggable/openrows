@@ -508,7 +508,8 @@ describe('automation groups', () => {
           find,
         ],
       });
-      // 100 items × 3 × 2 actions = 600: the 501st fails (item 84's second inner item).
+      // The outer repeat, then per item the inner repeat and 3 × 2 actions: 1 + 71 × 7 = 498,
+      // so item 72's inner repeat is the 499th and its first item's second action the 501st.
       await fire(a.id, {
         outer: Array.from({ length: 100 }, (_, i) => i),
         inner: ['a', 'b', 'c'],
@@ -516,13 +517,48 @@ describe('automation groups', () => {
       const run = await lastRun(a.id);
       expect(run.status).toBe('failed');
       expect(run.error).toBe(
-        `Item 84: Item 2: Step 1.actions.1.actions.1 failed: This run reached its limit of ${MAX_RUN_ACTIONS} actions; the rest weren't run.`
+        `Item 72: Item 1: Step 1.actions.1.actions.2 failed: This run reached its limit of ${MAX_RUN_ACTIONS} actions; the rest weren't run.`
       );
       const outer = run.steps[0];
       expect(outer?.status).toBe('failed');
-      expect(outer?.iterations).toHaveLength(84);
+      expect(outer?.iterations).toHaveLength(72);
       expect(outer?.iterations?.at(-1)?.status).toBe('failed');
       expect(run.steps[1]?.status).toBe('skipped');
+      await off(a.id);
+    });
+
+    it('counts each repeat it starts, so repeats that run no action still stop', async () => {
+      // Three levels of repeats over 100 items, the innermost empty: without counting the
+      // repeats themselves, a million iterations (and their history) for no action at all.
+      const a = await create({
+        actions: [
+          {
+            type: 'repeat',
+            items: '{{trigger.body.list}}',
+            actions: [
+              {
+                type: 'repeat',
+                items: '{{trigger.body.list}}',
+                actions: [{ type: 'repeat', items: '{{trigger.body.list}}', actions: [] }],
+              },
+            ],
+          },
+        ],
+      });
+      await fire(a.id, { list: Array.from({ length: MAX_REPEAT_ITEMS }, (_, i) => i) });
+      const run = await lastRun(a.id);
+      expect(run.status).toBe('failed');
+      // 1 + 4 × (1 + 100) = 405; item 5's middle repeat is the 406th, its 95th innermost the 501st.
+      expect(run.error).toBe(
+        `Item 5: Item 95: Step 1.actions.1.actions.1 failed: This run reached its limit of ${MAX_RUN_ACTIONS} actions; the rest weren't run.`
+      );
+      const iterations = (steps: Step[] | undefined): number =>
+        (steps ?? []).reduce(
+          (n, s) => n + (s.iterations ?? []).reduce((m, it) => m + 1 + iterations(it.steps), 0),
+          0
+        );
+      expect(iterations(run.steps)).toBeLessThan(MAX_RUN_ACTIONS * MAX_REPEAT_ITEMS);
+      expect(run.steps[0]?.iterations).toHaveLength(5);
       await off(a.id);
     });
   });

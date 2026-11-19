@@ -110,7 +110,8 @@ import {
  *   recorded as skipped); a Repeat for each runs its steps once per item (at most
  *   MAX_REPEAT_ITEMS). Their steps run like top-level ones (savepoints, the same person and
  *   checks); one failing stops the group and the run. A run executes at most MAX_RUN_ACTIONS
- *   actions and checks in all, so repeats can't multiply into unbounded work.
+ *   actions, checks and repeats in all, so repeats can't multiply into unbounded work (a repeat
+ *   counts each time it starts, so empty or nested-only repeats can't loop for free).
  * - **Tests and retries** (testAutomation and retryRun below) run the same steps
  *   (performRun) in the API's request transaction, as the person testing or retrying.
  */
@@ -268,7 +269,7 @@ interface RunEnv extends OutboundEnv {
   db: Database;
   secrets: AutomationSecrets;
   scripts: ScriptSandbox | undefined;
-  /** Actions and branch checks this run executed so far (at most MAX_RUN_ACTIONS). */
+  /** Actions, branch checks and repeats this run started so far (at most MAX_RUN_ACTIONS). */
   executed: { count: number };
 }
 
@@ -474,7 +475,7 @@ interface ListResult {
   error: string | null;
 }
 
-/** Counts an action or check against the run's ceiling. */
+/** Counts an action, a branch's check or a repeat against the run's ceiling. */
 function countExecuted(env: RunEnv) {
   if (env.executed.count >= MAX_RUN_ACTIONS) {
     throw new StepFailure(
@@ -650,6 +651,9 @@ async function runRepeat(
   let input: unknown = null;
   let items: unknown[];
   try {
+    // Counted like a branch's check: a repeat whose items run nothing counted (no steps, or
+    // only an empty repeat) would otherwise loop 100 × 100 × 100 times for free.
+    countExecuted(env);
     const list = renderTemplate(action.items, context);
     input = { type: action.type, items: list };
     items = repeatItems(list);

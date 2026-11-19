@@ -35,8 +35,9 @@ export const MAX_FIND_RECORDS = 100;
 /** Items one Repeat for each runs for; a longer list fails the step before any item runs. */
 export const MAX_REPEAT_ITEMS = MAX_FIND_RECORDS;
 /**
- * Actions one run executes in all, each counted once per item of the repeats around it; the
- * action that would go past it fails (and the run stops, like any failed step).
+ * Actions one run executes in all, each counted once per item of the repeats around it, with
+ * each If / Otherwise check and each start of a Repeat for each; the step that would go past it
+ * fails (and the run stops, like any failed step).
  */
 export const MAX_RUN_ACTIONS = 500;
 /** Items of a repeat whose steps' input and output the run history keeps (the rest: status). */
