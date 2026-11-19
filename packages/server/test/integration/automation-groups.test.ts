@@ -1,7 +1,12 @@
 // biome-ignore-all lint/suspicious/noThenProperty: `then` is an If / Otherwise step's list of steps (an array)
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { MAX_REPEAT_ITEMS, MAX_RUN_ACTIONS } from '@openrows/shared';
+import {
+  MAX_AUTOMATION_ACTIONS,
+  MAX_REPEAT_ITEMS,
+  MAX_RUN_ACTIONS,
+  MAX_RUN_EXTERNAL_ACTIONS,
+} from '@openrows/shared';
 import { eq, sql } from 'drizzle-orm';
 import type { JobInsert } from 'pg-boss';
 import { uuidv7 } from 'uuidv7';
@@ -779,6 +784,108 @@ describe('automation groups', () => {
       expect(received.every((r) => r.headers['x-key'] === 'nested-secret-value')).toBe(true);
       expect(JSON.parse(received[0]?.body ?? '{}')).toEqual({ item: 'http://10.0.0.1/' });
       expect(JSON.stringify(run.steps)).not.toContain('nested-secret-value');
+      await off(a.id);
+    });
+  });
+
+  describe('external steps per run', () => {
+    const limitMessage = `This run reached its limit of ${MAX_RUN_EXTERNAL_ACTIONS} external steps (HTTP requests, Slack messages, emails and scripts); the rest weren't run.`;
+
+    it(`stops a run at ${MAX_RUN_EXTERNAL_ACTIONS} external steps, live and in a test run; record steps still count only toward the actions`, async () => {
+      const m = await makeTable('External');
+      const log = await makeTable('External log');
+      await inScope(t.appDb, { userId: owner.id, workspaceId }, (tx) =>
+        createRecords(
+          {
+            tx,
+            workspaceId,
+            userId: owner.id,
+            role: 'owner',
+            entitlements: unlimitedEntitlements(),
+            table: m.table,
+          },
+          Array.from({ length: 30 }, (_, i) => ({ [m.name]: `r${i + 1}` }))
+        )
+      );
+      const actions = [
+        { type: 'findRecords', tableId: m.table.id, filter: noFilter, limit: 30 },
+        {
+          type: 'repeat',
+          items: '{{steps.1.records}}',
+          actions: [
+            {
+              type: 'createRecord',
+              tableId: log.table.id,
+              fields: { [log.name]: '{{steps.2.item.fields.Name}}' },
+            },
+            {
+              type: 'httpRequest',
+              method: 'POST',
+              url: `http://127.0.0.1:${port}/external`,
+              headers: [],
+              body: { item: '{{steps.2.item.fields.Name}}' },
+            },
+          ],
+        },
+        { type: 'createRecord', tableId: log.table.id, fields: { [log.name]: 'after' } },
+      ];
+      const expected = `Item ${MAX_RUN_EXTERNAL_ACTIONS + 1}: Step 2.actions.2 failed: ${limitMessage}`;
+
+      received.length = 0;
+      const a = await create({ actions });
+      await fire(a.id, {});
+      const run = await lastRun(a.id);
+      expect(run.status).toBe('failed');
+      expect(run.error).toBe(expected);
+      const repeat = run.steps[1];
+      expect(repeat?.iterations).toHaveLength(MAX_RUN_EXTERNAL_ACTIONS + 1);
+      expect(shape(repeat?.iterations?.at(-1)?.steps)).toEqual([
+        'createRecord:succeeded',
+        'httpRequest:failed',
+      ]);
+      expect(run.steps[2]?.status).toBe('skipped');
+      // 25 requests went out; the 26th item's record step still ran (its own savepoint).
+      expect(received).toHaveLength(MAX_RUN_EXTERNAL_ACTIONS);
+      expect(received.map((r) => JSON.parse(r.body).item)).toEqual(
+        Array.from({ length: MAX_RUN_EXTERNAL_ACTIONS }, (_, i) => `r${i + 1}`)
+      );
+      expect(await column(log, log.name)).toHaveLength(MAX_RUN_EXTERNAL_ACTIONS + 1);
+      await off(a.id);
+
+      // A test run counts the same way.
+      received.length = 0;
+      const tested = await create({
+        trigger: { type: 'recordCreated', tableId: m.table.id },
+        enabled: false,
+        actions,
+      });
+      const [first] = await t.db
+        .execute<{ id: string }>(sql`SELECT id FROM ${qualified(m.table)} ORDER BY id LIMIT 1`)
+        .then((r) => r.rows);
+      const res = await call(creator, 'POST', `${autos()}/${tested.id}/test`, {
+        recordId: first?.id,
+      });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect((res.body as Run).status).toBe('failed');
+      expect((res.body as Run).error).toBe(expected);
+      expect(received).toHaveLength(MAX_RUN_EXTERNAL_ACTIONS);
+    });
+
+    it('lets a flat automation run as many external steps as it can hold', async () => {
+      received.length = 0;
+      const a = await create({
+        actions: Array.from({ length: MAX_AUTOMATION_ACTIONS }, (_, i) => ({
+          type: 'httpRequest',
+          method: 'POST',
+          url: `http://127.0.0.1:${port}/flat`,
+          headers: [],
+          body: { n: i + 1 },
+        })),
+      });
+      await fire(a.id, {});
+      const run = await lastRun(a.id);
+      expect(run.status, run.error ?? '').toBe('succeeded');
+      expect(received).toHaveLength(MAX_AUTOMATION_ACTIONS);
       await off(a.id);
     });
   });

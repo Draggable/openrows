@@ -1,5 +1,6 @@
 import {
   type AutomationAction,
+  type AutomationActionType,
   type AutomationRun,
   type AutomationRunMode,
   type AutomationRunStatus,
@@ -7,10 +8,12 @@ import {
   type AutomationStep,
   type AutomationTrigger,
   type BranchAction,
+  isExternalActionType,
   MAX_AUTOMATION_DEPTH,
   MAX_LOGGED_ITERATIONS,
   MAX_REPEAT_ITEMS,
   MAX_RUN_ACTIONS,
+  MAX_RUN_EXTERNAL_ACTIONS,
   MAX_UPDATE_RECORDS,
   queryRecordsSchema,
   type RepeatAction,
@@ -111,7 +114,9 @@ import {
  *   MAX_REPEAT_ITEMS). Their steps run like top-level ones (savepoints, the same person and
  *   checks); one failing stops the group and the run. A run executes at most MAX_RUN_ACTIONS
  *   actions, checks and repeats in all, so repeats can't multiply into unbounded work (a repeat
- *   counts each time it starts, so empty or nested-only repeats can't loop for free).
+ *   counts each time it starts, so empty or nested-only repeats can't loop for free). Of
+ *   those, at most MAX_RUN_EXTERNAL_ACTIONS are external steps (HTTP, Slack, email, script), so
+ *   a repeat can't hold the run's transaction open for hundreds of slow requests.
  * - **Tests and retries** (testAutomation and retryRun below) run the same steps
  *   (performRun) in the API's request transaction, as the person testing or retrying.
  */
@@ -269,8 +274,11 @@ interface RunEnv extends OutboundEnv {
   db: Database;
   secrets: AutomationSecrets;
   scripts: ScriptSandbox | undefined;
-  /** Actions, branch checks and repeats this run started so far (at most MAX_RUN_ACTIONS). */
-  executed: { count: number };
+  /**
+   * Actions, branch checks and repeats this run started so far (at most MAX_RUN_ACTIONS), and
+   * of them the external steps: HTTP, Slack, email and script (at most MAX_RUN_EXTERNAL_ACTIONS).
+   */
+  executed: { count: number; external: number };
 }
 
 type LeafAction = Exclude<AutomationAction, BranchAction | RepeatAction>;
@@ -475,14 +483,25 @@ interface ListResult {
   error: string | null;
 }
 
-/** Counts an action, a branch's check or a repeat against the run's ceiling. */
-function countExecuted(env: RunEnv) {
+/**
+ * Counts an action, a branch's check or a repeat against the run's ceiling, and an external
+ * step (HTTP, Slack, email, script) against the run's external ceiling too: the run is one
+ * transaction, which slow steps would hold open. Over either, the step fails before it starts.
+ */
+function countExecuted(env: RunEnv, type: AutomationActionType) {
   if (env.executed.count >= MAX_RUN_ACTIONS) {
     throw new StepFailure(
       `This run reached its limit of ${MAX_RUN_ACTIONS} actions; the rest weren't run.`
     );
   }
+  const external = isExternalActionType(type);
+  if (external && env.executed.external >= MAX_RUN_EXTERNAL_ACTIONS) {
+    throw new StepFailure(
+      `This run reached its limit of ${MAX_RUN_EXTERNAL_ACTIONS} external steps (HTTP requests, Slack messages, emails and scripts); the rest weren't run.`
+    );
+  }
   env.executed.count += 1;
+  if (external) env.executed.external += 1;
 }
 
 /** Runs a list's steps in order; after a failure, the rest are skipped. */
@@ -554,7 +573,7 @@ async function runLeaf(
   const t0 = performance.now();
   let input: unknown = null;
   try {
-    countExecuted(env);
+    countExecuted(env, action.type);
     const rendered = renderAction(action, context);
     input = loggedInput(rendered);
     const output = await tx.transaction((sp) => runAction(sp, env, action, rendered, secrets));
@@ -594,7 +613,7 @@ async function runBranch(
   let input: unknown = null;
   let matched: boolean;
   try {
-    countExecuted(env);
+    countExecuted(env, action.type);
     const rendered = {
       type: action.type,
       tableId: action.tableId,
@@ -653,7 +672,7 @@ async function runRepeat(
   try {
     // Counted like a branch's check: a repeat whose items run nothing counted (no steps, or
     // only an empty repeat) would otherwise loop 100 × 100 × 100 times for free.
-    countExecuted(env);
+    countExecuted(env, action.type);
     const list = renderTemplate(action.items, context);
     input = { type: action.type, items: list };
     items = repeatItems(list);
@@ -1172,7 +1191,7 @@ async function performRun(
     userId: opts.userId,
     role: opts.role,
     entitlements,
-    executed: { count: 0 },
+    executed: { count: 0, external: 0 },
   };
   const context: { trigger: Record<string, unknown>; steps: Record<number, unknown> } = {
     trigger: triggered.data,

@@ -125,6 +125,7 @@ Set the **Method**, **URL**, **Headers** (up to 20) and an optional **JSON body*
 - If / Otherwise and Repeat for each can hold each other, at most three levels deep: a step inside a group inside a group can't hold steps of its own.
 - All steps count toward the limit of 25 steps per automation, including the groups themselves and the steps inside them.
 - One run executes at most 500 actions in all, counting each action, each If / Otherwise check and each start of a Repeat for each once per item it runs for. The step that would go past that fails with "This run reached its limit of 500 actions", and the run stops.
+- Of those, one run executes at most 25 external steps: Send HTTP request, Send Slack message, Send email and Run a script, counted wherever they are and once per item of the Repeat for each around them (test runs too). The step that would go past that fails with "This run reached its limit of 25 external steps", and the run stops. An automation without Repeat for each can't reach this limit; inside one, use a Find records step with **At most** to work on fewer items per run. Record steps and If / Otherwise checks count only toward the limit of 500 actions.
 - Steps inside groups run as the same person as the rest of the automation, with the same permissions, and their outgoing requests follow the same rules.
 
 ## Tokens

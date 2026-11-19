@@ -204,7 +204,8 @@ packages/
                              subscriber.ts (the outbox subscriber, `automations.schedule`, the
                              prune), run.ts (the `automations.run` job: one transaction, steps in
                              savepoints through the RecordService as the creator, branches
-                             and repeats (MAX_REPEAT_ITEMS, MAX_RUN_ACTIONS), the loop guard
+                             and repeats (MAX_REPEAT_ITEMS, MAX_RUN_ACTIONS,
+                             MAX_RUN_EXTERNAL_ACTIONS), the loop guard
                              by `app.automation_depth`, idempotency keys: testAutomation and
                              retryRun, in the request, as the caller): hooks.ts (the
                              public POST /hooks/a/<token> of webhook-received triggers: 100 KB

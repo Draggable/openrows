@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AUTOMATION_ACTION_TYPES,
   createAutomationSchema,
+  EXTERNAL_ACTION_TYPES,
+  isExternalActionType,
   MAX_AUTOMATION_ACTIONS,
+  MAX_RUN_EXTERNAL_ACTIONS,
   MAX_SCRIPT_INPUTS,
   MAX_SCRIPT_LENGTH,
   MAX_STEP_DEPTH,
@@ -125,6 +129,29 @@ describe('If / Otherwise and Repeat for each steps (#21)', () => {
       'actions: An automation has at most 25 steps, counting the steps inside If / Otherwise and Repeat for each.',
     ]);
     expect(issues(parseAll([branch(many.slice(0, 12), many.slice(0, 12)), create])).length).toBe(1);
+  });
+
+  it('caps external steps per run at the flat-list maximum, so a flat automation never reaches it', () => {
+    expect(MAX_RUN_EXTERNAL_ACTIONS).toBe(25);
+    expect(MAX_RUN_EXTERNAL_ACTIONS).toBe(MAX_AUTOMATION_ACTIONS);
+    expect([...EXTERNAL_ACTION_TYPES].sort()).toEqual([
+      'httpRequest',
+      'runScript',
+      'sendEmail',
+      'slackMessage',
+    ]);
+    expect(AUTOMATION_ACTION_TYPES.filter(isExternalActionType)).toEqual([
+      ...EXTERNAL_ACTION_TYPES,
+    ]);
+    for (const type of [
+      'createRecord',
+      'updateRecord',
+      'findRecords',
+      'branch',
+      'repeat',
+    ] as const) {
+      expect(isExternalActionType(type)).toBe(false);
+    }
   });
 
   it('nests at most three levels: a group may hold the other kind of group', () => {

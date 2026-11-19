@@ -40,6 +40,13 @@ export const MAX_REPEAT_ITEMS = MAX_FIND_RECORDS;
  * fails (and the run stops, like any failed step).
  */
 export const MAX_RUN_ACTIONS = 500;
+/**
+ * External steps (EXTERNAL_ACTION_TYPES: HTTP requests, Slack messages, emails and scripts) one
+ * run executes in all, top-level or nested, each counted once per item of the repeats around it.
+ * A run is one transaction, so slow steps hold it open; the step that would go past it fails
+ * (and the run stops). The same as MAX_AUTOMATION_ACTIONS, so a flat list never reaches it.
+ */
+export const MAX_RUN_EXTERNAL_ACTIONS = MAX_AUTOMATION_ACTIONS;
 /** Items of a repeat whose steps' input and output the run history keeps (the rest: status). */
 export const MAX_LOGGED_ITERATIONS = 10;
 /** Records one update action may change (a found list). */
@@ -170,6 +177,15 @@ export const AUTOMATION_ACTION_TYPES = [
   'repeat',
 ] as const;
 export type AutomationActionType = (typeof AUTOMATION_ACTION_TYPES)[number];
+/** Steps that reach outside the base (or run code), counted against MAX_RUN_EXTERNAL_ACTIONS. */
+export const EXTERNAL_ACTION_TYPES = [
+  'sendEmail',
+  'httpRequest',
+  'slackMessage',
+  'runScript',
+] as const satisfies readonly AutomationActionType[];
+export const isExternalActionType = (type: AutomationActionType): boolean =>
+  (EXTERNAL_ACTION_TYPES as readonly AutomationActionType[]).includes(type);
 
 const leafActionSchemas = [
   z.strictObject({ type: z.literal('createRecord'), tableId: z.uuid(), fields: cellsSchema }),
