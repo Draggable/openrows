@@ -1,12 +1,12 @@
 # Automations
 
-Automations run actions when something happens in a base: create or update records, send emails, Slack messages or HTTP requests, or run a script.
+Automations run actions when something happens in a base: create or update records, send emails, Slack messages or HTTP requests, or run a script. Steps can run only when a record meets conditions (**If / Otherwise**) or once for each item of a list (**Repeat for each**).
 
 ## Overview
 
-Each automation belongs to one base and has one trigger ("When") and up to 25 actions that run in order. Open a base and click **Automations** in the top bar (owners and creators of the base see it). The page lists every automation with its trigger, an on/off switch, its last run and how many runs its history holds.
+Each automation belongs to one base and has one trigger ("When") and up to 25 steps that run in order (steps inside If / Otherwise and Repeat for each count too). Open a base and click **Automations** in the top bar (owners and creators of the base see it). The page lists every automation with its trigger, an on/off switch, its last run and how many runs its history holds.
 
-- Click **New automation**, pick a trigger, then use **Add an action…** to add steps. Move steps up or down; each step's number is what tokens use to refer to it.
+- Click **New automation**, pick a trigger, then use **Add an action…** to add steps. Move steps up or down; each step's number is what tokens use to refer to it. When you move a step, tokens are renumbered so they keep pointing at the same steps. When you delete one, tokens that refer to the steps after it are renumbered; tokens that used the deleted step need updating.
 - Click **Save**, then turn the automation on with its switch. New automations are off, and an automation needs at least one action before you can turn it on.
 - A base can have up to 50 automations.
 - Automations are managed in the app only; they aren't part of the [REST API](../api/v1.md) or personal access tokens yet. To notify another system of changes without building an automation, see [Webhooks](../api/webhooks.md).
@@ -74,6 +74,8 @@ curl -X POST "https://app.example.com/hooks/a/<token>" \
 | Send Slack message | Posts a message to a Slack incoming webhook (or a compatible one) | The response status |
 | Send HTTP request | Sends a GET, POST, PUT, PATCH or DELETE request with headers and a JSON body | The response status and body |
 | Run a script | Runs your JavaScript in a sandbox | What the script outputs |
+| If / Otherwise | Runs its **Then** steps when a record meets **Conditions**, else its **Otherwise** steps | Which path ran, and the steps that ran in it |
+| Repeat for each | Runs its steps once for each item of a **List** | How many items it ran for, and the list |
 
 ### Record actions
 
@@ -99,6 +101,33 @@ Set the **Method**, **URL**, **Headers** (up to 20) and an optional **JSON body*
 - The request times out after 15 seconds; an answer other than 2xx fails the step. Up to 1 MB of the response is kept for later steps (JSON responses are parsed).
 - URLs must be public `https` addresses on ports 80 or 443. Self-hosted servers can allow more (see [Self-hosting](self-hosting.md)).
 
+## If / Otherwise
+
+**If / Otherwise** checks one record against conditions and runs one of two lists of steps.
+
+- **Table** and **Record**: the record to check, as an ID or a token, such as the trigger's record (`{{trigger.record.id}}`), the current item of a Repeat for each (`{{steps.2.item.id}}`) or a list from a Find records step (`{{steps.1.records}}`; its first record is checked).
+- **Conditions**: the same filter builder as views and the "When a record matches conditions" trigger. Text values can hold tokens. With no conditions, any record matches.
+- **Then**: the steps that run when the record meets the conditions. **Otherwise** (optional): the steps that run when it doesn't. Add, move and delete their steps like the automation's own.
+- When there is no record (the token is empty, or a Find records step found nothing), the conditions don't hold and the Otherwise steps run. To run steps only when a Find records step found something, check `{{steps.1.records}}` on the same table with no conditions.
+- The steps of the path that didn't run show as skipped in the run history.
+
+## Repeat for each
+
+**Repeat for each** runs its steps once for each item of a list.
+
+- **List**: a token that gives a list, such as the records a Find records or Update record step returned (`{{steps.1.records}}`) or a link field of the trigger's record (`{{trigger.record.fields.Tasks}}`, whose items have an `id` and a `name`). A single value that isn't a list runs the steps once; an empty value runs them no times.
+- **For each item**: the steps to run for each item, in order. Add, move and delete them like the automation's own.
+- A Repeat for each runs for at most 100 items. A longer list fails the step before any item runs, with a message giving the list's length; use a Find records step with **At most** to pick fewer.
+- When a step fails for one item, the items after it don't run, the Repeat for each fails and the automation stops, as with any failed step. The changes made for earlier items stay.
+
+### Nesting and limits
+
+- If / Otherwise and Repeat for each can hold each other, at most three levels deep: a step inside a group inside a group can't hold steps of its own.
+- All steps count toward the limit of 25 steps per automation, including the groups themselves and the steps inside them.
+- One run executes at most 500 actions in all, counting each action, each If / Otherwise check and each start of a Repeat for each once per item it runs for. The step that would go past that fails with "This run reached its limit of 500 actions", and the run stops.
+- Of those, one run executes at most 25 external steps: Send HTTP request, Send Slack message, Send email and Run a script, counted wherever they are and once per item of the Repeat for each around them (test runs too). The step that would go past that fails with "This run reached its limit of 25 external steps", and the run stops. An automation without Repeat for each can't reach this limit; inside one, use a Find records step with **At most** to work on fewer items per run. Record steps and If / Otherwise checks count only toward the limit of 500 actions.
+- Steps inside groups run as the same person as the rest of the automation, with the same permissions, and their outgoing requests follow the same rules.
+
 ## Tokens
 
 Values in actions can include tokens in double braces, filled in when the automation runs. Click the `{}` button next to a box to search and insert one instead of typing it.
@@ -117,12 +146,20 @@ Values in actions can include tokens in double braces, filled in when the automa
 | `{{steps.3.status}}`, `{{steps.3.body.id}}` | An HTTP step's response status and body |
 | `{{steps.4.sent}}` | How many emails step 4 sent |
 | `{{steps.5.output.total}}` | A value a script step set |
+| `{{steps.2.path}}`, `{{steps.2.matched}}` | Which path an If / Otherwise ran (`then` or `otherwise`), and whether its conditions held (`true` or `false`) |
+| `{{steps.2.then.1.record.id}}` | The record the first step of step 2's Then created (`otherwise` for its Otherwise steps) |
+| `{{steps.3.item}}`, `{{steps.3.item.fields.Name}}` | Inside a Repeat for each: the current item, and a field of it when the items are records |
+| `{{steps.3.index}}` | Inside a Repeat for each: the current item's number, from 1 |
+| `{{steps.3.actions.1.record.id}}` | Inside a Repeat for each: what its first step did for the current item |
+| `{{steps.3.count}}`, `{{steps.3.items}}` | After a Repeat for each: how many items it ran for, and its list |
 
 How tokens fill in:
 
 - A box that holds exactly one token keeps the value as it is: a number stays a number, and a list of records can fill a link field.
 - Inside other text, lists are joined with commas, and linked records and people show their names.
 - A missing value is empty. A step can only use the trigger and the steps before it, and the trigger itself can't hold tokens. One box can hold up to 50 tokens.
+- A step inside a group is numbered within its list, after the group's number: the first step of step 2's Then is `steps.2.then.1`, the first step of step 3's Repeat for each is `steps.3.actions.1`. The value picker lists what each box can use.
+- Inside a group, a step can use the trigger, the steps before the group, the groups around it (a Repeat for each's current item) and the steps before it in the same list. After an If / Otherwise, later steps can use the steps of its paths; those of the path that didn't run are empty. The steps inside a Repeat for each can only be used inside it, for the current item; after it, use its count and list.
 - Tokens name fields by name, so renaming a field breaks the tokens that use the old name. Update them after a rename.
 
 ## Run a script
@@ -163,20 +200,23 @@ The panel beside the builder has two tabs, **Test** and **Run history**. A test 
 - Webhook triggers: the test uses the last request received; send one to the URL first.
 - Schedules: the test runs as if the schedule fired now.
 
-Click **Run test** (or **Save and test** with unsaved changes). The result shows each step's input, output and error. Tests aren't counted as runs and don't change the automation's last run.
+Click **Run test** (or **Save and test** with unsaved changes). The result shows each step's input, output and error. An If / Otherwise shows whether its conditions were met and which path ran, with the other path's steps as skipped; a Repeat for each shows each item with its steps' results. Tests aren't counted as runs and don't change the automation's last run.
 
 ## Run history and retries
 
 **Run history** keeps runs from the last 30 days. Use **Show** to list all runs or only succeeded, failed or skipped ones. Open a run to see its trigger data and each step's input, output and error; header values, Slack URLs and query string values are shown as `[redacted]`. Tags mark **Test** and **Retry** runs, and why a run was skipped: **Loop guard** or **Plan limit**.
 
-When a step fails, its own changes are undone, the steps after it are skipped, and the changes of earlier steps stay.
+When a step fails, its own changes are undone, the steps after it are skipped, and the changes of earlier steps stay. This applies inside If / Otherwise and Repeat for each too.
+
+For a Repeat for each, the history lists every item it ran for with each step's status and error; it keeps the input and output of the steps of the first 10 items (and of a step that failed).
 
 Click **Retry** on a failed run to run it once more, as you, with the automation's current actions. Record triggers use the record's values as they are now; webhook, schedule and button runs reuse the original request, time or clicker. Each failed run can be retried once, and not after its trigger type changed. Test runs can't be retried.
 
 ## Limits
 
 - **Loop guard**: automations whose actions trigger other automations can chain at most 3 deep. A deeper run does nothing and shows as skipped with **Loop guard**.
-- Per base: 50 automations, 25 actions each, 64 KB of configuration.
+- Per base: 50 automations, 25 steps each (counting the steps inside If / Otherwise and Repeat for each), 64 KB of configuration.
+- If / Otherwise and Repeat for each nest at most three levels deep. A Repeat for each runs for at most 100 items, and one run executes at most 500 actions in all.
 - Find records returns at most 100 records; one Update record step changes at most 100.
 - Emails: 50 recipients per step and the daily email limit above.
 - Outgoing requests (HTTP, Slack, email and script `fetch`) share a per-workspace rate; runs over it wait in the queue and nothing is dropped.

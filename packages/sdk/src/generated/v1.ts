@@ -678,115 +678,7 @@ export type V1AutomationsListResponse = {
           tableId: string;
           fieldId: string;
         };
-    actions: (
-      | {
-          type: 'createRecord';
-          tableId: string;
-          fields: Record<string, unknown>;
-        }
-      | {
-          type: 'updateRecord';
-          tableId: string;
-          recordId: string;
-          fields: Record<string, unknown>;
-        }
-      | {
-          type: 'findRecords';
-          tableId: string;
-          filter?: {
-            conjunction: 'and' | 'or';
-            conditions: (
-              | {
-                  fieldId: string;
-                  operator:
-                    | 'is'
-                    | 'isNot'
-                    | 'contains'
-                    | 'doesNotContain'
-                    | 'isEmpty'
-                    | 'isNotEmpty'
-                    | '='
-                    | '!='
-                    | '<'
-                    | '<='
-                    | '>'
-                    | '>='
-                    | 'isBefore'
-                    | 'isAfter'
-                    | 'isOnOrBefore'
-                    | 'isOnOrAfter'
-                    | 'isWithin'
-                    | 'isAnyOf'
-                    | 'isNoneOf'
-                    | 'hasAnyOf'
-                    | 'hasAllOf'
-                    | 'hasNoneOf'
-                    | 'isExactly';
-                  value?: unknown;
-                }
-              | {
-                  conjunction: 'and' | 'or';
-                  conditions: {
-                    fieldId: string;
-                    operator:
-                      | 'is'
-                      | 'isNot'
-                      | 'contains'
-                      | 'doesNotContain'
-                      | 'isEmpty'
-                      | 'isNotEmpty'
-                      | '='
-                      | '!='
-                      | '<'
-                      | '<='
-                      | '>'
-                      | '>='
-                      | 'isBefore'
-                      | 'isAfter'
-                      | 'isOnOrBefore'
-                      | 'isOnOrAfter'
-                      | 'isWithin'
-                      | 'isAnyOf'
-                      | 'isNoneOf'
-                      | 'hasAnyOf'
-                      | 'hasAllOf'
-                      | 'hasNoneOf'
-                      | 'isExactly';
-                    value?: unknown;
-                  }[];
-                }
-            )[];
-          };
-          limit: number;
-        }
-      | {
-          type: 'sendEmail';
-          to: string[];
-          subject: string;
-          body: string;
-        }
-      | {
-          type: 'httpRequest';
-          method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-          url: string;
-          headers: {
-            name: string;
-            value?: string;
-            secret: boolean;
-          }[];
-          body?: unknown;
-        }
-      | {
-          type: 'slackMessage';
-          webhookUrl?: string;
-          text: string;
-        }
-      | {
-          type: 'runScript';
-          script: string;
-          inputs: Record<string, string>;
-        }
-    )[];
+    actions: V1AutomationAction[];
     createdBy: string | null;
     lastRunAt: string | null;
     lastRunStatus: 'succeeded' | 'failed' | 'skipped' | null;
@@ -911,115 +803,7 @@ export type V1AutomationsGetResponse = {
         tableId: string;
         fieldId: string;
       };
-  actions: (
-    | {
-        type: 'createRecord';
-        tableId: string;
-        fields: Record<string, unknown>;
-      }
-    | {
-        type: 'updateRecord';
-        tableId: string;
-        recordId: string;
-        fields: Record<string, unknown>;
-      }
-    | {
-        type: 'findRecords';
-        tableId: string;
-        filter?: {
-          conjunction: 'and' | 'or';
-          conditions: (
-            | {
-                fieldId: string;
-                operator:
-                  | 'is'
-                  | 'isNot'
-                  | 'contains'
-                  | 'doesNotContain'
-                  | 'isEmpty'
-                  | 'isNotEmpty'
-                  | '='
-                  | '!='
-                  | '<'
-                  | '<='
-                  | '>'
-                  | '>='
-                  | 'isBefore'
-                  | 'isAfter'
-                  | 'isOnOrBefore'
-                  | 'isOnOrAfter'
-                  | 'isWithin'
-                  | 'isAnyOf'
-                  | 'isNoneOf'
-                  | 'hasAnyOf'
-                  | 'hasAllOf'
-                  | 'hasNoneOf'
-                  | 'isExactly';
-                value?: unknown;
-              }
-            | {
-                conjunction: 'and' | 'or';
-                conditions: {
-                  fieldId: string;
-                  operator:
-                    | 'is'
-                    | 'isNot'
-                    | 'contains'
-                    | 'doesNotContain'
-                    | 'isEmpty'
-                    | 'isNotEmpty'
-                    | '='
-                    | '!='
-                    | '<'
-                    | '<='
-                    | '>'
-                    | '>='
-                    | 'isBefore'
-                    | 'isAfter'
-                    | 'isOnOrBefore'
-                    | 'isOnOrAfter'
-                    | 'isWithin'
-                    | 'isAnyOf'
-                    | 'isNoneOf'
-                    | 'hasAnyOf'
-                    | 'hasAllOf'
-                    | 'hasNoneOf'
-                    | 'isExactly';
-                  value?: unknown;
-                }[];
-              }
-          )[];
-        };
-        limit: number;
-      }
-    | {
-        type: 'sendEmail';
-        to: string[];
-        subject: string;
-        body: string;
-      }
-    | {
-        type: 'httpRequest';
-        method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-        url: string;
-        headers: {
-          name: string;
-          value?: string;
-          secret: boolean;
-        }[];
-        body?: unknown;
-      }
-    | {
-        type: 'slackMessage';
-        webhookUrl?: string;
-        text: string;
-      }
-    | {
-        type: 'runScript';
-        script: string;
-        inputs: Record<string, string>;
-      }
-  )[];
+  actions: V1AutomationAction[];
   createdBy: string | null;
   lastRunAt: string | null;
   lastRunStatus: 'succeeded' | 'failed' | 'skipped' | null;
@@ -1148,115 +932,7 @@ export type V1AutomationsUpdateResponse = {
         tableId: string;
         fieldId: string;
       };
-  actions: (
-    | {
-        type: 'createRecord';
-        tableId: string;
-        fields: Record<string, unknown>;
-      }
-    | {
-        type: 'updateRecord';
-        tableId: string;
-        recordId: string;
-        fields: Record<string, unknown>;
-      }
-    | {
-        type: 'findRecords';
-        tableId: string;
-        filter?: {
-          conjunction: 'and' | 'or';
-          conditions: (
-            | {
-                fieldId: string;
-                operator:
-                  | 'is'
-                  | 'isNot'
-                  | 'contains'
-                  | 'doesNotContain'
-                  | 'isEmpty'
-                  | 'isNotEmpty'
-                  | '='
-                  | '!='
-                  | '<'
-                  | '<='
-                  | '>'
-                  | '>='
-                  | 'isBefore'
-                  | 'isAfter'
-                  | 'isOnOrBefore'
-                  | 'isOnOrAfter'
-                  | 'isWithin'
-                  | 'isAnyOf'
-                  | 'isNoneOf'
-                  | 'hasAnyOf'
-                  | 'hasAllOf'
-                  | 'hasNoneOf'
-                  | 'isExactly';
-                value?: unknown;
-              }
-            | {
-                conjunction: 'and' | 'or';
-                conditions: {
-                  fieldId: string;
-                  operator:
-                    | 'is'
-                    | 'isNot'
-                    | 'contains'
-                    | 'doesNotContain'
-                    | 'isEmpty'
-                    | 'isNotEmpty'
-                    | '='
-                    | '!='
-                    | '<'
-                    | '<='
-                    | '>'
-                    | '>='
-                    | 'isBefore'
-                    | 'isAfter'
-                    | 'isOnOrBefore'
-                    | 'isOnOrAfter'
-                    | 'isWithin'
-                    | 'isAnyOf'
-                    | 'isNoneOf'
-                    | 'hasAnyOf'
-                    | 'hasAllOf'
-                    | 'hasNoneOf'
-                    | 'isExactly';
-                  value?: unknown;
-                }[];
-              }
-          )[];
-        };
-        limit: number;
-      }
-    | {
-        type: 'sendEmail';
-        to: string[];
-        subject: string;
-        body: string;
-      }
-    | {
-        type: 'httpRequest';
-        method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-        url: string;
-        headers: {
-          name: string;
-          value?: string;
-          secret: boolean;
-        }[];
-        body?: unknown;
-      }
-    | {
-        type: 'slackMessage';
-        webhookUrl?: string;
-        text: string;
-      }
-    | {
-        type: 'runScript';
-        script: string;
-        inputs: Record<string, string>;
-      }
-  )[];
+  actions: V1AutomationAction[];
   createdBy: string | null;
   lastRunAt: string | null;
   lastRunStatus: 'succeeded' | 'failed' | 'skipped' | null;
@@ -1281,22 +957,7 @@ export type V1AutomationsRunsResponse = {
     skipReason: 'loop' | 'quota' | null;
     retryOf: string | null;
     trigger: unknown;
-    steps: {
-      index: number;
-      type:
-        | 'createRecord'
-        | 'updateRecord'
-        | 'findRecords'
-        | 'sendEmail'
-        | 'httpRequest'
-        | 'slackMessage'
-        | 'runScript';
-      status: 'succeeded' | 'failed' | 'skipped';
-      input: unknown;
-      output: unknown;
-      error: string | null;
-      durationMs: number;
-    }[];
+    steps: V1AutomationRunStep[];
     error: string | null;
     depth: number;
     triggeredBy: string | null;
@@ -1345,6 +1006,221 @@ export type V1SearchRecordsResponse = {
   skippedTables?: {
     baseId: string;
     tableId: string;
+  }[];
+};
+
+/** A step of an automation: an action, or an If / Otherwise (`branch`) or Repeat for each (`repeat`) group holding steps of its own. */
+export type V1AutomationAction =
+  | {
+      type: 'createRecord';
+      tableId: string;
+      fields: Record<string, unknown>;
+    }
+  | {
+      type: 'updateRecord';
+      tableId: string;
+      recordId: string;
+      fields: Record<string, unknown>;
+    }
+  | {
+      type: 'findRecords';
+      tableId: string;
+      filter?: {
+        conjunction: 'and' | 'or';
+        conditions: (
+          | {
+              fieldId: string;
+              operator:
+                | 'is'
+                | 'isNot'
+                | 'contains'
+                | 'doesNotContain'
+                | 'isEmpty'
+                | 'isNotEmpty'
+                | '='
+                | '!='
+                | '<'
+                | '<='
+                | '>'
+                | '>='
+                | 'isBefore'
+                | 'isAfter'
+                | 'isOnOrBefore'
+                | 'isOnOrAfter'
+                | 'isWithin'
+                | 'isAnyOf'
+                | 'isNoneOf'
+                | 'hasAnyOf'
+                | 'hasAllOf'
+                | 'hasNoneOf'
+                | 'isExactly';
+              value?: unknown;
+            }
+          | {
+              conjunction: 'and' | 'or';
+              conditions: {
+                fieldId: string;
+                operator:
+                  | 'is'
+                  | 'isNot'
+                  | 'contains'
+                  | 'doesNotContain'
+                  | 'isEmpty'
+                  | 'isNotEmpty'
+                  | '='
+                  | '!='
+                  | '<'
+                  | '<='
+                  | '>'
+                  | '>='
+                  | 'isBefore'
+                  | 'isAfter'
+                  | 'isOnOrBefore'
+                  | 'isOnOrAfter'
+                  | 'isWithin'
+                  | 'isAnyOf'
+                  | 'isNoneOf'
+                  | 'hasAnyOf'
+                  | 'hasAllOf'
+                  | 'hasNoneOf'
+                  | 'isExactly';
+                value?: unknown;
+              }[];
+            }
+        )[];
+      };
+      limit: number;
+    }
+  | {
+      type: 'sendEmail';
+      to: string[];
+      subject: string;
+      body: string;
+    }
+  | {
+      type: 'httpRequest';
+      method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+      url: string;
+      headers: {
+        name: string;
+        value?: string;
+        secret: boolean;
+      }[];
+      body?: unknown;
+    }
+  | {
+      type: 'slackMessage';
+      webhookUrl?: string;
+      text: string;
+    }
+  | {
+      type: 'runScript';
+      script: string;
+      inputs: Record<string, string>;
+    }
+  | {
+      type: 'branch';
+      tableId: string;
+      recordId: string;
+      filter: {
+        conjunction: 'and' | 'or';
+        conditions: (
+          | {
+              fieldId: string;
+              operator:
+                | 'is'
+                | 'isNot'
+                | 'contains'
+                | 'doesNotContain'
+                | 'isEmpty'
+                | 'isNotEmpty'
+                | '='
+                | '!='
+                | '<'
+                | '<='
+                | '>'
+                | '>='
+                | 'isBefore'
+                | 'isAfter'
+                | 'isOnOrBefore'
+                | 'isOnOrAfter'
+                | 'isWithin'
+                | 'isAnyOf'
+                | 'isNoneOf'
+                | 'hasAnyOf'
+                | 'hasAllOf'
+                | 'hasNoneOf'
+                | 'isExactly';
+              value?: unknown;
+            }
+          | {
+              conjunction: 'and' | 'or';
+              conditions: {
+                fieldId: string;
+                operator:
+                  | 'is'
+                  | 'isNot'
+                  | 'contains'
+                  | 'doesNotContain'
+                  | 'isEmpty'
+                  | 'isNotEmpty'
+                  | '='
+                  | '!='
+                  | '<'
+                  | '<='
+                  | '>'
+                  | '>='
+                  | 'isBefore'
+                  | 'isAfter'
+                  | 'isOnOrBefore'
+                  | 'isOnOrAfter'
+                  | 'isWithin'
+                  | 'isAnyOf'
+                  | 'isNoneOf'
+                  | 'hasAnyOf'
+                  | 'hasAllOf'
+                  | 'hasNoneOf'
+                  | 'isExactly';
+                value?: unknown;
+              }[];
+            }
+        )[];
+      };
+      then: V1AutomationAction[];
+      otherwise: V1AutomationAction[];
+    }
+  | {
+      type: 'repeat';
+      items: string;
+      actions: V1AutomationAction[];
+    };
+
+/** A step of a run: its input, output and error; a group's steps (a branch's paths, a repeat's items) inside it. */
+export type V1AutomationRunStep = {
+  index: number;
+  type:
+    | 'createRecord'
+    | 'updateRecord'
+    | 'findRecords'
+    | 'sendEmail'
+    | 'httpRequest'
+    | 'slackMessage'
+    | 'runScript'
+    | 'branch'
+    | 'repeat';
+  status: 'succeeded' | 'failed' | 'skipped';
+  input: unknown;
+  output: unknown;
+  error: string | null;
+  durationMs: number;
+  path?: 'then' | 'otherwise';
+  then?: V1AutomationRunStep[];
+  otherwise?: V1AutomationRunStep[];
+  actions?: V1AutomationRunStep[];
+  iterations?: {
+    index: number;
+    status: 'succeeded' | 'failed' | 'skipped';
+    steps: V1AutomationRunStep[];
   }[];
 };
 

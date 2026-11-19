@@ -154,6 +154,18 @@ describe('buildOpenApiDocument', () => {
     expect(JSON.stringify(doc)).not.toContain('$defs');
   });
 
+  it('puts named (recursive) schemas in components and points their references there', () => {
+    const schemas = doc.components.schemas as Record<string, unknown>;
+    expect(Object.keys(schemas)).toEqual(
+      expect.arrayContaining(['AutomationAction', 'AutomationActionInput', 'AutomationRunStep'])
+    );
+    const refs = [...JSON.stringify(doc).matchAll(/"\$ref":"([^"]+)"/g)].map((m) => m[1]);
+    for (const ref of refs) {
+      expect(ref).toMatch(/^#\/components\/schemas\//);
+      expect(schemas).toHaveProperty(String(ref).split('/').at(-1) as string);
+    }
+  });
+
   it('documents the 429 of the rate limits, the server and the license (#104)', () => {
     const list = doc.paths['/api/tables/{tableId}/records']?.['get'] as {
       responses: Record<string, { headers?: Record<string, unknown> }>;

@@ -86,6 +86,8 @@ packages/
             and its Zod schema; define.ts, defineTemplate: keys to stable ids; builtin/: the 10
             built-in templates, BUILT_IN_TEMPLATES), automations (src/automations/: schedule.ts, cron and intervals in a time zone with
             DST rules; template.ts, the `{{trigger...}}`/`{{steps.N...}}` tokens, never eval;
+            steps.ts, the step tree: If / Otherwise (`branch`) and Repeat for each (`repeat`)
+            groups, step addresses such as `steps.2.then.1`, where a token may point;
             schemas/automation.ts), the ViewQuery
             spec (src/query/; `within` and `dateRange`), CSV parse/write and type inference
             (src/csv/), Excel workbooks for import (src/xlsx/: readXlsx, one sheet as rows of
@@ -201,7 +203,9 @@ packages/
                              (/api/bases/:baseId/automations, creators, sessions only),
                              subscriber.ts (the outbox subscriber, `automations.schedule`, the
                              prune), run.ts (the `automations.run` job: one transaction, steps in
-                             savepoints through the RecordService as the creator, the loop guard
+                             savepoints through the RecordService as the creator, branches
+                             and repeats (MAX_REPEAT_ITEMS, MAX_RUN_ACTIONS,
+                             MAX_RUN_EXTERNAL_ACTIONS), the loop guard
                              by `app.automation_depth`, idempotency keys: testAutomation and
                              retryRun, in the request, as the caller): hooks.ts (the
                              public POST /hooks/a/<token> of webhook-received triggers: 100 KB

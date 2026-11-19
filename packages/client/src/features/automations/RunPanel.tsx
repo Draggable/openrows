@@ -3,7 +3,12 @@ import {
   type Automation,
   type AutomationRun,
   type AutomationRunStatus,
+  type AutomationStep,
   type AutomationTrigger,
+  MAX_LOGGED_ITERATIONS,
+  type StepAddress,
+  stepAddressText,
+  stepListNames,
 } from '@openrows/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -28,6 +33,7 @@ import { selectClass } from '../views/toolbar/FilterMenu';
 import {
   ACTION_LABELS,
   canRetry,
+  LIST_LABELS,
   modeLabel,
   needsRecord,
   pretty,
@@ -65,6 +71,104 @@ function Json({ value, label }: { value: unknown; label: string }) {
   );
 }
 
+/** A step of a run: its status, error, input and output; a group's steps inside it. */
+function StepLog({ step, address }: { step: AutomationStep; address: StepAddress }) {
+  const n = stepAddressText(address);
+  const nested = address.length > 1;
+  const lists = stepListNames(step.type).filter((name) => step[name] !== undefined);
+  return (
+    <li className="flex flex-col gap-1 rounded-sm border border-border p-2">
+      <div className="flex items-center gap-2">
+        <StatusIcon status={step.status} />
+        <span className="min-w-0 flex-1 truncate font-[550]">
+          Step {n}: {ACTION_LABELS[step.type]}
+        </span>
+        <span className="text-small text-text-2">
+          {RUN_STATUS_LABELS[step.status]} · {step.durationMs} ms
+        </span>
+      </div>
+      {step.error && <p className="text-small text-danger">{step.error}</p>}
+      {step.path && (
+        <p className="text-small">
+          Conditions {step.path === 'then' ? 'met' : 'not met'}: ran {LIST_LABELS[step.path]}.
+        </p>
+      )}
+      {step.iterations && (
+        <p className="text-small">
+          {step.iterations.length} item{step.iterations.length === 1 ? '' : 's'} run.
+        </p>
+      )}
+      {step.status !== 'skipped' &&
+        (nested && step.input === null && step.output === null ? (
+          <p className="text-small text-text-2">
+            Input and output are kept for the first {MAX_LOGGED_ITERATIONS} items of a repeat.
+          </p>
+        ) : (
+          <>
+            {(!nested || step.input !== null) && <Json label="Input" value={step.input} />}
+            {step.output !== null && <Json label="Output" value={step.output} />}
+          </>
+        ))}
+      {lists.map((name) => (
+        <LogList
+          key={name}
+          title={LIST_LABELS[name]}
+          label={`${LIST_LABELS[name]} of step ${n}`}
+          steps={step[name] ?? []}
+          address={[...address, name]}
+        />
+      ))}
+      {step.iterations && step.iterations.length > 0 && (
+        <ol aria-label={`Items of step ${n}`} className="flex flex-col gap-1">
+          {step.iterations.map((it) => (
+            <li key={it.index}>
+              <details open={it.status === 'failed'}>
+                <summary className="flex cursor-pointer list-none items-center gap-2 rounded-sm py-0.5 hover:bg-hover">
+                  <StatusIcon status={it.status} />
+                  <span className="text-small font-[550]">Item {it.index}</span>
+                </summary>
+                <ol
+                  aria-label={`Steps of item ${it.index}`}
+                  className="mt-1 flex flex-col gap-1 pl-6"
+                >
+                  {it.steps.map((s) => (
+                    <StepLog key={s.index} step={s} address={[...address, 'actions', s.index]} />
+                  ))}
+                </ol>
+              </details>
+            </li>
+          ))}
+        </ol>
+      )}
+    </li>
+  );
+}
+
+/** A group's list in the run log: Then, Otherwise (the path that didn't run: skipped). */
+function LogList({
+  title,
+  label,
+  steps,
+  address,
+}: {
+  title: string;
+  label: string;
+  steps: AutomationStep[];
+  address: StepAddress;
+}) {
+  if (steps.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-small font-[550] text-text-2">{title}</span>
+      <ol aria-label={label} className="flex flex-col gap-1 pl-3">
+        {steps.map((s) => (
+          <StepLog key={s.index} step={s} address={[...address, s.index]} />
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 /** A run's error, trigger data and each step with its (redacted) input and output. */
 export function RunDetails({ run }: { run: AutomationRun }) {
   return (
@@ -78,27 +182,7 @@ export function RunDetails({ run }: { run: AutomationRun }) {
       {run.steps.length > 0 && (
         <ol aria-label="Steps" className="flex flex-col gap-2">
           {run.steps.map((step) => (
-            <li
-              key={step.index}
-              className="flex flex-col gap-1 rounded-sm border border-border p-2"
-            >
-              <div className="flex items-center gap-2">
-                <StatusIcon status={step.status} />
-                <span className="min-w-0 flex-1 truncate font-[550]">
-                  Step {step.index}: {ACTION_LABELS[step.type]}
-                </span>
-                <span className="text-small text-text-2">
-                  {RUN_STATUS_LABELS[step.status]} · {step.durationMs} ms
-                </span>
-              </div>
-              {step.error && <p className="text-small text-danger">{step.error}</p>}
-              {step.status !== 'skipped' && (
-                <>
-                  <Json label="Input" value={step.input} />
-                  {step.output !== null && <Json label="Output" value={step.output} />}
-                </>
-              )}
-            </li>
+            <StepLog key={step.index} step={step} address={[step.index]} />
           ))}
         </ol>
       )}

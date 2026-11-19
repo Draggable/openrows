@@ -380,7 +380,7 @@
           "name": "runs",
           "kind": "method",
           "signatures": [
-            "runs(automationId: string, options?: { limit?: number; status?: \"succeeded\" | \"failed\" | \"skipped\" }): Promise<{ id: string; automationId: string; status: \"succeeded\" | \"failed\" | \"skipped\"; mode: \"live\" | \"test\" | \"retry\"; skipReason: \"loop\" | \"quota\" | null; retryOf: string | null; trigger: unknown; steps: { index: number; type: \"createRecord\" | \"updateRecord\" | \"findRecords\" | \"sendEmail\" | \"httpRequest\" | \"slackMessage\" | \"runScript\"; status: \"succeeded\" | \"failed\" | \"skipped\"; input: unknown; output: unknown; error: string | null; durationMs: number }[]; error: string | null; depth: number; triggeredBy: string | null; durationMs: number; createdAt: string }[]>"
+            "runs(automationId: string, options?: { limit?: number; status?: \"succeeded\" | \"failed\" | \"skipped\" }): Promise<{ id: string; automationId: string; status: \"succeeded\" | \"failed\" | \"skipped\"; mode: \"live\" | \"test\" | \"retry\"; skipReason: \"loop\" | \"quota\" | null; retryOf: string | null; trigger: unknown; steps: V1AutomationRunStep[]; error: string | null; depth: number; triggeredBy: string | null; durationMs: number; createdAt: string }[]>"
           ],
           "summary": "The automation's runs of the last 30 days, newest first."
         },
@@ -1153,6 +1153,22 @@
       "name": "V1SearchRecordsResponse",
       "kind": "type",
       "summary": "The answer of GET /api/v1/search: Find records by text in every table and base the caller can read.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationAction",
+      "kind": "type",
+      "summary": "A step of an automation: an action, or an If / Otherwise (`branch`) or Repeat for each (`repeat`) group holding steps of its own.",
+      "generated": true,
+      "members": [],
+      "signatures": []
+    },
+    {
+      "name": "V1AutomationRunStep",
+      "kind": "type",
+      "summary": "A step of a run: its input, output and error; a group's steps (a branch's paths, a repeat's items) inside it.",
       "generated": true,
       "members": [],
       "signatures": []

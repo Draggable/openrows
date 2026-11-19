@@ -23,5 +23,10 @@ describe('the generated v1 types', () => {
     ).toBe('{\n  a: "x" | "y";\n  "b-c"?: 1;\n}');
     expect(toTs({})).toBe('unknown');
     expect(() => toTs({ $ref: '#/x' })).toThrow(/\$ref/);
+    // Named (recursive) schemas are their own types.
+    expect(toTs({ type: 'array', items: { $ref: '#/$defs/AutomationAction' } })).toBe(
+      'V1AutomationAction[]'
+    );
+    expect(toTs({ $ref: '#/$defs/AutomationAction' }, '', 'input')).toBe('V1AutomationActionInput');
   });
 });

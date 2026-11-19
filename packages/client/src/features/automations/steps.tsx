@@ -8,7 +8,11 @@ import {
   type FieldMeta,
   type FilterGroup,
   HTTP_METHODS,
+  MAX_AUTOMATION_ACTIONS,
+  MAX_REPEAT_ITEMS,
   SCHEDULE_UNITS,
+  stepAddressText,
+  stepListNames,
 } from '@openrows/shared';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -28,11 +32,27 @@ import { FilterMenu, selectClass } from '../views/toolbar/FilterMenu';
 import {
   ACTION_LABELS,
   ACTION_TYPES,
+  addressOf,
+  addStep,
+  cardErrors,
+  defaultAction,
   defaultTrigger,
+  errorPathOf,
+  GROUP_TYPES,
+  groupsAllowed,
+  LIST_LABELS,
+  type ListPath,
+  listAt,
+  moveStep,
   pretty,
+  removeStep,
+  replaceStep,
+  stepCount,
+  type TokenContext,
   type TokenOption,
   TRIGGER_LABELS,
   TRIGGER_TYPES,
+  tokensFor,
   tomorrowAtNine,
   writableFields,
 } from './model';
@@ -554,40 +574,108 @@ function WebhookTrigger({
 
 // ---- Actions ----
 
+/** What every card of the step tree needs: the draft's steps and how to change them. */
+export interface StepTree {
+  actions: AutomationAction[];
+  onChange: (actions: AutomationAction[]) => void;
+  trigger: AutomationTrigger;
+  tables: readonly Table[];
+  /** The fields of a table, when loaded; the webhook's sample. */
+  tokens: Omit<TokenContext, 'actions' | 'trigger'>;
+  /** The server's errors by path. */
+  errors: Record<string, string>;
+  /** Whether this workspace may run scripts. */
+  scripts: AutomationScripts | undefined;
+}
+
+/** A new step of this type, its table the trigger's (or the first). */
+function newStep(tree: StepTree, type: AutomationActionType): AutomationAction {
+  const first = tree.tables[0]?.id ?? '';
+  const tableId = ('tableId' in tree.trigger ? tree.trigger.tableId : null) ?? first;
+  const tableName = tree.tables.find((t) => t.id === tableId)?.name;
+  return defaultAction(type, tree.trigger, first, tableName);
+}
+
+/** The steps of one list (the top level, or a group's), each a card. */
+export function StepList({ tree, path, label }: { tree: StepTree; path: ListPath; label: string }) {
+  const list = listAt(tree.actions, path);
+  return (
+    <ol aria-label={label} className="flex flex-col gap-4">
+      {list.map((action, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: steps are positional, like their tokens
+        <li key={i}>
+          <ActionCard tree={tree} path={path} index={i} count={list.length} action={action} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** "Add an action" for a list: the top level's, or a group's. */
+export function AddStep({ tree, path, label }: { tree: StepTree; path: ListPath; label?: string }) {
+  return (
+    <AddAction
+      label={label}
+      disabled={stepCount(tree.actions) >= MAX_AUTOMATION_ACTIONS}
+      groups={groupsAllowed(path)}
+      scripts={tree.scripts}
+      onAdd={(type) => tree.onChange(addStep(tree.actions, path, newStep(tree, type)))}
+    />
+  );
+}
+
+/** A group's list (Then, Otherwise, For each item): its steps and its own "Add an action". */
+function NestedList({ tree, path, owner }: { tree: StepTree; path: ListPath; owner: string }) {
+  const headingId = useId();
+  const name = path[path.length - 1] as keyof typeof LIST_LABELS;
+  const title = LIST_LABELS[name];
+  const count = listAt(tree.actions, path).length;
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="flex flex-col gap-3 rounded-md border border-border bg-header p-3"
+    >
+      <h4 id={headingId} className="text-small font-[550] text-text-2">
+        {title}
+      </h4>
+      {count === 0 && <p className="text-small text-text-2">No steps yet.</p>}
+      <StepList tree={tree} path={path} label={`${title} steps of step ${owner}`} />
+      <AddStep tree={tree} path={path} label={`Add an action to ${title} of step ${owner}`} />
+    </section>
+  );
+}
+
 export function ActionCard({
+  tree,
+  path,
   index,
   count,
   action,
-  tables,
-  tokens,
-  errors,
-  errorAt,
-  onChange,
-  onMove,
-  onDelete,
-  scripts,
 }: {
+  tree: StepTree;
+  /** The list the step is in. */
+  path: ListPath;
   index: number;
   count: number;
   action: AutomationAction;
-  tables: readonly Table[];
-  tokens: readonly TokenOption[];
-  /** Whether this workspace may run scripts. */
-  scripts?: AutomationScripts | undefined;
-  errors: string[];
-  errorAt: (path: string) => string | undefined;
-  onChange: (action: AutomationAction) => void;
-  onMove: (to: number) => void;
-  onDelete: () => void;
 }) {
-  const n = index + 1;
+  const address = addressOf([...path, index]);
+  const n = stepAddressText(address);
+  const prefix = errorPathOf([...path, index]);
   const title = ACTION_LABELS[action.type];
-  const at = (rest: string) => errorAt(`actions.${index}${rest ? `.${rest}` : ''}`);
+  const errorAt = (p: string) => tree.errors[p];
+  const at = (rest: string) => errorAt(`${prefix}${rest ? `.${rest}` : ''}`);
+  const tokens = tokensFor(
+    { ...tree.tokens, trigger: tree.trigger, actions: tree.actions },
+    address
+  );
+  const onChange = (next: AutomationAction) =>
+    tree.onChange(replaceStep(tree.actions, path, index, next));
   return (
     <StepCard
-      label={`Then ${n}`}
+      label={path.length === 0 ? `Then ${n}` : `Step ${n}`}
       title={title}
-      errors={errors}
+      errors={cardErrors(tree.errors, prefix)}
       actions={
         <div className="flex items-center gap-0.5">
           <Button
@@ -595,7 +683,7 @@ export function ActionCard({
             variant="ghost"
             size="icon"
             disabled={index === 0}
-            onClick={() => onMove(index - 1)}
+            onClick={() => tree.onChange(moveStep(tree.actions, path, index, index - 1))}
             aria-label={`Move step ${n} up`}
           >
             <ArrowUpIcon />
@@ -605,7 +693,7 @@ export function ActionCard({
             variant="ghost"
             size="icon"
             disabled={index === count - 1}
-            onClick={() => onMove(index + 1)}
+            onClick={() => tree.onChange(moveStep(tree.actions, path, index, index + 1))}
             aria-label={`Move step ${n} down`}
           >
             <ArrowDownIcon />
@@ -614,7 +702,7 @@ export function ActionCard({
             type="button"
             variant="ghost"
             size="icon"
-            onClick={onDelete}
+            onClick={() => tree.onChange(removeStep(tree.actions, path, index))}
             aria-label={`Delete step ${n}`}
           >
             <Trash2Icon />
@@ -624,13 +712,16 @@ export function ActionCard({
     >
       <ActionFields
         action={action}
-        index={index}
-        tables={tables}
+        n={n}
+        tables={tree.tables}
         tokens={tokens}
         at={at}
         onChange={onChange}
-        scripts={scripts}
+        scripts={tree.scripts}
       />
+      {stepListNames(action.type).map((name) => (
+        <NestedList key={name} tree={tree} path={[...path, index, name]} owner={n} />
+      ))}
     </StepCard>
   );
 }
@@ -662,7 +753,7 @@ function TableSelect({
 
 function ActionFields({
   action,
-  index,
+  n,
   tables,
   tokens,
   at,
@@ -670,7 +761,8 @@ function ActionFields({
   scripts,
 }: {
   action: AutomationAction;
-  index: number;
+  /** The step's number as tokens write it: `2`, `2.then.1`. */
+  n: string;
   tables: readonly Table[];
   tokens: readonly TokenOption[];
   at: (rest: string) => string | undefined;
@@ -679,7 +771,6 @@ function ActionFields({
 }) {
   const ids = { a: useId(), b: useId(), c: useId(), d: useId() };
   const fields = useTableFields('tableId' in action ? action.tableId : null);
-  const n = index + 1;
   switch (action.type) {
     case 'createRecord':
     case 'updateRecord':
@@ -846,6 +937,61 @@ function ActionFields({
           onChange={onChange}
           scripts={scripts}
         />
+      );
+    case 'branch':
+      return (
+        <>
+          <TableSelect
+            value={action.tableId}
+            tables={tables}
+            error={at('tableId')}
+            onChange={(tableId) => onChange({ ...action, tableId, filter: emptyFilter })}
+          />
+          <Row
+            label="Record"
+            htmlFor={ids.a}
+            error={at('recordId')}
+            hint="The record to check: an ID, or a value such as the trigger's record or the current item. With a list, its first record."
+          >
+            <TokenInput
+              id={ids.a}
+              label={`step ${n}'s record`}
+              value={action.recordId}
+              tokens={tokens}
+              invalid={!!at('recordId')}
+              onChange={(recordId) => onChange({ ...action, recordId })}
+            />
+          </Row>
+          <Row
+            label="Conditions"
+            hint="When the record meets them, the Then steps run; if not, the Otherwise steps. Text values may hold values from the trigger and earlier steps."
+          >
+            <ConditionsSummary
+              fields={fields ?? []}
+              filter={action.filter}
+              onChange={(filter) => onChange({ ...action, filter })}
+            />
+          </Row>
+        </>
+      );
+    case 'repeat':
+      return (
+        <Row
+          label="List"
+          htmlFor={ids.a}
+          error={at('items')}
+          hint={`A list, such as found records or a link field's records. The steps below run once per item, for at most ${MAX_REPEAT_ITEMS} items.`}
+        >
+          <TokenInput
+            id={ids.a}
+            label={`step ${n}'s list`}
+            value={action.items}
+            tokens={tokens}
+            invalid={!!at('items')}
+            placeholder="{{steps.1.records}}"
+            onChange={(items) => onChange({ ...action, items })}
+          />
+        </Row>
       );
   }
 }
@@ -1028,7 +1174,7 @@ function HttpFields({
   onChange,
 }: {
   action: AutomationAction & { type: 'httpRequest' };
-  n: number;
+  n: string;
   tokens: readonly TokenOption[];
   at: (rest: string) => string | undefined;
   onChange: (action: AutomationAction) => void;
@@ -1164,7 +1310,7 @@ function FieldValues({
   errorFor,
   onChange,
 }: {
-  step: number;
+  step: string;
   fields: readonly FieldMeta[];
   value: Record<string, unknown>;
   tokens: readonly TokenOption[];
@@ -1234,22 +1380,39 @@ function FieldValues({
   );
 }
 
-/** "Add action": the action type picker under the last step. */
+/** "Add action": the action type picker under the last step of a list. */
 export function AddAction({
   disabled,
   onAdd,
   scripts,
+  label = 'Add an action',
+  groups = true,
 }: {
   disabled: boolean;
   onAdd: (type: AutomationActionType) => void;
   scripts?: AutomationScripts | undefined;
+  /** The picker's name (a group's list says which). */
+  label?: string | undefined;
+  /** Whether If / Otherwise and Repeat for each fit here (they nest only so deep). */
+  groups?: boolean;
 }) {
   const id = useId();
+  const option = (t: AutomationActionType) => {
+    const off =
+      (t === 'runScript' && scripts !== undefined && !scripts.available) ||
+      (!groups && GROUP_TYPES.includes(t));
+    return (
+      <option key={t} value={t} disabled={off}>
+        {ACTION_LABELS[t]}
+        {off ? ' (not available)' : ''}
+      </option>
+    );
+  };
   return (
     <div className="flex items-center gap-2">
       <PlusIcon className="size-4 text-text-2" aria-hidden />
       <label htmlFor={id} className="sr-only">
-        Add an action
+        {label}
       </label>
       <select
         id={id}
@@ -1259,15 +1422,10 @@ export function AddAction({
         onChange={(e) => e.target.value && onAdd(e.target.value as AutomationActionType)}
       >
         <option value="">Add an action…</option>
-        {ACTION_TYPES.map((t) => {
-          const off = t === 'runScript' && scripts !== undefined && !scripts.available;
-          return (
-            <option key={t} value={t} disabled={off}>
-              {ACTION_LABELS[t]}
-              {off ? ' (not available)' : ''}
-            </option>
-          );
-        })}
+        <optgroup label="Actions">
+          {ACTION_TYPES.filter((t) => !GROUP_TYPES.includes(t)).map(option)}
+        </optgroup>
+        <optgroup label="Conditions and loops">{GROUP_TYPES.map(option)}</optgroup>
       </select>
     </div>
   );
