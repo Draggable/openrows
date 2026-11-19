@@ -6,14 +6,25 @@ import {
   type AutomationSkipReason,
   type AutomationStep,
   type AutomationTrigger,
+  type BranchAction,
   MAX_AUTOMATION_DEPTH,
+  MAX_LOGGED_ITERATIONS,
+  MAX_REPEAT_ITEMS,
+  MAX_RUN_ACTIONS,
   MAX_UPDATE_RECORDS,
   queryRecordsSchema,
+  type RepeatAction,
   renderTemplate,
   renderTemplateValue,
   roleAllows,
+  type StepAddress,
+  type StepListName,
+  stepAddressText,
+  stepList,
+  stepListNames,
   TemplateError,
   type UserRole,
+  viewQuerySchema,
 } from '@openrows/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
@@ -65,7 +76,7 @@ import {
   slackMessageStep,
 } from './outbound.js';
 import { createScriptBridge, type ScriptSandbox, type ScriptTableInfo } from './script/index.js';
-import { readSecrets, type StepSecrets } from './secrets.js';
+import { type AutomationSecrets, readSecrets, type StepSecrets } from './secrets.js';
 import {
   type AutomationRow,
   type AutomationRunRow,
@@ -93,8 +104,13 @@ import {
  *   recorded as skipped and does nothing.
  * - **Steps.** Each action runs in a savepoint: a failing step (an AppError, a bad token) is
  *   rolled back alone, recorded with its message, and the steps after it are skipped; earlier
- *   steps' writes stay, as in Airtable. Other errors fail the job, which pg-boss retries; the last
- *   attempt records a failed run.
+ *   steps' writes stay. Other errors fail the job, which pg-boss retries; the last attempt
+ *   records a failed run.
+ * - **Groups.** An If / Otherwise runs the steps of one of its paths (the other path's are
+ *   recorded as skipped); a Repeat for each runs its steps once per item (at most
+ *   MAX_REPEAT_ITEMS). Their steps run like top-level ones (savepoints, the same person and
+ *   checks); one failing stops the group and the run. A run executes at most MAX_RUN_ACTIONS
+ *   actions and checks in all, so repeats can't multiply into unbounded work.
  * - **Tests and retries** (testAutomation and retryRun below) run the same steps
  *   (performRun) in the API's request transaction, as the person testing or retrying.
  */
@@ -250,12 +266,16 @@ interface RunEnv extends OutboundEnv {
   /** The workspace's plan: record creates past records per base fail their step. */
   entitlements: Entitlements;
   db: Database;
-  secrets: (StepSecrets | null)[];
+  secrets: AutomationSecrets;
   scripts: ScriptSandbox | undefined;
+  /** Actions and branch checks this run executed so far (at most MAX_RUN_ACTIONS). */
+  executed: { count: number };
 }
 
+type LeafAction = Exclude<AutomationAction, BranchAction | RepeatAction>;
+
 /** Fills in an action's tokens: cells, the record id and filter values. */
-function renderAction(action: AutomationAction, context: Record<string, unknown>) {
+function renderAction(action: LeafAction, context: Record<string, unknown>) {
   switch (action.type) {
     case 'createRecord':
       return { ...action, fields: renderTemplateValue(action.fields, context) };
@@ -304,13 +324,13 @@ function mayWrite(env: RunEnv, action: 'record:create' | 'record:update') {
 async function runAction(
   tx: Transaction,
   env: RunEnv,
-  index: number,
-  action: AutomationAction,
-  input: ReturnType<typeof renderAction>
+  action: LeafAction,
+  input: ReturnType<typeof renderAction>,
+  secrets: StepSecrets | null | undefined
 ): Promise<Record<string, unknown>> {
   if (input.type === 'sendEmail') return sendEmailStep(tx, env.db, env, input);
-  if (input.type === 'httpRequest') return httpRequestStep(env, input, env.secrets[index - 1]);
-  if (input.type === 'slackMessage') return slackMessageStep(env, input, env.secrets[index - 1]);
+  if (input.type === 'httpRequest') return httpRequestStep(env, input, secrets);
+  if (input.type === 'slackMessage') return slackMessageStep(env, input, secrets);
   if (input.type === 'runScript') return runScriptStep(tx, env, input);
   if (!('tableId' in action)) throw new Error('a record step without a table');
   const table = await stepTable(tx, env, action.tableId);
@@ -350,6 +370,335 @@ async function runAction(
   const found = await queryRecords(ctx, query);
   const records = found.records.map((r) => contextRecord(r, fields));
   return { records, count: records.length };
+}
+
+/** The record an If / Otherwise checks: an id, the first of a list, or none. */
+function branchRecordId(value: unknown): string | null {
+  const first = Array.isArray(value) ? value[0] : value;
+  let id: unknown = first;
+  if (first && typeof first === 'object') id = (first as { id?: unknown }).id;
+  if (typeof id === 'string') id = id.split(',')[0]?.trim() ?? '';
+  if (id === null || id === undefined || id === '') return null;
+  if (typeof id !== 'string' || !UUID_RE.test(id)) {
+    throw new AppError('VALIDATION_FAILED', {
+      detail: `"${String(id).slice(0, 60)}" isn't a record id.`,
+    });
+  }
+  return id;
+}
+
+/**
+ * Whether an If / Otherwise's record meets its conditions: compiled like a view's filter (its
+ * tokens filled in), on a live record of the step's table, read as the run's person. No record
+ * (an empty token, an empty list): they don't.
+ */
+async function branchMatches(
+  tx: Transaction,
+  env: RunEnv,
+  action: BranchAction,
+  input: { recordId: unknown; filter: unknown }
+): Promise<boolean> {
+  if (!roleAllows(env.role, 'record:read')) {
+    throw new AppError('FORBIDDEN', {
+      detail: "The person this automation runs as can't read records.",
+    });
+  }
+  const table = await stepTable(tx, env, action.tableId);
+  const fields = await tableFields(tx, table);
+  const { where } = compileViewQuery(
+    viewQuerySchema.parse({ filter: input.filter }),
+    toQueryFields(fields),
+    { userId: env.userId }
+  );
+  const recordId = branchRecordId(input.recordId);
+  if (!recordId) return false;
+  const { rows } = await tx.execute(
+    sql`SELECT 1 FROM ${qualified(table)} AS r
+         WHERE r.id = ${recordId}::uuid AND r.deleted_at IS NULL AND ${where}`
+  );
+  return rows.length > 0;
+}
+
+/** The items a Repeat for each runs for: a list's, one value's, or none. */
+function repeatItems(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined || value === '') return [];
+  return [value];
+}
+
+/** A step that didn't run, with the steps of its lists as skipped too. */
+function skippedStep(action: AutomationAction, index: number): AutomationStep {
+  return withSkippedLists(
+    {
+      index,
+      type: action.type,
+      status: 'skipped',
+      input: null,
+      output: null,
+      error: null,
+      durationMs: 0,
+    },
+    action
+  );
+}
+
+/** Records a group's lists (all of them, or all but the path that ran) as skipped. */
+function withSkippedLists(
+  step: AutomationStep,
+  action: AutomationAction,
+  ran?: StepListName
+): AutomationStep {
+  for (const name of stepListNames(action.type)) {
+    if (name !== ran) step[name] = skippedSteps(stepList(action, name) as AutomationAction[]);
+  }
+  return step;
+}
+
+const skippedSteps = (list: readonly AutomationAction[]) =>
+  list.map((a, i) => skippedStep(a, i + 1));
+
+/** Where a list of steps runs. */
+interface ListScope {
+  /** The address of the list's group (`[]` at the top, `[2, 'then']` inside step 2's Then). */
+  address: StepAddress;
+  /** The list's outputs by number, what `{{steps.<address>.N...}}` reads. */
+  frame: Record<number, unknown>;
+  secrets: AutomationSecrets;
+  /** Whether the history keeps its steps' input and output (past a repeat's first items: no). */
+  detail: boolean;
+}
+
+interface ListResult {
+  steps: AutomationStep[];
+  /** The run's error when a step failed: "Step 2.then.1 failed: ...". */
+  error: string | null;
+}
+
+/** Counts an action or check against the run's ceiling. */
+function countExecuted(env: RunEnv) {
+  if (env.executed.count >= MAX_RUN_ACTIONS) {
+    throw new StepFailure(
+      `This run reached its limit of ${MAX_RUN_ACTIONS} actions; the rest weren't run.`
+    );
+  }
+  env.executed.count += 1;
+}
+
+/** Runs a list's steps in order; after a failure, the rest are skipped. */
+async function runSteps(
+  tx: Transaction,
+  env: RunEnv,
+  context: Record<string, unknown>,
+  list: readonly AutomationAction[],
+  scope: ListScope
+): Promise<ListResult> {
+  const steps: AutomationStep[] = [];
+  let error: string | null = null;
+  for (const [i, action] of list.entries()) {
+    const index = i + 1;
+    if (error) {
+      steps.push(skippedStep(action, index));
+      continue;
+    }
+    const address = [...scope.address, index];
+    const secrets = scope.secrets[i];
+    const result =
+      action.type === 'branch'
+        ? await runBranch(tx, env, context, action, index, address, secrets, scope)
+        : action.type === 'repeat'
+          ? await runRepeat(tx, env, context, action, index, address, secrets, scope)
+          : await runLeaf(tx, env, context, action, index, address, secrets, scope);
+    steps.push(result.step);
+    error = result.error;
+  }
+  return { steps, error };
+}
+
+type StepResult = { step: AutomationStep; error: string | null };
+
+/** A failed step's record and the run's error. */
+function failed(
+  base: Pick<AutomationStep, 'index' | 'type'>,
+  address: StepAddress,
+  err: unknown,
+  input: unknown,
+  t0: number
+): StepResult {
+  const message = stepError(err);
+  if (message === null) throw err;
+  return {
+    step: {
+      ...base,
+      status: 'failed',
+      input: stored(input),
+      // A script's logs and output so far.
+      output: err instanceof StepFailure && err.output !== undefined ? stored(err.output) : null,
+      error: message,
+      durationMs: Math.round(performance.now() - t0),
+    },
+    error: `Step ${stepAddressText(address)} failed: ${message}`,
+  };
+}
+
+async function runLeaf(
+  tx: Transaction,
+  env: RunEnv,
+  context: Record<string, unknown>,
+  action: LeafAction,
+  index: number,
+  address: StepAddress,
+  secrets: StepSecrets | null | undefined,
+  scope: ListScope
+): Promise<StepResult> {
+  const t0 = performance.now();
+  let input: unknown = null;
+  try {
+    countExecuted(env);
+    const rendered = renderAction(action, context);
+    input = loggedInput(rendered);
+    const output = await tx.transaction((sp) => runAction(sp, env, action, rendered, secrets));
+    scope.frame[index] = output;
+    return {
+      step: {
+        index,
+        type: action.type,
+        status: 'succeeded',
+        input: scope.detail ? stored(input) : null,
+        output: scope.detail ? stored(output) : null,
+        error: null,
+        durationMs: Math.round(performance.now() - t0),
+      },
+      error: null,
+    };
+  } catch (err) {
+    return failed({ index, type: action.type }, address, err, input, t0);
+  }
+}
+
+/**
+ * If / Otherwise: checks the conditions, then runs the path's steps. Tokens see
+ * `{{steps.N.path}}`, `{{steps.N.matched}}` and the steps that ran (`{{steps.N.then.1...}}`).
+ */
+async function runBranch(
+  tx: Transaction,
+  env: RunEnv,
+  context: Record<string, unknown>,
+  action: BranchAction,
+  index: number,
+  address: StepAddress,
+  secrets: StepSecrets | null | undefined,
+  scope: ListScope
+): Promise<StepResult> {
+  const t0 = performance.now();
+  let input: unknown = null;
+  let matched: boolean;
+  try {
+    countExecuted(env);
+    const rendered = {
+      type: action.type,
+      tableId: action.tableId,
+      recordId: renderTemplate(action.recordId, context),
+      filter: renderTemplateValue(action.filter, context),
+    };
+    input = rendered;
+    matched = await tx.transaction((sp) => branchMatches(sp, env, action, rendered));
+  } catch (err) {
+    const result = failed({ index, type: action.type }, address, err, input, t0);
+    withSkippedLists(result.step, action);
+    return result;
+  }
+  const path = matched ? 'then' : 'otherwise';
+  const frame: Record<number, unknown> = {};
+  scope.frame[index] = { path, matched, [path]: frame };
+  const ran = await runSteps(tx, env, context, action[path], {
+    address: [...address, path],
+    frame,
+    secrets: secrets?.[path] ?? [],
+    detail: scope.detail,
+  });
+  const step: AutomationStep = {
+    index,
+    type: action.type,
+    status: ran.error ? 'failed' : 'succeeded',
+    input: scope.detail || ran.error ? stored(input) : null,
+    output: { path, matched },
+    error: ran.error,
+    durationMs: Math.round(performance.now() - t0),
+    path,
+    [path]: ran.steps,
+  };
+  return { step: withSkippedLists(step, action, path), error: ran.error };
+}
+
+/**
+ * Repeat for each: its steps once per item of the list, in order, at most MAX_REPEAT_ITEMS
+ * (a longer list fails the step before any item runs). Inside, tokens see `{{steps.N.item}}`,
+ * `{{steps.N.index}}` (from 1) and this item's steps (`{{steps.N.actions.1...}}`); after it,
+ * `{{steps.N.count}}` and `{{steps.N.items}}`. A failing item stops the repeat.
+ */
+async function runRepeat(
+  tx: Transaction,
+  env: RunEnv,
+  context: Record<string, unknown>,
+  action: RepeatAction,
+  index: number,
+  address: StepAddress,
+  secrets: StepSecrets | null | undefined,
+  scope: ListScope
+): Promise<StepResult> {
+  const t0 = performance.now();
+  let input: unknown = null;
+  let items: unknown[];
+  try {
+    const list = renderTemplate(action.items, context);
+    input = { type: action.type, items: list };
+    items = repeatItems(list);
+    if (items.length > MAX_REPEAT_ITEMS) {
+      throw new StepFailure(
+        `The list has ${items.length} items; a Repeat for each runs for at most ${MAX_REPEAT_ITEMS}.`
+      );
+    }
+  } catch (err) {
+    const result = failed({ index, type: action.type }, address, err, input, t0);
+    withSkippedLists(result.step, action);
+    return result;
+  }
+  const entry: Record<string, unknown> = { items, count: 0 };
+  scope.frame[index] = entry;
+  const iterations: NonNullable<AutomationStep['iterations']> = [];
+  let error: string | null = null;
+  for (const [k, item] of items.entries()) {
+    const frame: Record<number, unknown> = {};
+    Object.assign(entry, { item, index: k + 1, actions: frame });
+    const ran = await runSteps(tx, env, context, action.actions, {
+      address: [...address, 'actions'],
+      frame,
+      secrets: secrets?.actions ?? [],
+      detail: scope.detail && k < MAX_LOGGED_ITERATIONS,
+    });
+    entry['count'] = k + 1;
+    iterations.push({ index: k + 1, status: ran.error ? 'failed' : 'succeeded', steps: ran.steps });
+    if (ran.error) {
+      error = `Item ${k + 1}: ${ran.error}`;
+      break;
+    }
+  }
+  const count = entry['count'] as number;
+  // After the group, only the list and how many items ran: never one item's steps.
+  scope.frame[index] = { items, count };
+  return {
+    step: {
+      index,
+      type: action.type,
+      status: error ? 'failed' : 'succeeded',
+      input: scope.detail || error ? stored(input) : null,
+      output: { count },
+      error,
+      durationMs: Math.round(performance.now() - t0),
+      iterations,
+    },
+    error,
+  };
 }
 
 /** The base's live tables and fields, for the script's `base.getTable(...)`. */
@@ -819,59 +1168,18 @@ async function performRun(
     userId: opts.userId,
     role: opts.role,
     entitlements,
+    executed: { count: 0 },
   };
   const context: { trigger: Record<string, unknown>; steps: Record<number, unknown> } = {
     trigger: triggered.data,
     steps: {},
   };
-  const steps: AutomationStep[] = [];
-  let error: string | null = null;
-  for (const [i, action] of actionsOf(automation).entries()) {
-    const index = i + 1;
-    if (error) {
-      steps.push({
-        index,
-        type: action.type,
-        status: 'skipped',
-        input: null,
-        output: null,
-        error: null,
-        durationMs: 0,
-      });
-      continue;
-    }
-    const t0 = performance.now();
-    let input: unknown = null;
-    try {
-      const rendered = renderAction(action, context);
-      input = loggedInput(rendered);
-      const output = await tx.transaction((sp) => runAction(sp, env, index, action, rendered));
-      context.steps[index] = output;
-      steps.push({
-        index,
-        type: action.type,
-        status: 'succeeded',
-        input: stored(input),
-        output: stored(output),
-        error: null,
-        durationMs: Math.round(performance.now() - t0),
-      });
-    } catch (err) {
-      const message = stepError(err);
-      if (message === null) throw err;
-      error = `Step ${index} failed: ${message}`;
-      steps.push({
-        index,
-        type: action.type,
-        status: 'failed',
-        input: stored(input),
-        // A script's logs and output so far.
-        output: err instanceof StepFailure && err.output !== undefined ? stored(err.output) : null,
-        error: message,
-        durationMs: Math.round(performance.now() - t0),
-      });
-    }
-  }
+  const { steps, error } = await runSteps(tx, env, context, actionsOf(automation), {
+    address: [],
+    frame: context.steps,
+    secrets: env.secrets,
+    detail: true,
+  });
   return finish(
     tx,
     automation,

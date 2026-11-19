@@ -5,22 +5,42 @@ import {
   type Schedule,
   scheduleProblems,
 } from '../automations/schedule.js';
-import { type PathKey, TemplateError, valuePaths } from '../automations/template.js';
+import {
+  type StepAddress,
+  stepAddressText,
+  stepTokenProblem,
+  walkSteps,
+} from '../automations/steps.js';
+import { TemplateError, valuePaths } from '../automations/template.js';
 import { timeZoneSchema } from '../fields/datetime.js';
 import { filterGroupSchema } from '../query/index.js';
 
 /**
  * Automations: a base's trigger (a record created, updated or entering a filter, or a
- * schedule) and its ordered actions (create, update and find records), run by the worker as the
- * automation's creator. Managed by the base's creators; every run is kept 30 days.
+ * schedule) and its ordered actions (create, update and find records, ...), run by the worker
+ * as the automation's creator. Two kinds of step hold steps of their own: If / Otherwise
+ * (`branch`) and Repeat for each (`repeat`), see automations/steps.ts. Managed by the base's
+ * creators; every run is kept 30 days.
  */
 
 export const MAX_AUTOMATIONS_PER_BASE = 50;
+/** Steps of one automation, counting the steps inside branches and repeats (and those groups). */
 export const MAX_AUTOMATION_ACTIONS = 25;
+/** How deep steps nest: a group's steps are level 2, a group inside a group holds level 3. */
+export const MAX_STEP_DEPTH = 3;
 /** Automation writes trigger automations up to this depth; deeper runs are skipped (loop guard). */
 export const MAX_AUTOMATION_DEPTH = 3;
 export const AUTOMATION_RUN_RETENTION_DAYS = 30;
 export const MAX_FIND_RECORDS = 100;
+/** Items one Repeat for each runs for; a longer list fails the step before any item runs. */
+export const MAX_REPEAT_ITEMS = MAX_FIND_RECORDS;
+/**
+ * Actions one run executes in all, each counted once per item of the repeats around it; the
+ * action that would go past it fails (and the run stops, like any failed step).
+ */
+export const MAX_RUN_ACTIONS = 500;
+/** Items of a repeat whose steps' input and output the run history keeps (the rest: status). */
+export const MAX_LOGGED_ITERATIONS = 10;
 /** Records one update action may change (a found list). */
 export const MAX_UPDATE_RECORDS = 100;
 export const MAX_AUTOMATION_NAME = 255;
@@ -145,10 +165,12 @@ export const AUTOMATION_ACTION_TYPES = [
   'httpRequest',
   'slackMessage',
   'runScript',
+  'branch',
+  'repeat',
 ] as const;
 export type AutomationActionType = (typeof AUTOMATION_ACTION_TYPES)[number];
 
-export const automationActionSchema = z.discriminatedUnion('type', [
+const leafActionSchemas = [
   z.strictObject({ type: z.literal('createRecord'), tableId: z.uuid(), fields: cellsSchema }),
   z.strictObject({
     type: z.literal('updateRecord'),
@@ -223,29 +245,89 @@ export const automationActionSchema = z.discriminatedUnion('type', [
       })
       .default({}),
   }),
-]);
-export type AutomationAction = z.infer<typeof automationActionSchema>;
+] as const;
 
-/** Where a token may point: the trigger's data, or a step before this one (1-based). */
-function tokenProblem(path: PathKey[], step: number | null): string | null {
-  const [root, n] = path;
-  if (step === null) return "Tokens can't be used in the trigger.";
-  if (root === 'trigger') return null;
-  if (typeof n !== 'number' || n < 1 || n >= step) {
-    return `Step ${step} can only use the steps before it.`;
+/** A list of steps inside a branch or a repeat (the whole tree is checked by `checkSteps`). */
+const nestedSteps = () => z.array(automationActionSchema).max(MAX_AUTOMATION_ACTIONS).default([]);
+
+/**
+ * If / Otherwise: when the record (`recordId`: an id or a token such as `{{trigger.record.id}}`;
+ * a list gives its first record; none: the conditions don't hold) of the table meets the
+ * conditions (the view filter language; values may hold tokens), the `then` steps run, else the
+ * `otherwise` steps. Its output: `{{steps.N.path}}` (`then` or `otherwise`), `{{steps.N.matched}}`
+ * and the steps of the path that ran (`{{steps.N.then.1...}}`).
+ */
+const branchSchema = z.strictObject({
+  type: z.literal('branch'),
+  tableId: z.uuid(),
+  recordId: z.string().trim().min(1).max(2000),
+  filter: filterGroupSchema,
+  // biome-ignore lint/suspicious/noThenProperty: a list of steps (an array, never a function)
+  get then(): z.ZodDefault<z.ZodArray<typeof automationActionSchema>> {
+    return nestedSteps();
+  },
+  get otherwise(): z.ZodDefault<z.ZodArray<typeof automationActionSchema>> {
+    return nestedSteps();
+  },
+});
+
+/**
+ * Repeat for each: `items` is a token giving a list (`{{steps.1.records}}`, a link field's
+ * records); `actions` run once per item, at most MAX_REPEAT_ITEMS. Inside, `{{steps.N.item}}` is
+ * the current item, `{{steps.N.index}}` its number (from 1) and `{{steps.N.actions.1...}}` this
+ * item's steps; after it, `{{steps.N.count}}` and `{{steps.N.items}}`.
+ */
+const repeatSchema = z.strictObject({
+  type: z.literal('repeat'),
+  items: z.string().trim().min(1).max(2000),
+  get actions(): z.ZodDefault<z.ZodArray<typeof automationActionSchema>> {
+    return nestedSteps();
+  },
+});
+
+export const automationActionSchema = z
+  .discriminatedUnion('type', [...leafActionSchemas, branchSchema, repeatSchema])
+  .meta({
+    id: 'AutomationAction',
+    description:
+      'A step of an automation: an action, or an If / Otherwise (`branch`) or Repeat for each (`repeat`) group holding steps of its own.',
+  });
+export type AutomationAction = z.infer<typeof automationActionSchema>;
+export type AutomationActionInput = z.input<typeof automationActionSchema>;
+export type BranchAction = Extract<AutomationAction, { type: 'branch' }>;
+export type RepeatAction = Extract<AutomationAction, { type: 'repeat' }>;
+
+/** What a step fills in with tokens: not its nested steps, and only a script's inputs. */
+function ownTokenValues(step: unknown): unknown {
+  if (!step || typeof step !== 'object') return step;
+  const s = step as Record<string, unknown>;
+  switch (s['type']) {
+    // A script is code, never filled in: only its input variables hold tokens.
+    case 'runScript':
+      return s['inputs'];
+    case 'branch':
+      return [s['recordId'], s['filter']];
+    case 'repeat':
+      return s['items'];
+    default:
+      return step;
   }
-  return null;
 }
 
-function checkTokens(
+/**
+ * The checks of a trigger and its steps as a whole: at most MAX_AUTOMATION_ACTIONS steps in
+ * all, nested at most MAX_STEP_DEPTH deep, tokens only where they can be filled in (see
+ * stepTokenProblem), and the size of the configuration.
+ */
+export function checkSteps(
   trigger: unknown,
   actions: readonly unknown[] | undefined,
   ctx: z.RefinementCtx
 ) {
-  const check = (value: unknown, step: number | null, path: (string | number)[]) => {
+  const check = (value: unknown, at: StepAddress | null, path: (string | number)[]) => {
     try {
       for (const p of valuePaths(value)) {
-        const message = tokenProblem(p, step);
+        const message = stepTokenProblem(actions ?? [], p, at);
         if (message) {
           ctx.addIssue({ code: 'custom', path, message });
           return;
@@ -257,11 +339,27 @@ function checkTokens(
     }
   };
   if (trigger !== undefined) check(trigger, null, ['trigger']);
-  actions?.forEach((a, i) => {
-    // A script is code, never filled in: only its input variables hold tokens.
-    const script = (a as { type?: unknown } | null)?.type === 'runScript';
-    check(script ? (a as { inputs?: unknown }).inputs : a, i + 1, ['actions', i]);
-  });
+  if (actions) {
+    const steps = walkSteps(actions);
+    if (steps.length > MAX_AUTOMATION_ACTIONS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['actions'],
+        message: `An automation has at most ${MAX_AUTOMATION_ACTIONS} steps, counting the steps inside If / Otherwise and Repeat for each.`,
+      });
+    }
+    for (const s of steps) {
+      if (s.depth > MAX_STEP_DEPTH) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['actions', ...s.path],
+          message: `Step ${stepAddressText(s.address)} is nested too deep: groups hold steps at most ${MAX_STEP_DEPTH} levels deep.`,
+        });
+        continue;
+      }
+      check(ownTokenValues(s.step), s.address, ['actions', ...s.path]);
+    }
+  }
   const size = JSON.stringify({ trigger, actions }).length;
   if (size > MAX_AUTOMATION_CONFIG_BYTES) {
     ctx.addIssue({ code: 'custom', message: 'The trigger and actions are too large.' });
@@ -281,7 +379,7 @@ export const createAutomationSchema = z
     /** Off by default, as in Airtable; it needs an action to turn on. */
     enabled: z.boolean().default(false),
   })
-  .superRefine((v, ctx) => checkTokens(v.trigger, v.actions, ctx));
+  .superRefine((v, ctx) => checkSteps(v.trigger, v.actions, ctx));
 export type CreateAutomationInput = z.input<typeof createAutomationSchema>;
 
 export const updateAutomationSchema = z
@@ -293,7 +391,7 @@ export const updateAutomationSchema = z
     enabled: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nothing to change.' })
-  .superRefine((v, ctx) => checkTokens(v.trigger, v.actions, ctx));
+  .superRefine((v, ctx) => checkSteps(v.trigger, v.actions, ctx));
 export type UpdateAutomationInput = z.input<typeof updateAutomationSchema>;
 
 export const AUTOMATION_RUN_STATUSES = ['succeeded', 'failed', 'skipped'] as const;
@@ -352,17 +450,64 @@ export const AutomationListSchema = z.object({
 });
 export type AutomationList = z.infer<typeof AutomationListSchema>;
 
-export const AutomationStepSchema = z.object({
-  /** 1-based, as tokens count them (`steps.1`). */
-  index: z.number().int(),
-  type: z.enum(AUTOMATION_ACTION_TYPES),
-  status: z.enum(['succeeded', 'failed', 'skipped']),
-  /** The action with its tokens filled in. */
-  input: z.unknown(),
-  output: z.unknown(),
-  error: z.string().nullable(),
-  durationMs: z.number().int(),
-});
+/**
+ * One step of a run. A branch's (`branch`) also has its paths' steps (the path that didn't
+ * run as skipped); a repeat's has its items' runs (`iterations`). Old runs have neither.
+ */
+export const AutomationStepSchema = z
+  .object({
+    /** 1-based, as tokens count them (`steps.1`; inside a group, its number in that list). */
+    index: z.number().int(),
+    type: z.enum(AUTOMATION_ACTION_TYPES),
+    status: z.enum(['succeeded', 'failed', 'skipped']),
+    /** The action with its tokens filled in. */
+    input: z.unknown(),
+    output: z.unknown(),
+    error: z.string().nullable(),
+    durationMs: z.number().int(),
+    /** A branch's path that ran (none when it was skipped). */
+    path: z.enum(['then', 'otherwise']).optional(),
+    // biome-ignore lint/suspicious/noThenProperty: a list of steps (an array, never a function)
+    get then(): z.ZodOptional<z.ZodArray<typeof AutomationStepSchema>> {
+      return z.array(AutomationStepSchema).optional();
+    },
+    get otherwise(): z.ZodOptional<z.ZodArray<typeof AutomationStepSchema>> {
+      return z.array(AutomationStepSchema).optional();
+    },
+    /** A skipped repeat's steps (how it would have run). */
+    get actions(): z.ZodOptional<z.ZodArray<typeof AutomationStepSchema>> {
+      return z.array(AutomationStepSchema).optional();
+    },
+    /**
+     * A repeat's items that ran, each with its steps; past MAX_LOGGED_ITERATIONS their steps
+     * keep their status and error, not their input and output.
+     */
+    get iterations(): z.ZodOptional<
+      z.ZodArray<
+        z.ZodObject<{
+          index: z.ZodNumber;
+          status: z.ZodEnum<{ succeeded: 'succeeded'; failed: 'failed'; skipped: 'skipped' }>;
+          steps: z.ZodArray<typeof AutomationStepSchema>;
+        }>
+      >
+    > {
+      return z
+        .array(
+          z.object({
+            /** The item's number, from 1. */
+            index: z.number().int(),
+            status: z.enum(['succeeded', 'failed', 'skipped']),
+            steps: z.array(AutomationStepSchema),
+          })
+        )
+        .optional();
+    },
+  })
+  .meta({
+    id: 'AutomationRunStep',
+    description:
+      "A step of a run: its input, output and error; a group's steps (a branch's paths, a repeat's items) inside it.",
+  });
 export type AutomationStep = z.infer<typeof AutomationStepSchema>;
 
 /**

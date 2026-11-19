@@ -6,9 +6,9 @@ import {
   type AutomationScripts,
   type AutomationTrigger,
   type FieldMeta,
-  MAX_AUTOMATION_ACTIONS,
   MAX_AUTOMATIONS_PER_BASE,
   type MeResponse,
+  walkSteps,
 } from '@openrows/shared';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -31,18 +31,15 @@ import { CollaboratorsProvider } from '../collaborators/context';
 import {
   canManageAutomations,
   cardErrors,
-  defaultAction,
   defaultTrigger,
   generalErrors,
-  moveItem,
   problemErrors,
   RUN_STATUS_LABELS,
   runWhen,
   TRIGGER_LABELS,
-  tokensFor,
 } from './model';
 import { FailedRuns, RunHistory, StatusIcon, TestPanel } from './RunPanel';
-import { ActionCard, AddAction, StepCard, TriggerEditor } from './steps';
+import { AddStep, StepCard, StepList, type StepTree, TriggerEditor } from './steps';
 
 type Table = { id: string; name: string };
 
@@ -434,7 +431,9 @@ function AutomationEditor({
   const tableIds = useMemo(() => {
     const ids = new Set<string>();
     if ('tableId' in draft.trigger) ids.add(draft.trigger.tableId);
-    for (const a of draft.actions) if ('tableId' in a) ids.add(a.tableId);
+    for (const { step } of walkSteps(draft.actions)) {
+      if (step && typeof step === 'object' && 'tableId' in step) ids.add(String(step.tableId));
+    }
     return [...ids].filter(Boolean);
   }, [draft]);
   const fieldsByTable = useTablesFields(tableIds);
@@ -508,12 +507,14 @@ function AutomationEditor({
   };
 
   const errorAt = (path: string) => errors[path];
-  const setActions = (actions: AutomationAction[]) => setDraft({ ...draft, actions });
-  const tokenCtx = {
-    trigger: draft.trigger,
+  const tree: StepTree = {
     actions: draft.actions,
-    fieldsOf,
-    webhookSample: automation.webhookSample,
+    onChange: (actions: AutomationAction[]) => setDraft({ ...draft, actions }),
+    trigger: draft.trigger,
+    tables,
+    tokens: { fieldsOf, webhookSample: automation.webhookSample },
+    errors,
+    scripts,
   };
   const general = generalErrors(errors);
 
@@ -600,39 +601,8 @@ function AutomationEditor({
         {draft.actions.length === 0 && (
           <p className="text-text-2">No actions yet. Add what the automation does.</p>
         )}
-        <ol aria-label="Actions" className="flex flex-col gap-4">
-          {draft.actions.map((action, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: steps are positional, like their tokens
-            <li key={i}>
-              <ActionCard
-                index={i}
-                count={draft.actions.length}
-                action={action}
-                tables={tables}
-                tokens={tokensFor(tokenCtx, i + 1)}
-                errors={cardErrors(errors, `actions.${i}`)}
-                errorAt={errorAt}
-                onChange={(next) => setActions(draft.actions.map((a, j) => (j === i ? next : a)))}
-                onMove={(to) => setActions(moveItem(draft.actions, i, to))}
-                onDelete={() => setActions(draft.actions.filter((_, j) => j !== i))}
-                scripts={scripts}
-              />
-            </li>
-          ))}
-        </ol>
-        <AddAction
-          disabled={draft.actions.length >= MAX_AUTOMATION_ACTIONS}
-          scripts={scripts}
-          onAdd={(type) => {
-            const tableId =
-              ('tableId' in draft.trigger ? draft.trigger.tableId : null) ?? tables[0]?.id ?? '';
-            const tableName = tables.find((t) => t.id === tableId)?.name;
-            setActions([
-              ...draft.actions,
-              defaultAction(type, draft.trigger, tables[0]?.id ?? '', tableName),
-            ]);
-          }}
-        />
+        <StepList tree={tree} path={[]} label="Actions" />
+        <AddStep tree={tree} path={[]} />
       </div>
       <aside
         aria-label="Test and run history"

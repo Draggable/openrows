@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noThenProperty: `then` is an If / Otherwise step's list of steps (an array)
 import type { Automation, AutomationRun, AutomationScripts } from '@openrows/shared';
 import { QueryClient } from '@tanstack/react-query';
 import { createMemoryHistory, RouterProvider } from '@tanstack/react-router';
@@ -40,6 +41,8 @@ async function setUp(
   const automations: (Automation & { runCount: number })[] = [];
   const runs: AutomationRun[] = [];
   const requests: { method: string; path: string; body: unknown }[] = [];
+  /** What the next test run answers. */
+  const testRun: { steps: AutomationRun['steps'] | null } = { steps: null };
   const inner = api.fetch.getMockImplementation();
   if (!inner) throw new Error('no fake fetch');
   const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
@@ -123,7 +126,7 @@ async function setUp(
     if (a && one?.[2] === '/test' && method === 'POST') {
       const r = run({
         mode: 'test',
-        steps: [
+        steps: testRun.steps ?? [
           {
             index: 1,
             type: 'createRecord',
@@ -168,7 +171,7 @@ async function setUp(
     return inner(input, init);
   });
   vi.stubGlobal('fetch', fetchMock);
-  return { base, table, nameField, automations, runs, requests, run };
+  return { base, table, nameField, automations, runs, requests, run, testRun };
 }
 
 describe('automations builder (#111)', () => {
@@ -350,6 +353,153 @@ describe('automations builder (#111)', () => {
     expect((screen.getByRole('switch', { name: 'Steps on' }) as HTMLButtonElement).disabled).toBe(
       true
     );
+  });
+
+  it('adds If / Otherwise and Repeat for each groups, with steps of their own (#21)', async () => {
+    const { base, table, nameField, requests, testRun } = await setUp();
+    renderApp(`/b/${base.id}/automations`);
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: 'New automation' }))[0] as HTMLElement
+    );
+    await screen.findByRole('region', { name: 'When a record is created' });
+    const top = screen.getByLabelText('Add an action');
+    expect(within(top).getByRole('group', { name: 'Conditions and loops' })).toBeTruthy();
+
+    // If / Otherwise: its record, then a step in Then.
+    fireEvent.change(top, { target: { value: 'branch' } });
+    const branch = await screen.findByRole('region', { name: 'If / Otherwise' });
+    expect((within(branch).getByLabelText('Record') as HTMLInputElement).value).toBe(
+      '{{trigger.record.id}}'
+    );
+    expect(within(branch).getByLabelText('Table')).toHaveProperty('value', table.id);
+    const then = within(branch).getByRole('region', { name: 'Then' });
+    within(branch).getByRole('region', { name: 'Otherwise' });
+    fireEvent.change(within(then).getByLabelText('Add an action to Then of step 1'), {
+      target: { value: 'createRecord' },
+    });
+    const nested = await within(then).findByRole('region', { name: 'Create record' });
+    expect(nested.textContent).toContain('Step 1.then.1');
+    fireEvent.change(await within(nested).findByLabelText('Add a field to step 1.then.1'), {
+      target: { value: nameField.id },
+    });
+
+    // Repeat for each over the trigger's record (one item), with a step using the item.
+    fireEvent.change(screen.getByLabelText('Add an action'), { target: { value: 'repeat' } });
+    const repeat = await screen.findByRole('region', { name: 'Repeat for each' });
+    fireEvent.change(within(repeat).getByLabelText('List'), {
+      target: { value: '{{trigger.record.id}}' },
+    });
+    const each = within(repeat).getByRole('region', { name: 'For each item' });
+    expect(within(each).getByText('No steps yet.')).toBeTruthy();
+    // Groups nest at most three deep: inside a group, a group may still be added.
+    const addInEach = within(each).getByLabelText('Add an action to For each item of step 2');
+    expect(
+      (within(addInEach).getByRole('option', { name: 'If / Otherwise' }) as HTMLOptionElement)
+        .disabled
+    ).toBe(false);
+    fireEvent.change(addInEach, { target: { value: 'sendEmail' } });
+    fireEvent.change(addInEach, { target: { value: 'slackMessage' } });
+    const email = await within(each).findByRole('region', { name: 'Send email' });
+    fireEvent.click(
+      within(email).getByRole('button', { name: "Insert a value into step 2.actions.1's subject" })
+    );
+    fireEvent.click(await screen.findByRole('option', { name: 'Item number (from 1)' }));
+    await waitFor(() =>
+      expect((within(email).getByLabelText('Subject') as HTMLInputElement).value).toBe(
+        '{{steps.2.index}}'
+      )
+    );
+    fireEvent.change(within(email).getByLabelText('To'), { target: { value: 'a@example.com' } });
+    const slack = within(each).getByRole('region', { name: 'Send Slack message' });
+    fireEvent.change(within(slack).getByLabelText('Message'), { target: { value: 'Hi' } });
+    // Reorder inside the group with the same buttons as the top level.
+    fireEvent.click(within(each).getByRole('button', { name: 'Move step 2.actions.2 up' }));
+    expect(
+      within(within(each).getByRole('list', { name: 'For each item steps of step 2' }))
+        .getAllByRole('heading')
+        .map((h) => h.textContent)
+    ).toEqual(['Send Slack message', 'Send email']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(
+        true
+      )
+    );
+    expect(requests.filter((r) => r.method === 'PATCH').at(-1)?.body).toEqual({
+      actions: [
+        {
+          type: 'branch',
+          tableId: table.id,
+          recordId: '{{trigger.record.id}}',
+          filter: { conjunction: 'and', conditions: [] },
+          then: [{ type: 'createRecord', tableId: table.id, fields: { [nameField.id]: '' } }],
+          otherwise: [],
+        },
+        {
+          type: 'repeat',
+          items: '{{trigger.record.id}}',
+          actions: [
+            { type: 'slackMessage', text: 'Hi' },
+            { type: 'sendEmail', to: ['a@example.com'], subject: '{{steps.2.index}}', body: '' },
+          ],
+        },
+      ],
+    });
+
+    // A test run shows which path ran, the skipped path and each item.
+    const step = (over: Partial<AutomationRun['steps'][number]>) => ({
+      index: 1,
+      type: 'createRecord' as const,
+      status: 'succeeded' as const,
+      input: { fields: {} },
+      output: { id: 'r1' },
+      error: null,
+      durationMs: 1,
+      ...over,
+    });
+    testRun.steps = [
+      step({
+        type: 'branch',
+        input: { recordId: 'x' },
+        output: { path: 'otherwise', matched: false },
+        path: 'otherwise',
+        then: [step({ status: 'skipped', input: null, output: null })],
+        otherwise: [],
+      }),
+      step({
+        index: 2,
+        type: 'repeat',
+        status: 'failed',
+        error: 'Item 2: Step 2.actions.1 failed: Nope.',
+        output: { count: 2 },
+        iterations: [
+          { index: 1, status: 'succeeded', steps: [step({ type: 'slackMessage' })] },
+          {
+            index: 2,
+            status: 'failed',
+            steps: [step({ type: 'slackMessage', status: 'failed', error: 'Nope.' })],
+          },
+        ],
+      }),
+    ];
+    const panel = screen.getByRole('complementary', { name: 'Test and run history' });
+    await within(panel).findByRole('option', { name: 'Ship it' });
+    fireEvent.change(within(panel).getByLabelText('Test with record'), {
+      target: { value: await recordOf(table.id) },
+    });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Run test' }));
+    const result = await within(panel).findByRole('region', { name: 'Test result' });
+    expect(result.textContent).toContain('Conditions not met: ran Otherwise.');
+    const skipped = within(result).getByRole('list', { name: 'Then of step 1' });
+    expect(skipped.textContent).toContain('Step 1.then.1: Create record');
+    expect(skipped.textContent).toContain('Skipped');
+    expect(result.textContent).toContain('2 items run.');
+    const items = within(result).getByRole('list', { name: 'Items of step 2' });
+    expect(within(items).getAllByRole('listitem').length).toBeGreaterThanOrEqual(2);
+    const second = within(items).getByRole('list', { name: 'Steps of item 2' });
+    expect(second.textContent).toContain('Step 2.actions.1: Send Slack message');
+    expect(second.textContent).toContain('Nope.');
   });
 
   it('lists automations with their switch, last run and runs; history filters and retries', async () => {

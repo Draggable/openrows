@@ -7,9 +7,21 @@ import {
   type AutomationSkipReason,
   type AutomationTrigger,
   type AutomationTriggerType,
+  countSteps,
   type FieldMeta,
   getFieldType,
+  MAX_STEP_DEPTH,
+  parseTemplatePath,
+  renumberStepTokens,
   roleAllows,
+  type StepAddress,
+  type StepListName,
+  stepAddressText,
+  stepAt,
+  stepList,
+  TemplateError,
+  templatePaths,
+  tokenStepAddress,
   type UserRole,
 } from '@openrows/shared';
 import { ApiError } from '../../api/client';
@@ -51,7 +63,12 @@ export const ACTION_TYPES: readonly AutomationActionType[] = [
   'slackMessage',
   'httpRequest',
   'runScript',
+  'branch',
+  'repeat',
 ];
+
+/** Steps that hold steps of their own. */
+export const GROUP_TYPES: readonly AutomationActionType[] = ['branch', 'repeat'];
 
 export const ACTION_LABELS: Record<AutomationActionType, string> = {
   createRecord: 'Create record',
@@ -61,6 +78,16 @@ export const ACTION_LABELS: Record<AutomationActionType, string> = {
   slackMessage: 'Send Slack message',
   httpRequest: 'Send HTTP request',
   runScript: 'Run a script',
+  branch: 'If / Otherwise',
+  repeat: 'Repeat for each',
+};
+
+/** The names of a group's lists, as the builder and the run history show them. */
+export const LIST_LABELS: Record<StepListName, string> = {
+  // biome-ignore lint/suspicious/noThenProperty: a label, keyed like the step's lists
+  then: 'Then',
+  otherwise: 'Otherwise',
+  actions: 'For each item',
 };
 
 /** A new script step's source: what the API looks like. */
@@ -183,6 +210,18 @@ export function defaultAction(
         ),
         inputs: needsRecord(trigger) ? { recordId: '{{trigger.record.id}}' } : {},
       };
+    case 'branch':
+      return {
+        type,
+        tableId,
+        recordId: needsRecord(trigger) ? '{{trigger.record.id}}' : '',
+        filter: { conjunction: 'and', conditions: [] },
+        // biome-ignore lint/suspicious/noThenProperty: a list of steps (an array, never a function)
+        then: [],
+        otherwise: [],
+      };
+    case 'repeat':
+      return { type, items: '', actions: [] };
   }
 }
 
@@ -195,6 +234,105 @@ export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
   const [item] = next.splice(from, 1);
   if (item !== undefined) next.splice(to, 0, item);
   return next;
+}
+
+// ---- The step tree ----
+
+/**
+ * Where a list of steps is in the draft, by array positions (0-based): `[]` is the top level,
+ * `[1, 'then']` step 2's Then, `[1, 'then', 0, 'actions']` the steps of the repeat inside it.
+ */
+export type ListPath = readonly (number | StepListName)[];
+
+/** A list's (or its step's) address as tokens count it: positions + 1. */
+export const addressOf = (path: ListPath): StepAddress =>
+  path.map((k) => (typeof k === 'number' ? k + 1 : k));
+
+/** `actions.1.then.0`: where the server's errors for a step (or list) are. */
+export const errorPathOf = (path: ListPath) => ['actions', ...path].join('.');
+
+/** The steps of a list. */
+export function listAt(actions: readonly AutomationAction[], path: ListPath): AutomationAction[] {
+  let list: readonly AutomationAction[] = actions;
+  for (let i = 0; i < path.length; i += 2) {
+    const step = list[path[i] as number];
+    list = stepList(step, path[i + 1] as StepListName) as AutomationAction[];
+  }
+  return [...list];
+}
+
+/** The tree with one list changed. */
+export function updateList(
+  actions: readonly AutomationAction[],
+  path: ListPath,
+  fn: (list: AutomationAction[]) => AutomationAction[]
+): AutomationAction[] {
+  if (path.length === 0) return fn([...actions]);
+  const [i, name, ...rest] = path as [number, StepListName, ...ListPath];
+  return actions.map((step, j) =>
+    j === i
+      ? ({
+          ...step,
+          [name]: updateList(stepList(step, name) as AutomationAction[], rest, fn),
+        } as AutomationAction)
+      : step
+  );
+}
+
+/** How deep a list's steps sit (1 at the top level). */
+export const listDepth = (path: ListPath) => path.length / 2 + 1;
+
+/** Whether a group can be added to the list: its steps would still be nested deep enough. */
+export const groupsAllowed = (path: ListPath) => listDepth(path) < MAX_STEP_DEPTH;
+
+/** Every step in the tree, groups and their steps alike. */
+export const stepCount = (actions: readonly AutomationAction[]) => countSteps(actions);
+
+export const addStep = (
+  actions: readonly AutomationAction[],
+  path: ListPath,
+  step: AutomationAction
+) => updateList(actions, path, (list) => [...list, step]);
+
+export const replaceStep = (
+  actions: readonly AutomationAction[],
+  path: ListPath,
+  index: number,
+  step: AutomationAction
+) => updateList(actions, path, (list) => list.map((s, j) => (j === index ? step : s)));
+
+/**
+ * Moves a step within its list; tokens that pointed at the list's steps are renumbered, so they
+ * still point at the same steps.
+ */
+export function moveStep(
+  actions: readonly AutomationAction[],
+  path: ListPath,
+  from: number,
+  to: number
+): AutomationAction[] {
+  const size = listAt(actions, path).length;
+  const order = moveItem(
+    Array.from({ length: size }, (_, i) => i),
+    from,
+    to
+  );
+  const number = new Map(order.map((old, now) => [old + 1, now + 1]));
+  const moved = updateList(actions, path, (list) => moveItem(list, from, to));
+  return renumberStepTokens(moved, addressOf(path), (n) => number.get(n) ?? n);
+}
+
+/**
+ * Removes a step; tokens that pointed at the steps after it in its list are renumbered. Tokens
+ * that pointed at the removed step are left for the server's checks to point out.
+ */
+export function removeStep(
+  actions: readonly AutomationAction[],
+  path: ListPath,
+  index: number
+): AutomationAction[] {
+  const removed = updateList(actions, path, (list) => list.filter((_, j) => j !== index));
+  return renumberStepTokens(removed, addressOf(path), (n) => (n > index + 1 ? n - 1 : n));
 }
 
 /** Fields an action may set: not computed, not read-only. */
@@ -277,11 +415,125 @@ export interface TokenContext {
   webhookSample?: Automation['webhookSample'];
 }
 
+/** The tokens a step's output gives the steps after it (a branch's: those of its paths too). */
+function stepTokens(ctx: TokenContext, a: AutomationAction, address: StepAddress): TokenOption[] {
+  const n = stepAddressText(address);
+  const group = `Step ${n}: ${ACTION_LABELS[a.type]}`;
+  const fields = 'tableId' in a ? ctx.fieldsOf(a.tableId) : undefined;
+  switch (a.type) {
+    case 'createRecord':
+      return recordTokens(group, `steps.${n}.record`, 'Created record', fields);
+    case 'updateRecord':
+    case 'findRecords':
+      return [
+        { group, label: 'Records (list)', token: token(`steps.${n}.records`) },
+        { group, label: 'Number of records', token: token(`steps.${n}.count`) },
+        ...recordTokens(group, `steps.${n}.records[0]`, 'First record', fields),
+      ];
+    case 'httpRequest':
+      return [
+        { group, label: 'Response status', token: token(`steps.${n}.status`) },
+        { group, label: 'Response body', token: token(`steps.${n}.body`) },
+      ];
+    case 'sendEmail':
+      return [{ group, label: 'Emails sent', token: token(`steps.${n}.sent`) }];
+    case 'slackMessage':
+      return [{ group, label: 'Response status', token: token(`steps.${n}.status`) }];
+    case 'runScript':
+      return [
+        ...scriptOutputNames(a.script).map((name) => ({
+          group,
+          label: `Output: ${name}`,
+          token: token(`steps.${n}.output.${name}`),
+        })),
+        { group, label: 'All outputs', token: token(`steps.${n}.output`) },
+      ];
+    case 'branch':
+      // What ran inside it: empty when its path didn't run.
+      return [
+        { group, label: 'Path that ran (then or otherwise)', token: token(`steps.${n}.path`) },
+        { group, label: 'Conditions met (true or false)', token: token(`steps.${n}.matched`) },
+        ...(['then', 'otherwise'] as const).flatMap((list) =>
+          a[list].flatMap((s, i) => stepTokens(ctx, s, [...address, list, i + 1]))
+        ),
+      ];
+    case 'repeat':
+      // Its steps are for the steps inside it only.
+      return [
+        { group, label: 'Number of items run', token: token(`steps.${n}.count`) },
+        { group, label: 'Items (list)', token: token(`steps.${n}.items`) },
+      ];
+  }
+}
+
+/** The table of a repeat's items, when its list is a step's records (`{{steps.1.records}}`). */
+function itemsTable(ctx: TokenContext, items: string): string | null {
+  const whole = /^\{\{([^{}]*)\}\}$/.exec(items.trim());
+  if (!whole) return null;
+  try {
+    const path = parseTemplatePath(whole[1] ?? '');
+    const address = tokenStepAddress(ctx.actions, path);
+    if (!address) return null;
+    const rest = path.slice(1 + address.length);
+    if (rest[0] !== 'records' || rest.length !== 1) return null;
+    const step = stepAt(ctx.actions, address) as AutomationAction | undefined;
+    return step && 'tableId' in step && step.type !== 'branch' ? step.tableId : null;
+  } catch (err) {
+    if (err instanceof TemplateError) return null;
+    throw err;
+  }
+}
+
+/** Whether a repeat's list is a link field of the trigger's record (items: `{ id, name }`). */
+function itemsAreLinks(ctx: TokenContext, items: string): boolean {
+  const tableId = triggerTableId(ctx.trigger);
+  if (!tableId) return false;
+  try {
+    const paths = templatePaths(items.trim());
+    const [path] = paths;
+    if (paths.length !== 1 || !path || path.length !== 4) return false;
+    if (path[0] !== 'trigger' || path[1] !== 'record' || path[2] !== 'fields') return false;
+    const field = ctx.fieldsOf(tableId)?.find((f) => f.name === path[3] || f.id === path[3]);
+    return field?.type === 'link';
+  } catch (err) {
+    if (err instanceof TemplateError) return false;
+    throw err;
+  }
+}
+
+/** What a group gives the steps inside it: a repeat's current item and its number. */
+function enclosingTokens(
+  ctx: TokenContext,
+  a: AutomationAction,
+  address: StepAddress
+): TokenOption[] {
+  if (a.type !== 'repeat') return [];
+  const n = stepAddressText(address);
+  const group = `Step ${n}: ${ACTION_LABELS[a.type]}`;
+  const out: TokenOption[] = [
+    { group, label: 'Current item', token: token(`steps.${n}.item`) },
+    { group, label: 'Item number (from 1)', token: token(`steps.${n}.index`) },
+  ];
+  const tableId = itemsTable(ctx, a.items);
+  if (tableId) {
+    out.push(...recordTokens(group, `steps.${n}.item`, 'Current item', ctx.fieldsOf(tableId)));
+  } else if (itemsAreLinks(ctx, a.items)) {
+    out.push(
+      { group, label: 'Current item › Record ID', token: token(`steps.${n}.item.id`) },
+      { group, label: 'Current item › Name', token: token(`steps.${n}.item.name`) }
+    );
+  }
+  return out;
+}
+
 /**
- * The tokens step `step` (1-based) may use: the trigger's data, then each step before it.
- * The server refuses tokens pointing at the step itself or later ones.
+ * The tokens the step at `at` may use (a number for a top-level step, or its address such as
+ * `[2, 'then', 1]`): the trigger's data, the groups around it (a repeat's current item), the
+ * steps before it in its list and in the lists around it, and what ran inside an earlier If /
+ * Otherwise. The server refuses tokens pointing at the step itself or later ones.
  */
-export function tokensFor(ctx: TokenContext, step: number): TokenOption[] {
+export function tokensFor(ctx: TokenContext, at: number | StepAddress): TokenOption[] {
+  const address = typeof at === 'number' ? [at] : at;
   const { trigger } = ctx;
   const out: TokenOption[] = [];
   const tableId = triggerTableId(trigger);
@@ -304,46 +556,20 @@ export function tokensFor(ctx: TokenContext, step: number): TokenOption[] {
         : bodyTokens(sample))
     );
   }
-  ctx.actions.slice(0, Math.max(0, step - 1)).forEach((a, i) => {
-    const n = i + 1;
-    const group = `Step ${n}: ${ACTION_LABELS[a.type]}`;
-    const fields = 'tableId' in a ? ctx.fieldsOf(a.tableId) : undefined;
-    switch (a.type) {
-      case 'createRecord':
-        out.push(...recordTokens(group, `steps.${n}.record`, 'Created record', fields));
-        break;
-      case 'updateRecord':
-      case 'findRecords':
-        out.push(
-          { group, label: 'Records (list)', token: token(`steps.${n}.records`) },
-          { group, label: 'Number of records', token: token(`steps.${n}.count`) },
-          ...recordTokens(group, `steps.${n}.records[0]`, 'First record', fields)
-        );
-        break;
-      case 'httpRequest':
-        out.push(
-          { group, label: 'Response status', token: token(`steps.${n}.status`) },
-          { group, label: 'Response body', token: token(`steps.${n}.body`) }
-        );
-        break;
-      case 'sendEmail':
-        out.push({ group, label: 'Emails sent', token: token(`steps.${n}.sent`) });
-        break;
-      case 'slackMessage':
-        out.push({ group, label: 'Response status', token: token(`steps.${n}.status`) });
-        break;
-      case 'runScript':
-        out.push(
-          ...scriptOutputNames(a.script).map((name) => ({
-            group,
-            label: `Output: ${name}`,
-            token: token(`steps.${n}.output.${name}`),
-          })),
-          { group, label: 'All outputs', token: token(`steps.${n}.output`) }
-        );
-        break;
-    }
-  });
+  let list: readonly AutomationAction[] = ctx.actions;
+  let prefix: StepAddress = [];
+  for (let level = 0; level < address.length; level += 2) {
+    const n = address[level] as number;
+    list.slice(0, Math.max(0, n - 1)).forEach((a, i) => {
+      out.push(...stepTokens(ctx, a, [...prefix, i + 1]));
+    });
+    const name = address[level + 1] as StepListName | undefined;
+    const self = list[n - 1];
+    if (name === undefined || !self) break;
+    out.push(...enclosingTokens(ctx, self, [...prefix, n]));
+    prefix = [...prefix, n, name];
+    list = stepList(self, name) as AutomationAction[];
+  }
   return out;
 }
 
@@ -384,14 +610,25 @@ export function problemErrors(err: unknown, fallback: string): ProblemErrors {
 
 /** Paths whose message shows next to its control; others show at the foot of the card. */
 const INLINE_PATH =
-  /^(trigger\.(tableId|fieldIds|viewId|fieldId|schedule\.(every|startAt|expression|timeZone))|actions\.\d+\.(tableId|recordId|fields|fields\.[0-9a-f-]{36}|limit|to|subject|body|text|webhookUrl|url))$/i;
+  /^(trigger\.(tableId|fieldIds|viewId|fieldId|schedule\.(every|startAt|expression|timeZone))|actions(\.\d+\.(then|otherwise|actions))*\.\d+\.(tableId|recordId|fields|fields\.[0-9a-f-]{36}|limit|to|subject|body|text|webhookUrl|url|items))$/i;
 
-/** The messages for a card (`trigger`, `actions.2`) that no control of it shows. */
+/** A path under a card's prefix that belongs to a step inside it (`.then.0...`). */
+const NESTED_STEP = /^\.(then|otherwise|actions)\.\d+(\.|$)/;
+
+/**
+ * The messages for a card (`trigger`, `actions.2`, `actions.2.then.0`) that no control of it
+ * shows; a group's card leaves its steps' messages to their own cards.
+ */
 export function cardErrors(byPath: Record<string, string>, prefix: string): string[] {
   return [
     ...new Set(
       Object.entries(byPath)
-        .filter(([p]) => (p === prefix || p.startsWith(`${prefix}.`)) && !INLINE_PATH.test(p))
+        .filter(
+          ([p]) =>
+            (p === prefix || p.startsWith(`${prefix}.`)) &&
+            !INLINE_PATH.test(p) &&
+            !NESTED_STEP.test(p.slice(prefix.length))
+        )
         .map(([, m]) => m)
     ),
   ];

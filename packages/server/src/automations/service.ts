@@ -16,6 +16,7 @@ import {
   templateValuePaths,
   type updateAutomationSchema,
   viewQuerySchema,
+  walkSteps,
 } from '@openrows/shared';
 import { and, count, desc, eq, inArray, isNull, ne, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -233,25 +234,28 @@ async function checkConfig(
     }
   }
   await checkScripts(ctx, actions, errors);
-  for (const [i, action] of actions.entries()) {
-    if (action.type === 'sendEmail' || action.type === 'runScript') continue;
+  for (const visited of walkSteps(actions)) {
+    const action = visited.step as AutomationAction;
+    const at = `actions.${visited.path.join('.')}`;
+    if (action.type === 'sendEmail' || action.type === 'runScript' || action.type === 'repeat') {
+      continue;
+    }
     if (action.type === 'httpRequest' || action.type === 'slackMessage') {
-      await checkActionUrl(ctx, action, i, errors);
+      await checkActionUrl(ctx, action, at, errors);
       continue;
     }
     const t = await load(action.tableId);
     if (!t) {
-      errors.push({ path: `actions.${i}.tableId`, message: 'No such table in this base.' });
+      errors.push({ path: `${at}.tableId`, message: 'No such table in this base.' });
       continue;
     }
-    if (action.type === 'findRecords') {
-      if (action.filter)
-        checkFilter(t.fields, withoutTokens(action.filter), `actions.${i}`, ctx.userId);
+    if (action.type === 'findRecords' || action.type === 'branch') {
+      if (action.filter) checkFilter(t.fields, withoutTokens(action.filter), at, ctx.userId);
       continue;
     }
     for (const fieldId of Object.keys(action.fields)) {
       const f = t.fields.find((x) => x.row.id === fieldId);
-      const path = `actions.${i}.fields.${fieldId}`;
+      const path = `${at}.fields.${fieldId}`;
       if (!f) errors.push({ path, message: 'No such field in this table.' });
       else if (f.def.readOnly || f.def.computed) {
         errors.push({ path, message: `${f.row.name} is computed; it can't be set.` });
@@ -267,12 +271,12 @@ async function checkScripts(
   actions: readonly AutomationAction[],
   errors: { path: string; message: string }[]
 ) {
-  const i = actions.findIndex((a) => a.type === 'runScript');
-  if (i < 0) return;
+  const script = walkSteps(actions).find((s) => (s.step as AutomationAction).type === 'runScript');
+  if (!script) return;
   const availability = await ctx.deps.scripts.limitsFor(ctx.workspaceId);
   if (availability.available) return;
   errors.push({
-    path: `actions.${i}.type`,
+    path: `actions.${script.path.join('.')}.type`,
     message:
       availability.reason === 'plan'
         ? "This workspace's plan doesn't include scripts."
@@ -288,16 +292,17 @@ async function checkScripts(
 async function checkActionUrl(
   ctx: AutomationContext,
   action: AutomationAction & { type: 'httpRequest' | 'slackMessage' },
-  i: number,
+  /** Where the step sits: `actions.2`, `actions.2.then.0`. */
+  at: string,
   errors: { path: string; message: string }[]
 ) {
   const url = action.type === 'httpRequest' ? action.url : action.webhookUrl;
-  const path = `actions.${i}.${action.type === 'httpRequest' ? 'url' : 'webhookUrl'}`;
+  const path = `${at}.${action.type === 'httpRequest' ? 'url' : 'webhookUrl'}`;
   if (action.type === 'httpRequest') {
     action.headers.forEach((h, j) => {
       if (h.secret && h.value !== undefined && templateValuePaths(h.value).length) {
         errors.push({
-          path: `actions.${i}.headers.${j}.value`,
+          path: `${at}.headers.${j}.value`,
           message: "A secret header's value can't hold tokens.",
         });
       }

@@ -8,18 +8,25 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/client';
 import {
   ACTION_TYPES,
+  addStep,
   bodyTokens,
   canRetry,
   cardErrors,
   defaultAction,
   defaultTrigger,
   generalErrors,
+  groupsAllowed,
   insertToken,
+  listAt,
   moveItem,
+  moveStep,
   pathKey,
   problemErrors,
+  removeStep,
+  replaceStep,
   runSubject,
   scriptOutputNames,
+  stepCount,
   TRIGGER_TYPES,
   tokensFor,
   tomorrowAtNine,
@@ -65,17 +72,21 @@ describe('automation builder model (#111)', () => {
       const trigger = defaultTrigger(type, T1, new Date(2026, 9, 27, 15));
       const actions = ACTION_TYPES.map((a) => defaultAction(a, trigger, T2));
       const parsed = createAutomationSchema.safeParse({ name: 'A', trigger, actions });
-      // A new form or button trigger still needs its view or field picked, and new email,
-      // Slack and HTTP steps their recipients, text and URL: the rest parses as is.
+      // A new form or button trigger still needs its view or field picked, new email,
+      // Slack and HTTP steps their recipients, text and URL, and a repeat its list (a branch,
+      // its record without a record trigger): the rest parses as is.
       const issues = parsed.success ? [] : parsed.error.issues.map((i) => i.path.join('.'));
       const expected = [
         ...(type === 'formSubmitted' ? ['trigger.viewId'] : []),
         ...(type === 'buttonClicked' ? ['trigger.fieldId'] : []),
-        ...(type === 'scheduled' || type === 'webhookReceived' ? ['actions.1.recordId'] : []),
+        ...(type === 'scheduled' || type === 'webhookReceived'
+          ? ['actions.1.recordId', 'actions.7.recordId']
+          : []),
         'actions.3.to',
         'actions.3.subject',
         'actions.4.text',
         'actions.5.url',
+        'actions.8.items',
       ];
       expect(issues.sort()).toEqual(expected.sort());
     }
@@ -220,5 +231,116 @@ describe('automation builder model (#111)', () => {
         `output.set('a', 1); output.set("b", 2); output.set(name, 3); output.set('a', 4)`
       )
     ).toEqual(['a', 'b']);
+  });
+});
+
+describe('If / Otherwise and Repeat for each in the builder (#21)', () => {
+  const trigger = defaultTrigger('recordCreated', T1);
+  const name = field('Name');
+  const fieldsOf = (id: string) => (id === T1 ? [name] : undefined);
+  const create = (text: string) => ({
+    type: 'createRecord' as const,
+    tableId: T1,
+    fields: { [name.id]: text },
+  });
+  const tree = () => {
+    let actions = [defaultAction('findRecords', trigger, T1)];
+    actions = addStep(actions, [], { type: 'repeat', items: '{{steps.1.records}}', actions: [] });
+    actions = addStep(actions, [], defaultAction('branch', trigger, T1));
+    actions = addStep(actions, [1, 'actions'], create('{{steps.2.item.id}}'));
+    actions = addStep(actions, [1, 'actions'], create('{{steps.2.actions.1.id}}'));
+    actions = addStep(actions, [2, 'then'], create('first'));
+    actions = addStep(actions, [2, 'then'], create('second {{steps.3.then.1.id}}'));
+    actions = addStep(actions, [2, 'otherwise'], create('{{steps.1.count}}'));
+    return actions;
+  };
+
+  it('adds, replaces and lists nested steps; counts every step', () => {
+    const actions = tree();
+    expect(listAt(actions, [1, 'actions'])).toHaveLength(2);
+    expect(listAt(actions, [2, 'then']).map((a) => a.type === 'createRecord' && a.fields)).toEqual([
+      { [name.id]: 'first' },
+      { [name.id]: 'second {{steps.3.then.1.id}}' },
+    ]);
+    expect(stepCount(actions)).toBe(8);
+    const replaced = replaceStep(actions, [2, 'otherwise'], 0, create('changed'));
+    expect(listAt(replaced, [2, 'otherwise'])).toEqual([create('changed')]);
+    // The original is left alone.
+    expect(listAt(actions, [2, 'otherwise'])).toEqual([create('{{steps.1.count}}')]);
+    expect(createAutomationSchema.safeParse({ name: 'A', trigger, actions }).success).toBe(true);
+  });
+
+  it('keeps tokens on the same steps when steps move, in any list', () => {
+    // Swapping Then 1 and 2: the token to Then 1 now says Then 2.
+    const swapped = moveStep(tree(), [2, 'then'], 1, 0);
+    expect(listAt(swapped, [2, 'then']).map((a) => a.type === 'createRecord' && a.fields)).toEqual([
+      { [name.id]: 'second {{steps.3.then.2.id}}' },
+      { [name.id]: 'first' },
+    ]);
+    // Moving top-level step 3 up: the repeat becomes step 3 and its tokens follow.
+    const moved = moveStep(tree(), [], 2, 1);
+    expect(moved.map((a) => a.type)).toEqual(['findRecords', 'branch', 'repeat']);
+    expect(listAt(moved, [2, 'actions'])).toEqual([
+      create('{{steps.3.item.id}}'),
+      create('{{steps.3.actions.1.id}}'),
+    ]);
+    expect(listAt(moved, [1, 'then'])[1]).toEqual(create('second {{steps.2.then.1.id}}'));
+    // Removing step 1 of the repeat renumbers the steps after it in that list only.
+    const removed = removeStep(tree(), [1, 'actions'], 0);
+    expect(listAt(removed, [1, 'actions'])).toEqual([create('{{steps.2.actions.1.id}}')]);
+  });
+
+  it('lists the tokens a nested step may use', () => {
+    const actions = tree();
+    const labels = (at: Parameters<typeof tokensFor>[1]) =>
+      tokensFor({ trigger, actions, fieldsOf }, at).map((t) => `${t.group} | ${t.token}`);
+    // Inside the repeat's second step: its current item (a found record) and step 1.
+    const inRepeat = labels([2, 'actions', 2]);
+    expect(inRepeat).toEqual(
+      expect.arrayContaining([
+        'Step 1: Find records | {{steps.1.records}}',
+        'Step 2: Repeat for each | {{steps.2.item}}',
+        'Step 2: Repeat for each | {{steps.2.index}}',
+        `Step 2: Repeat for each | {{steps.2.item.fields.Name}}`,
+        'Step 2.actions.1: Create record | {{steps.2.actions.1.record.id}}',
+      ])
+    );
+    expect(inRepeat.some((l) => l.includes('steps.2.actions.2'))).toBe(false);
+    // In Otherwise: never the Then path's steps.
+    const inOtherwise = labels([3, 'otherwise', 1]);
+    expect(inOtherwise.some((l) => l.includes('steps.3.then'))).toBe(false);
+    // After both: the branch's path and its steps, the repeat's count, never its steps.
+    const after = labels(4);
+    expect(after).toEqual(
+      expect.arrayContaining([
+        'Step 3: If / Otherwise | {{steps.3.path}}',
+        'Step 3.then.2: Create record | {{steps.3.then.2.record.id}}',
+        'Step 3.otherwise.1: Create record | {{steps.3.otherwise.1.record.id}}',
+        'Step 2: Repeat for each | {{steps.2.count}}',
+      ])
+    );
+    expect(after.some((l) => l.includes('steps.2.actions'))).toBe(false);
+    // Every offered token passes the server's checks at that place.
+    for (const t of inRepeat) {
+      const step = { ...create(t.split(' | ')[1] ?? '') };
+      const next = replaceStep(actions, [1, 'actions'], 1, step);
+      const parsed = createAutomationSchema.safeParse({ name: 'A', trigger, actions: next });
+      expect(parsed.success, t).toBe(true);
+    }
+  });
+
+  it('nests groups only so deep, and sorts nested errors into their own cards', () => {
+    expect(groupsAllowed([])).toBe(true);
+    expect(groupsAllowed([0, 'then'])).toBe(true);
+    expect(groupsAllowed([0, 'then', 0, 'actions'])).toBe(false);
+    const byPath = {
+      'actions.1.items': 'Pick a list.',
+      'actions.1.actions.0.fields': 'Bad cells.',
+      'actions.1.actions.0': 'Nested problem.',
+      'actions.2.then': 'Too many.',
+    };
+    expect(cardErrors(byPath, 'actions.1')).toEqual([]);
+    expect(cardErrors(byPath, 'actions.1.actions.0')).toEqual(['Nested problem.']);
+    expect(cardErrors(byPath, 'actions.2')).toEqual(['Too many.']);
   });
 });

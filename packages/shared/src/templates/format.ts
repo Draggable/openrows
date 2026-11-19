@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { VIEW_TYPES } from '../constants/index.js';
 import { FIELD_TYPE_NAMES, getFieldType } from '../fields/index.js';
-import { automationActionSchema, automationTriggerSchema } from '../schemas/automation.js';
+import {
+  automationActionSchema,
+  automationTriggerSchema,
+  checkSteps,
+  MAX_AUTOMATION_ACTIONS,
+} from '../schemas/automation.js';
 import { interfacePageConfigSchema } from '../schemas/interface.js';
 
 /**
@@ -68,12 +73,15 @@ export const TemplateTableSchema = z.strictObject({
 });
 export type TemplateTable = z.infer<typeof TemplateTableSchema>;
 
-export const TemplateAutomationSchema = z.strictObject({
-  name,
-  description: z.string().max(1000).default(''),
-  trigger: automationTriggerSchema,
-  actions: z.array(automationActionSchema).max(25).default([]),
-});
+export const TemplateAutomationSchema = z
+  .strictObject({
+    name,
+    description: z.string().max(1000).default(''),
+    trigger: automationTriggerSchema,
+    actions: z.array(automationActionSchema).max(MAX_AUTOMATION_ACTIONS).default([]),
+  })
+  // The same limits as the builder's: steps in all, nesting, tokens.
+  .superRefine((a, ctx) => checkSteps(a.trigger, a.actions, ctx));
 export type TemplateAutomation = z.infer<typeof TemplateAutomationSchema>;
 
 /**

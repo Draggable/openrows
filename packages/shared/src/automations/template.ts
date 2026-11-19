@@ -26,14 +26,24 @@ export class TemplateError extends Error {
 
 export type PathKey = string | number;
 
-/** A token's path: `trigger.record.fields["Due date"]` → `['trigger', 'record', 'fields', 'Due date']`. */
-export function parsePath(text: string): PathKey[] {
+/** One key of a token's path and where its text is in the token (`.Name`, `[0]`, the root). */
+export interface PathSegment {
+  key: PathKey;
+  start: number;
+  end: number;
+}
+
+/** A token's path with where each key is written (offsets in `text`). */
+export function parsePathSegments(text: string): PathSegment[] {
+  const offset = text.length - text.trimStart().length;
   const src = text.trim();
-  const keys: PathKey[] = [];
+  const segments: PathSegment[] = [];
+  const add = (key: PathKey, start: number, end: number) =>
+    segments.push({ key, start: start + offset, end: end + offset });
   let i = 0;
   const root = /^[A-Za-z_][A-Za-z0-9_]*/.exec(src);
   if (!root) throw new TemplateError(`"{{${text}}}" doesn't start with trigger or steps.`);
-  keys.push(root[0]);
+  add(root[0], 0, root[0].length);
   i = root[0].length;
   while (i < src.length) {
     const ch = src[i];
@@ -42,22 +52,35 @@ export function parsePath(text: string): PathKey[] {
       while (j < src.length && !'.[]'.includes(src[j] ?? '')) j++;
       const key = src.slice(i + 1, j).trim();
       if (!key) throw new TemplateError(`"{{${text}}}" has an empty step.`);
-      keys.push(/^\d+$/.test(key) ? Number(key) : key);
+      add(/^\d+$/.test(key) ? Number(key) : key, i, j);
       i = j;
     } else if (ch === '[') {
       const m = /^\[\s*(?:(\d+)|"([^"]*)"|'([^']*)')\s*\]/.exec(src.slice(i));
       if (!m) throw new TemplateError(`"{{${text}}}" has a malformed [...].`);
-      keys.push(m[1] !== undefined ? Number(m[1]) : (m[2] ?? m[3] ?? ''));
+      add(m[1] !== undefined ? Number(m[1]) : (m[2] ?? m[3] ?? ''), i, i + m[0].length);
       i += m[0].length;
     } else {
       throw new TemplateError(`"{{${text}}}" isn't a valid token.`);
     }
-    if (keys.length > MAX_TEMPLATE_PATH) throw new TemplateError(`"{{${text}}}" is too deep.`);
+    if (segments.length > MAX_TEMPLATE_PATH) throw new TemplateError(`"{{${text}}}" is too deep.`);
   }
-  if (!(TEMPLATE_ROOTS as readonly string[]).includes(String(keys[0]))) {
+  if (!(TEMPLATE_ROOTS as readonly string[]).includes(String(segments[0]?.key))) {
     throw new TemplateError(`"{{${text}}}" doesn't start with trigger or steps.`);
   }
-  return keys;
+  return segments;
+}
+
+/** A token's path: `trigger.record.fields["Due date"]` → `['trigger', 'record', 'fields', 'Due date']`. */
+export function parsePath(text: string): PathKey[] {
+  return parsePathSegments(text).map((s) => s.key);
+}
+
+/** Rewrites each token of a string with `fn` (its inner text in, new inner text out). */
+export function mapTokens(text: string, fn: (inner: string) => string): string {
+  return text.replace(TOKEN_RE, (whole, inner: string) => {
+    const next = fn(inner);
+    return next === inner ? whole : `{{${next}}}`;
+  });
 }
 
 /** The token paths in a string (throws TemplateError on a malformed or excess token). */
