@@ -47,11 +47,39 @@ const rateLimitHeaders = {
   },
 };
 
-function jsonSchema(schema: z.ZodType, io: 'input' | 'output'): JsonSchema {
+/** Named schemas (a recursive one, like automation steps) collected for `components`. */
+type Components = Record<string, JsonSchema>;
+
+/** A named schema's component: its id, plus `Input` for a request's shape. */
+const componentName = (id: string, io: 'input' | 'output') => (io === 'input' ? `${id}Input` : id);
+
+/** Points `#/$defs/<id>` references at the document's `#/components/schemas/<name>`. */
+function relink(value: unknown, io: 'input' | 'output'): unknown {
+  if (Array.isArray(value)) return value.map((v) => relink(v, io));
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([k, v]) =>
+      k === '$ref' && typeof v === 'string' && v.startsWith('#/$defs/')
+        ? [k, `#/components/schemas/${componentName(v.slice('#/$defs/'.length), io)}`]
+        : [k, relink(v, io)]
+    )
+  );
+}
+
+function jsonSchema(schema: z.ZodType, io: 'input' | 'output', components?: Components) {
   // `unrepresentable: 'any'`: a transform or custom check documents as "any value" rather than
   // failing the whole document.
-  const { $schema: _, ...rest } = z.toJSONSchema(schema, { io, unrepresentable: 'any' });
-  return rest;
+  const {
+    $schema: _,
+    $defs,
+    ...rest
+  } = z.toJSONSchema(schema, { io, unrepresentable: 'any' }) as JsonSchema;
+  // Named schemas go to `components` (OpenAPI resolves `$ref`s from the document's root).
+  for (const [id, def] of Object.entries(($defs ?? {}) as Components)) {
+    if (!components) throw new Error(`openapi: unexpected named schema ${id}`);
+    components[componentName(id, io)] = relink(def, io) as JsonSchema;
+  }
+  return relink(rest, io) as JsonSchema;
 }
 
 /**
@@ -94,19 +122,19 @@ function operationId(e: EndpointDef): string {
     .replace(/-(\w)/g, (_, ch: string) => ch.toUpperCase());
 }
 
-function parameters(e: EndpointDef): JsonSchema[] {
+function parameters(e: EndpointDef, components: Components): JsonSchema[] {
   const path = pathParamNames(e.path).map((name) => {
     const check = e.params?.[name];
     return {
       name,
       in: 'path',
       required: true,
-      schema: check ? jsonSchema(check, 'input') : { type: 'string' },
+      schema: check ? jsonSchema(check, 'input', components) : { type: 'string' },
     };
   });
   const query: JsonSchema[] = [];
   if (e.query) {
-    const schema = jsonSchema(e.query, 'input');
+    const schema = jsonSchema(e.query, 'input', components);
     const props = (schema['properties'] ?? {}) as Record<string, JsonSchema>;
     const required = new Set((schema['required'] ?? []) as string[]);
     for (const [name, prop] of Object.entries(props)) {
@@ -123,6 +151,7 @@ function parameters(e: EndpointDef): JsonSchema[] {
  */
 export function buildOpenApiDocument(operations: OpenApiOperation[], options: OpenApiOptions) {
   const paths: Record<string, Record<string, unknown>> = {};
+  const components: Components = {};
   for (const { endpoint: e, access, kind } of operations) {
     const authenticated = kind !== 'public';
     const openApiPath = e.path.replace(/:(\w+)/g, '{$1}');
@@ -131,7 +160,9 @@ export function buildOpenApiDocument(operations: OpenApiOperation[], options: Op
       [e.status]: e.response
         ? {
             description: 'Success',
-            content: { 'application/json': { schema: jsonSchema(e.response, 'output') } },
+            content: {
+              'application/json': { schema: jsonSchema(e.response, 'output', components) },
+            },
           }
         : { description: 'Success, no content' },
       ...(authenticated ? { 401: problemResponse('Not signed in') } : {}),
@@ -153,12 +184,12 @@ export function buildOpenApiDocument(operations: OpenApiOperation[], options: Op
       summary: e.summary,
       description: `Access: ${access}.`,
       tags: [e.tag],
-      parameters: parameters(e),
+      parameters: parameters(e, components),
       ...(e.body
         ? {
             requestBody: {
               required: true,
-              content: { 'application/json': { schema: jsonSchema(e.body, 'input') } },
+              content: { 'application/json': { schema: jsonSchema(e.body, 'input', components) } },
             },
           }
         : {}),
@@ -180,6 +211,7 @@ export function buildOpenApiDocument(operations: OpenApiOperation[], options: Op
       schemas: {
         Problem: jsonSchema(ProblemDetailsSchema, 'output'),
         V1Error: jsonSchema(V1ErrorSchema, 'output'),
+        ...components,
       },
       securitySchemes: {
         session: { type: 'apiKey', in: 'cookie', name: options.sessionCookie },
