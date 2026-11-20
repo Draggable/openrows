@@ -108,6 +108,23 @@ async function setUp(
     const a = automations.find((x) => x.id === one?.[1]);
     if (a && !one?.[2] && method === 'PATCH') {
       const cells = body.actions?.[0]?.fields ?? {};
+      if (String(body.actions?.[0]?.webhookUrl ?? '').includes('evil')) {
+        return json(
+          {
+            title: 'VALIDATION_FAILED',
+            status: 422,
+            code: 'VALIDATION_FAILED',
+            detail: 'The automation is invalid.',
+            errors: [
+              {
+                path: 'actions.0.webhookUrl',
+                message: 'A Discord webhook URL is on discord.com.',
+              },
+            ],
+          },
+          422
+        );
+      }
       if (cells[nameField.id] === 'bad') {
         return json(
           {
@@ -500,6 +517,100 @@ describe('automations builder (#111)', () => {
     const second = within(items).getByRole('list', { name: 'Steps of item 2' });
     expect(second.textContent).toContain('Step 2.actions.1: Send Slack message');
     expect(second.textContent).toContain('Nope.');
+  });
+
+  it('adds a Send Discord message step next to Slack: URL, message, embed and whom it notifies', async () => {
+    const { base, table, requests, testRun } = await setUp();
+    renderApp(`/b/${base.id}/automations`);
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: 'New automation' }))[0] as HTMLElement
+    );
+    await screen.findByRole('region', { name: 'When a record is created' });
+    const add = screen.getByLabelText('Add an action');
+    const names = within(add)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(names.indexOf('Send Discord message')).toBe(names.indexOf('Send Slack message') + 1);
+
+    fireEvent.change(add, { target: { value: 'discordMessage' } });
+    const step = await screen.findByRole('region', { name: 'Send Discord message' });
+    const url = within(step).getByLabelText('Discord webhook URL') as HTMLInputElement;
+    expect(url.value).toBe('');
+    expect(step.textContent).toContain('Integrations, Webhooks');
+    // Nobody is notified unless ticked.
+    for (const label of ['Mentioned people', 'Mentioned roles', '@everyone and @here']) {
+      expect((within(step).getByLabelText(label) as HTMLInputElement).checked).toBe(false);
+    }
+    expect(within(step).queryByLabelText('Title')).toBeNull();
+
+    fireEvent.change(url, {
+      target: { value: 'https://discord.com.evil.example/api/webhooks/1/t' },
+    });
+    fireEvent.change(within(step).getByLabelText('Message'), {
+      target: { value: 'New: {{trigger.record.fields.Name}}' },
+    });
+    fireEvent.change(within(step).getByLabelText('Display name (optional)'), {
+      target: { value: 'Tasks' },
+    });
+    fireEvent.click(within(step).getByLabelText('Add an embed'));
+    fireEvent.change(within(step).getByLabelText('Title'), { target: { value: 'A task' } });
+    fireEvent.change(within(step).getByLabelText('Colour'), { target: { value: '#5865F2' } });
+    fireEvent.click(within(step).getByLabelText('Mentioned roles'));
+
+    // The server's 422 shows under the URL.
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await within(step).findByText('A Discord webhook URL is on discord.com.')).toBeTruthy();
+    expect(url.getAttribute('aria-invalid')).toBe('true');
+
+    const hook = 'https://discord.com/api/webhooks/123/token';
+    fireEvent.change(url, { target: { value: hook } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(requests.filter((r) => r.method === 'PATCH')).toHaveLength(2));
+    await waitFor(() => expect(within(step).queryByText(/is on discord\.com/)).toBeNull());
+    expect(requests.filter((r) => r.method === 'PATCH').at(-1)?.body).toEqual({
+      actions: [
+        {
+          type: 'discordMessage',
+          webhookUrl: hook,
+          text: 'New: {{trigger.record.fields.Name}}',
+          username: 'Tasks',
+          embed: { title: 'A task', color: '#5865F2' },
+          mentions: ['roles'],
+        },
+      ],
+    });
+
+    // The run panel shows the step like Slack's: its input with the URL redacted.
+    testRun.steps = [
+      {
+        index: 1,
+        type: 'discordMessage',
+        status: 'succeeded',
+        input: {
+          type: 'discordMessage',
+          text: 'New: Ship it',
+          mentions: [],
+          webhookUrl: '[redacted]',
+        },
+        output: { status: 204 },
+        error: null,
+        durationMs: 2,
+      },
+    ];
+    const panel = screen.getByRole('complementary', { name: 'Test and run history' });
+    await within(panel).findByRole('option', { name: 'Ship it' });
+    fireEvent.change(within(panel).getByLabelText('Test with record'), {
+      target: { value: await recordOf(table.id) },
+    });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Run test' }));
+    const result = await within(panel).findByRole('region', { name: 'Test result' });
+    expect(result.textContent).toContain('Step 1: Send Discord message');
+    expect(result.textContent).toContain('[redacted]');
+    expect(result.textContent).not.toContain('token');
+
+    // Turning the embed off drops it.
+    fireEvent.click(within(step).getByLabelText('Add an embed'));
+    expect(within(step).queryByLabelText('Title')).toBeNull();
   });
 
   it('lists automations with their switch, last run and runs; history filters and retries', async () => {

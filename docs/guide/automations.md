@@ -1,6 +1,6 @@
 # Automations
 
-Automations run actions when something happens in a base: create or update records, send emails, Slack messages or HTTP requests, or run a script. Steps can run only when a record meets conditions (**If / Otherwise**) or once for each item of a list (**Repeat for each**).
+Automations run actions when something happens in a base: create or update records, send emails, Slack or Discord messages or HTTP requests, or run a script. Steps can run only when a record meets conditions (**If / Otherwise**) or once for each item of a list (**Repeat for each**).
 
 ## Overview
 
@@ -72,6 +72,7 @@ curl -X POST "https://app.example.com/hooks/a/<token>" \
 | Find records | Finds records of a table matching **Conditions**, **At most** 1 to 100 (no conditions: any records) | The records found, their number |
 | Send email | Emails people from the server's own address | How many emails were sent |
 | Send Slack message | Posts a message to a Slack incoming webhook (or a compatible one) | The response status |
+| Send Discord message | Posts a message, optionally with an embed, to a Discord channel webhook | The response status |
 | Send HTTP request | Sends a GET, POST, PUT, PATCH or DELETE request with headers and a JSON body | The response status and body |
 | Run a script | Runs your JavaScript in a sandbox | What the script outputs |
 | If / Otherwise | Runs its **Then** steps when a record meets **Conditions**, else its **Otherwise** steps | Which path ran, and the steps that ran in it |
@@ -92,6 +93,18 @@ curl -X POST "https://app.example.com/hooks/a/<token>" \
 ### Send Slack message
 
 Paste the **Slack incoming webhook URL** and write the **Message** (up to 4,000 characters). The URL is stored encrypted and never shown again; leave the box empty to keep the saved one.
+
+### Send Discord message
+
+To get a webhook URL, open the Discord channel's settings (**Edit Channel**), go to **Integrations** > **Webhooks**, click **New Webhook** and then **Copy Webhook URL**. You need the Manage Webhooks permission on the channel.
+
+- **Discord webhook URL**: an `https` URL on `discord.com` (or `discordapp.com`, `ptb.discord.com`, `canary.discord.com`) of the form `/api/webhooks/<id>/<token>` (or `/api/v10/webhooks/...`), with nothing after the token. Other URLs are refused when you save. The URL is stored encrypted and never shown again; leave the box empty to keep the saved one. A duplicated base or a saved template doesn't include it, so enter it again there.
+- **Message**: up to 2,000 characters. Optional when the step has an embed.
+- **Display name** (optional): shown as the sender instead of the webhook's name, up to 80 characters.
+- **Add an embed** (optional): a **Title** (up to 256 characters), a **Description** (up to 4,096), a **Title link** (an `http` or `https` URL) and a **Colour** (`#RRGGBB`). An embed needs a title or a description.
+- The message, display name and embed's title, description and link can hold tokens. When the filled-in values are longer than Discord allows, they are cut to the limit and end with "…". A message that is empty once filled in (with no embed) fails the step.
+- **Notify**: by default the message notifies no one. Mentions such as `@everyone`, `@here`, `<@user-id>` or `<@&role-id>` show in the message but don't ping anybody. Tick **Mentioned people**, **Mentioned roles** or **@everyone and @here** to let those mentions notify.
+- The request is sent once, with the same timeout and rules as an HTTP request, and redirects aren't followed (a redirect fails the step). An answer other than 2xx fails the step with Discord's status, for example `Discord answered 429 Too Many Requests.` when the channel's webhook is rate-limited; retry the run later.
 
 ### Send HTTP request
 
@@ -125,7 +138,7 @@ Set the **Method**, **URL**, **Headers** (up to 20) and an optional **JSON body*
 - If / Otherwise and Repeat for each can hold each other, at most three levels deep: a step inside a group inside a group can't hold steps of its own.
 - All steps count toward the limit of 25 steps per automation, including the groups themselves and the steps inside them.
 - One run executes at most 500 actions in all, counting each action, each If / Otherwise check and each start of a Repeat for each once per item it runs for. The step that would go past that fails with "This run reached its limit of 500 actions", and the run stops.
-- Of those, one run executes at most 25 external steps: Send HTTP request, Send Slack message, Send email and Run a script, counted wherever they are and once per item of the Repeat for each around them (test runs too). The step that would go past that fails with "This run reached its limit of 25 external steps", and the run stops. An automation without Repeat for each can't reach this limit; inside one, use a Find records step with **At most** to work on fewer items per run. Record steps and If / Otherwise checks count only toward the limit of 500 actions.
+- Of those, one run executes at most 25 external steps: Send HTTP request, Send Slack message, Send Discord message, Send email and Run a script, counted wherever they are and once per item of the Repeat for each around them (test runs too). The step that would go past that fails with "This run reached its limit of 25 external steps", and the run stops. An automation without Repeat for each can't reach this limit; inside one, use a Find records step with **At most** to work on fewer items per run. Record steps and If / Otherwise checks count only toward the limit of 500 actions.
 - Steps inside groups run as the same person as the rest of the automation, with the same permissions, and their outgoing requests follow the same rules.
 
 ## Tokens
@@ -204,7 +217,7 @@ Click **Run test** (or **Save and test** with unsaved changes). The result shows
 
 ## Run history and retries
 
-**Run history** keeps runs from the last 30 days. Use **Show** to list all runs or only succeeded, failed or skipped ones. Open a run to see its trigger data and each step's input, output and error; header values, Slack URLs and query string values are shown as `[redacted]`. Tags mark **Test** and **Retry** runs, and why a run was skipped: **Loop guard** or **Plan limit**.
+**Run history** keeps runs from the last 30 days. Use **Show** to list all runs or only succeeded, failed or skipped ones. Open a run to see its trigger data and each step's input, output and error; header values, Slack and Discord webhook URLs and query string values are shown as `[redacted]`. Tags mark **Test** and **Retry** runs, and why a run was skipped: **Loop guard** or **Plan limit**.
 
 When a step fails, its own changes are undone, the steps after it are skipped, and the changes of earlier steps stay. This applies inside If / Otherwise and Repeat for each too.
 
@@ -219,6 +232,6 @@ Click **Retry** on a failed run to run it once more, as you, with the automation
 - If / Otherwise and Repeat for each nest at most three levels deep. A Repeat for each runs for at most 100 items, and one run executes at most 500 actions in all.
 - Find records returns at most 100 records; one Update record step changes at most 100.
 - Emails: 50 recipients per step and the daily email limit above.
-- Outgoing requests (HTTP, Slack, email and script `fetch`) share a per-workspace rate; runs over it wait in the queue and nothing is dropped.
+- Outgoing requests (HTTP, Slack, Discord, email and script `fetch`) share a per-workspace rate; runs over it wait in the queue and nothing is dropped.
 - On rare occasions, such as a server restart in the middle of a run, an email, message or request may be sent twice.
 - Automation runs per month and records per base: on the hosted service, your plan's limits apply (see https://openrows.io/pricing); self-hosted instances have no limits. Runs over the monthly limit are skipped with **Plan limit**.

@@ -215,7 +215,7 @@ and outbox pruning. Self-hosting must not need anything besides Postgres.
 - **The webhook URL is the credential.** `/hooks/a/<token>`: 192 random bits, stored as SHA-256
   (looked up by `automation_hook_resolve`, SECURITY DEFINER: enabled webhook automations of live
   bases only) and encrypted (so creators can see the URL again); rotation replaces both.
-- **Outbound steps are at least once.** Email, HTTP and Slack steps run inside the run's
+- **Outbound steps are at least once.** Email, HTTP, Slack and Discord steps run inside the run's
   transaction but act outside it, so a run retried after a crash may send again. Their own
   failures (refused URL, non-2xx, the email cap) fail the step, never retry the job. The daily
   email cap is taken in its own committed transaction (`automation_email_counts`), so a send
@@ -297,8 +297,8 @@ and outbox pruning. Self-hosting must not need anything besides Postgres.
   still run in the API process (a follow-up).
 - Outbound limits per workspace, config now (`OUTBOUND_WORKSPACE_*`), entitlements later through
   `OutboundLimits`: a token bucket `outbound:<workspace>` in the shared `rate_limit_buckets` (one
-  token per webhook delivery, HTTP/Slack/email step and script `fetch`), and a concurrency cap
-  on `webhooks.deliver` and `automations.run`. The cap uses pg-boss 12's `groupConcurrency`
+  token per webhook delivery, HTTP/Slack/Discord/email step and script `fetch`), and a
+  concurrency cap on `webhooks.deliver` and `automations.run`. The cap uses pg-boss 12's `groupConcurrency`
   (every tenant job is sent with its workspace as `group`), which keeps a noisy workspace's
   backlog in the queue while other workspaces' jobs are fetched; its active count is a snapshot,
   so parallel fetchers can overshoot, and each job also takes an exact slot in the UNLOGGED

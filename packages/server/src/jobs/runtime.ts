@@ -90,7 +90,7 @@ export interface WorkerDeps {
   subscribers?: readonly OutboxSubscriber[];
   /** Webhook delivery; without it webhooks aren't delivered (their log is still pruned). */
   webhooks?: Omit<WebhookDeliveryDeps, 'db' | 'logger'> | undefined;
-  /** Automations' email, HTTP and Slack steps; without it those steps fail. */
+  /** Automations' email, HTTP, Slack and Discord steps; without it those steps fail. */
   automations?: OutboundDeps | undefined;
   /** Run-script steps' sandbox; without it those steps fail as not available. */
   scripts?: ScriptSandbox | undefined;

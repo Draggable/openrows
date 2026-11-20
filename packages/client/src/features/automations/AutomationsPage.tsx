@@ -301,7 +301,7 @@ function AutomationList({
           <h2 className="text-title font-semibold">Automations</h2>
           <p className="text-text-2">
             When something happens in this base, run actions: create or update records, send an
-            email, a Slack message or a request.
+            email, a Slack or Discord message or a request.
           </p>
         </div>
         <Button onClick={onCreate} disabled={full || creating}>

@@ -15,7 +15,7 @@ import type { CaptchaVerifier } from '../../src/forms/turnstile.js';
 import type { DependencyCheck } from '../../src/health.js';
 import { runImportJob } from '../../src/import-export/import.js';
 import { createLogger } from '../../src/lib/logger.js';
-import type { SafeFetch } from '../../src/lib/safe-fetch/index.js';
+import type { ResolvedAddress, SafeFetch } from '../../src/lib/safe-fetch/index.js';
 import type { RateLimiter } from '../../src/ratelimit/limiter.js';
 import type { FieldVisibility } from '../../src/realtime/projection.js';
 import { runRestoreJob } from '../../src/snapshots/restore-job.js';
@@ -56,6 +56,8 @@ export function testApp(
     };
     /** Run-script steps' sandbox; AUTOMATION_SCRIPTS from `env` when omitted. */
     scripts?: ScriptSandbox;
+    /** Automations' DNS for saved and tested URLs; the system's when omitted. */
+    automationResolve?: (hostname: string) => Promise<ResolvedAddress[]>;
     /** Extra `/ready` details. */
     readyDetails?: () => Promise<Record<string, unknown>>;
     /** The edition's providers; the OSS edition when omitted. */
@@ -92,6 +94,7 @@ export function testApp(
     rateLimiter: opts.rateLimiter,
     airtable,
     ...(opts.scripts ? { scripts: opts.scripts } : {}),
+    ...(opts.automationResolve ? { automationResolve: opts.automationResolve } : {}),
     ...(opts.readyDetails ? { readyDetails: opts.readyDetails } : {}),
     ...(opts.edition ? { edition: opts.edition } : {}),
     ...(opts.syncSources ? { syncSources: opts.syncSources } : {}),

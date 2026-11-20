@@ -1,5 +1,15 @@
 import { z } from 'zod';
 import {
+  DISCORD_MENTION_TYPES,
+  discordWebhookUrlProblem,
+  isHttpUrl,
+  MAX_DISCORD_CONTENT,
+  MAX_DISCORD_EMBED_DESCRIPTION,
+  MAX_DISCORD_EMBED_TITLE,
+  MAX_DISCORD_EMBED_URL,
+  MAX_DISCORD_USERNAME,
+} from '../automations/discord.js';
+import {
   MAX_SCHEDULE_EVERY,
   SCHEDULE_UNITS,
   type Schedule,
@@ -41,7 +51,8 @@ export const MAX_REPEAT_ITEMS = MAX_FIND_RECORDS;
  */
 export const MAX_RUN_ACTIONS = 500;
 /**
- * External steps (EXTERNAL_ACTION_TYPES: HTTP requests, Slack messages, emails and scripts) one
+ * External steps (EXTERNAL_ACTION_TYPES: HTTP requests, Slack and Discord messages, emails and
+ * scripts) one
  * run executes in all, top-level or nested, each counted once per item of the repeats around it.
  * A run is one transaction, so slow steps hold it open; the step that would go past it fails
  * (and the run stops). The same as MAX_AUTOMATION_ACTIONS, so a flat list never reaches it.
@@ -158,6 +169,62 @@ export const httpHeaderSchema = z
     path: ['value'],
   });
 
+/** A Discord webhook URL: a fixed value (no tokens), on Discord's own hosts. */
+const discordWebhookUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_HTTP_URL)
+  .superRefine((v, ctx) => {
+    const message = discordWebhookUrlProblem(v);
+    if (message) ctx.addIssue({ code: 'custom', message });
+  });
+
+/**
+ * A message to a Discord channel webhook. Its `webhookUrl` (on Discord's own hosts only, see
+ * automations/discord.ts) is stored encrypted and never shown again; leave it out to keep the
+ * stored one. `text`, `username` and the embed's texts may hold tokens; filled in, they are cut
+ * to Discord's limits. `mentions`: who the message may notify (none by default). It needs a
+ * message or an embed (with a title or a description).
+ */
+const discordMessageSchema = z
+  .strictObject({
+    type: z.literal('discordMessage'),
+    webhookUrl: discordWebhookUrlSchema.optional(),
+    text: z.string().trim().max(MAX_DISCORD_CONTENT).default(''),
+    /** Shown as the sender instead of the webhook's name. */
+    username: z.string().trim().max(MAX_DISCORD_USERNAME).optional(),
+    embed: z
+      .strictObject({
+        title: z.string().trim().max(MAX_DISCORD_EMBED_TITLE).optional(),
+        description: z.string().trim().max(MAX_DISCORD_EMBED_DESCRIPTION).optional(),
+        /** The title's link: an http(s) URL, or tokens giving one. */
+        url: z
+          .string()
+          .trim()
+          .max(MAX_DISCORD_EMBED_URL)
+          .refine((v) => !v || v.includes('{{') || isHttpUrl(v), {
+            message: 'Enter an http or https URL.',
+          })
+          .optional(),
+        /** The embed's colour, `#RRGGBB`. */
+        color: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/, 'Enter a colour as #RRGGBB.')
+          .optional(),
+      })
+      .refine((e) => !!e.title || !!e.description, {
+        message: 'An embed needs a title or a description.',
+        path: ['title'],
+      })
+      .optional(),
+    mentions: z.array(z.enum(DISCORD_MENTION_TYPES)).max(DISCORD_MENTION_TYPES.length).default([]),
+  })
+  .refine((a) => a.text !== '' || a.embed !== undefined, {
+    message: 'Write a message or add an embed.',
+    path: ['text'],
+  });
+
 /** Cells by field id; strings may hold tokens (`{{trigger.record.fields.Name}}`). */
 const cellsSchema = z
   .record(z.uuid(), z.unknown())
@@ -172,6 +239,7 @@ export const AUTOMATION_ACTION_TYPES = [
   'sendEmail',
   'httpRequest',
   'slackMessage',
+  'discordMessage',
   'runScript',
   'branch',
   'repeat',
@@ -182,6 +250,7 @@ export const EXTERNAL_ACTION_TYPES = [
   'sendEmail',
   'httpRequest',
   'slackMessage',
+  'discordMessage',
   'runScript',
 ] as const satisfies readonly AutomationActionType[];
 export const isExternalActionType = (type: AutomationActionType): boolean =>
@@ -239,6 +308,7 @@ const leafActionSchemas = [
     webhookUrl: z.string().trim().min(1).max(MAX_HTTP_URL).optional(),
     text: z.string().trim().min(1).max(MAX_SLACK_TEXT),
   }),
+  discordMessageSchema,
   /**
    * JavaScript run in a sandbox: a throwaway container with no network, as the person the
    * run runs as. `inputs` are its input variables (`input.config()`), whose values may hold

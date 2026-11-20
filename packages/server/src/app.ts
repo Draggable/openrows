@@ -59,6 +59,7 @@ import {
   createSafeFetch,
   createUrlCheck,
   outboundPolicy,
+  type ResolvedAddress,
   type SafeFetch,
 } from './lib/safe-fetch/index.js';
 import { securityHeaders } from './lib/security-headers.js';
@@ -132,6 +133,11 @@ export interface AppDeps {
   syncSources?: SyncSources;
   /** Run-script steps' sandbox; AUTOMATION_SCRIPTS from the config when omitted. */
   scripts?: ScriptSandbox;
+  /**
+   * How automations' outbound URLs are resolved when they are saved and tested (the outbound
+   * rules apply to every answer); the system's DNS when omitted (tests pass a fixed table).
+   */
+  automationResolve?: (hostname: string) => Promise<ResolvedAddress[]>;
   /** Request counters for the internal metrics port; none when omitted. */
   metrics?: HttpMetrics;
   /** Extra, informational `/ready` details (the outbox relay's lag); none when omitted. */
@@ -211,6 +217,7 @@ export function createApp({
   ai,
   syncSources,
   scripts: scriptSandbox,
+  automationResolve,
   metrics,
   readyDetails,
 }: AppDeps): {
@@ -358,10 +365,11 @@ export function createApp({
   const automationCipher = createCipher(config.encryptionKey, 'automation-secret');
   // Run-script steps: the sandbox, when AUTOMATION_SCRIPTS is on (tests may pass one).
   const scripts = scriptSandbox ?? createScriptSandbox(config.scripts);
+  const resolve = automationResolve ? { resolve: automationResolve } : {};
   const automationDeps = {
     cipher: automationCipher,
     appUrl: config.appUrl,
-    checkUrl: createUrlCheck(outbound),
+    checkUrl: createUrlCheck(outbound, resolve),
     scripts,
   };
   automationRoutes(routes, {
@@ -373,7 +381,7 @@ export function createApp({
       scripts,
       outbound: {
         cipher: automationCipher,
-        http: createSafeFetch(outbound),
+        http: createSafeFetch(outbound, resolve),
         email: mail,
         emailDailyLimit: config.automationEmailDailyLimit,
       },

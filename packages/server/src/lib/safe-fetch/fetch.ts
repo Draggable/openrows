@@ -9,7 +9,7 @@ import type { OutboundPolicy } from './policy.js';
 
 /**
  * The SSRF-safe HTTP client (ADR-004 §5): the only way the server requests a URL a user
- * chose (webhooks, automation HTTP and Slack actions, the Airtable attachment copy). A test
+ * chose (webhooks, automation HTTP, Slack and Discord actions, the Airtable attachment copy). A test
  * (`boundary.test.ts`) fails when other server code makes outbound requests.
  *
  * Per hop (the request and each of at most 3 redirects): the URL must be https (http only with

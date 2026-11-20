@@ -4,7 +4,7 @@ import { type BucketPolicy, type RateLimiter, retryAfter } from '../ratelimit/li
 
 /**
  * Per-workspace limits on what the worker sends out: webhook deliveries, automations'
- * email, HTTP and Slack steps and run-script `fetch` calls. One tenant can't fill the worker's
+ * email, HTTP, Slack and Discord steps and run-script `fetch` calls. One tenant can't fill the worker's
  * slots or use the server to flood a third party; over the limits, work is delayed, never dropped.
  *
  * - The **rate**: a token bucket per workspace (`outbound:<workspace id>`) in the API's rate limit

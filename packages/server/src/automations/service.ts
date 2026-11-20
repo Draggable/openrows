@@ -240,7 +240,11 @@ async function checkConfig(
     if (action.type === 'sendEmail' || action.type === 'runScript' || action.type === 'repeat') {
       continue;
     }
-    if (action.type === 'httpRequest' || action.type === 'slackMessage') {
+    if (
+      action.type === 'httpRequest' ||
+      action.type === 'slackMessage' ||
+      action.type === 'discordMessage'
+    ) {
       await checkActionUrl(ctx, action, at, errors);
       continue;
     }
@@ -285,13 +289,14 @@ async function checkScripts(
 }
 
 /**
- * An HTTP or Slack step's URL must pass the outbound rules now; they apply again on every
- * request. An HTTP URL with tokens is checked when a run fills them in. A Slack URL is a secret
- * and holds no tokens. Secret header values hold no tokens either (they are sent as written).
+ * An HTTP, Slack or Discord step's URL must pass the outbound rules now; they apply again on
+ * every request. An HTTP URL with tokens is checked when a run fills them in. A Slack or Discord
+ * URL is a secret and holds no tokens (a Discord URL's host and path are checked by its schema).
+ * Secret header values hold no tokens either (they are sent as written).
  */
 async function checkActionUrl(
   ctx: AutomationContext,
-  action: AutomationAction & { type: 'httpRequest' | 'slackMessage' },
+  action: AutomationAction & { type: 'httpRequest' | 'slackMessage' | 'discordMessage' },
   /** Where the step sits: `actions.2`, `actions.2.then.0`. */
   at: string,
   errors: { path: string; message: string }[]
@@ -320,8 +325,9 @@ async function checkActionUrl(
     return;
   }
   if (templateValuePaths(url).length) {
-    if (action.type === 'slackMessage') {
-      errors.push({ path, message: "A Slack webhook URL can't hold tokens." });
+    if (action.type !== 'httpRequest') {
+      const service = action.type === 'slackMessage' ? 'Slack' : 'Discord';
+      errors.push({ path, message: `A ${service} webhook URL can't hold tokens.` });
     }
     return;
   }
