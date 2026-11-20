@@ -135,6 +135,7 @@ describe('If / Otherwise and Repeat for each steps (#21)', () => {
     expect(MAX_RUN_EXTERNAL_ACTIONS).toBe(25);
     expect(MAX_RUN_EXTERNAL_ACTIONS).toBe(MAX_AUTOMATION_ACTIONS);
     expect([...EXTERNAL_ACTION_TYPES].sort()).toEqual([
+      'discordMessage',
       'httpRequest',
       'runScript',
       'sendEmail',
@@ -213,5 +214,188 @@ describe('If / Otherwise and Repeat for each steps (#21)', () => {
       ],
     ];
     for (const [actions, issue] of cases) expect(issues(parseAll(actions))).toEqual([issue]);
+  });
+});
+
+describe('Send Discord message actions', () => {
+  const HOOK = 'https://discord.com/api/webhooks/123456789012345678/AbC-d_eF0123';
+  const discord = (over: Record<string, unknown> = {}) => ({
+    type: 'discordMessage',
+    webhookUrl: HOOK,
+    text: 'Hello',
+    ...over,
+  });
+  const messages = (r: ReturnType<typeof parse>) =>
+    r.success ? [] : r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+
+  it('takes a webhook URL and a message, mentioning no one by default', () => {
+    const r = parse(discord());
+    expect(r.success && r.data.actions[0]).toEqual({
+      type: 'discordMessage',
+      webhookUrl: HOOK,
+      text: 'Hello',
+      mentions: [],
+    });
+  });
+
+  it.each([
+    HOOK,
+    'https://discordapp.com/api/webhooks/1/token',
+    'https://ptb.discord.com/api/webhooks/1/token',
+    'https://canary.discord.com/api/webhooks/1/token',
+    'https://discord.com/api/v10/webhooks/1/token',
+    'https://discord.com/api/v9/webhooks/1/token',
+  ])('accepts %s', (url) => {
+    expect(paths(parse(discord({ webhookUrl: url })))).toEqual([]);
+  });
+
+  it.each([
+    // Not https.
+    'http://discord.com/api/webhooks/1/token',
+    'ftp://discord.com/api/webhooks/1/token',
+    // Other hosts, lookalikes and spellings that could reach one.
+    'https://example.com/api/webhooks/1/token',
+    'https://hooks.slack.com/services/T0/B0/x',
+    'https://discord.com.evil.example/api/webhooks/1/token',
+    'https://evil.example/discord.com/api/webhooks/1/token',
+    'https://discord.com@evil.example/api/webhooks/1/token',
+    'https://evil.example#@discord.com/api/webhooks/1/token',
+    'https://evildiscord.com/api/webhooks/1/token',
+    'https://discord.co/api/webhooks/1/token',
+    'https://discord.com./api/webhooks/1/token',
+    'https://www.discord.com/api/webhooks/1/token',
+    'https://cdn.discordapp.com/api/webhooks/1/token',
+    'https://DISCORD.COM/api/webhooks/1/token',
+    'https://xn--discrd-6ya.com/api/webhooks/1/token',
+    // IP literals, ports, credentials.
+    'https://162.159.135.232/api/webhooks/1/token',
+    'https://[::1]/api/webhooks/1/token',
+    'https://127.0.0.1/api/webhooks/1/token',
+    'https://169.254.169.254/api/webhooks/1/token',
+    'https://discord.com:8443/api/webhooks/1/token',
+    'https://user:pass@discord.com/api/webhooks/1/token',
+    // Other paths, or more after the token.
+    'https://discord.com/api/webhooks/1',
+    'https://discord.com/api/webhooks/abc/token',
+    'https://discord.com/webhooks/1/token',
+    'https://discord.com/api/v10/channels/1/messages',
+    'https://discord.com/api/webhooks/1/token/slack',
+    'https://discord.com/api/webhooks/1/token/../../../users/@me',
+    'https://discord.com/api/webhooks/1/token?thread_id=2',
+    'https://discord.com/api/webhooks/1/token#x',
+    'https://discord.com/api/webhooks/1/tok en',
+    'https://discord.com\\api\\webhooks\\1\\token',
+    // Tokens: the URL is a fixed secret.
+    'https://discord.com/api/webhooks/{{trigger.body.id}}/token',
+    '{{trigger.body.url}}',
+    'not a url',
+  ])('refuses %s with a message on its webhookUrl', (url) => {
+    const r = parse(discord({ webhookUrl: url }));
+    expect(paths(r)).toContain('actions.0.webhookUrl');
+    expect(messages(r).join('\n')).toMatch(/actions\.0\.webhookUrl: .*Discord webhook URL/);
+  });
+
+  it('says why a URL is refused', () => {
+    const why = (url: string) => messages(parse(discord({ webhookUrl: url })))[0];
+    expect(why('http://discord.com/api/webhooks/1/t')).toContain('starts with https://');
+    expect(why('https://discord.com.evil.example/api/webhooks/1/t')).toContain('is on discord.com');
+    expect(why('https://discord.com/api/channels/1')).toContain('looks like');
+  });
+
+  it('may leave the URL out (the stored one is kept), and then still checks the rest', () => {
+    expect(paths(parse({ type: 'discordMessage', text: 'Hi' }))).toEqual([]);
+  });
+
+  it('needs a message or an embed with a title or a description', () => {
+    expect(messages(parse(discord({ text: '' })))).toEqual([
+      'actions.0.text: Write a message or add an embed.',
+    ]);
+    expect(messages(parse(discord({ text: '   ' })))).toEqual([
+      'actions.0.text: Write a message or add an embed.',
+    ]);
+    expect(paths(parse(discord({ text: '', embed: { title: 'T' } })))).toEqual([]);
+    expect(paths(parse(discord({ text: '', embed: { description: 'D' } })))).toEqual([]);
+    expect(paths(parse(discord({ text: '', embed: { color: '#5865F2' } })))).toEqual([
+      'actions.0.embed.title',
+    ]);
+  });
+
+  it("keeps to Discord's limits", () => {
+    const over = (n: number) => 'x'.repeat(n + 1);
+    expect(paths(parse(discord({ text: 'x'.repeat(2000) })))).toEqual([]);
+    expect(paths(parse(discord({ text: over(2000) })))).toEqual(['actions.0.text']);
+    expect(paths(parse(discord({ username: 'x'.repeat(80) })))).toEqual([]);
+    expect(paths(parse(discord({ username: over(80) })))).toEqual(['actions.0.username']);
+    expect(paths(parse(discord({ embed: { title: over(256) } })))).toEqual([
+      'actions.0.embed.title',
+    ]);
+    expect(paths(parse(discord({ embed: { title: 'T', description: over(4096) } })))).toEqual([
+      'actions.0.embed.description',
+    ]);
+    expect(paths(parse(discord({ embed: { title: 'x'.repeat(256), description: 'x' } })))).toEqual(
+      []
+    );
+  });
+
+  it('checks the embed link and colour', () => {
+    const embed = (e: Record<string, unknown>) =>
+      paths(parse(discord({ embed: { title: 'T', ...e } })));
+    expect(embed({ url: 'https://example.com/a', color: '#5865f2' })).toEqual([]);
+    expect(embed({ url: '{{trigger.body.link}}' })).toEqual([]);
+    expect(embed({ url: 'javascript:alert(1)' })).toEqual(['actions.0.embed.url']);
+    expect(embed({ url: 'not a url' })).toEqual(['actions.0.embed.url']);
+    expect(embed({ color: 'red' })).toEqual(['actions.0.embed.color']);
+    expect(embed({ color: '#12345' })).toEqual(['actions.0.embed.color']);
+    expect(embed({ color: '{{trigger.body.colour}}' })).toEqual(['actions.0.embed.color']);
+    expect(embed({ extra: 1 })).toEqual(['actions.0.embed']);
+  });
+
+  it('takes who may be notified from a fixed list', () => {
+    const r = parse(discord({ mentions: ['users', 'everyone'] }));
+    expect(r.success && r.data.actions[0]).toMatchObject({ mentions: ['users', 'everyone'] });
+    expect(paths(parse(discord({ mentions: ['here'] })))).toEqual(['actions.0.mentions.0']);
+  });
+
+  it('checks tokens in the message, display name and embed like other steps', () => {
+    expect(
+      paths(
+        parse(
+          discord({
+            text: 'New: {{trigger.record.fields.Name}}',
+            username: '{{trigger.record.fields.Owner}}',
+            embed: { title: '{{trigger.record.id}}', description: '{{steps.1.count}}' },
+          })
+        )
+      )
+    ).toEqual(['actions.0']);
+    expect(
+      paths(parse(discord({ text: '{{trigger.record.id}}', username: '{{trigger.record.id}}' })))
+    ).toEqual([]);
+  });
+
+  it('refuses a bad URL at its path inside groups', () => {
+    const r = createAutomationSchema.safeParse({
+      name: 'A',
+      trigger,
+      actions: [
+        {
+          type: 'branch',
+          tableId: trigger.tableId,
+          recordId: '{{trigger.record.id}}',
+          filter: { conjunction: 'and', conditions: [] },
+          // biome-ignore lint/suspicious/noThenProperty: a list of steps (an array, never a function)
+          then: [
+            {
+              type: 'repeat',
+              items: '{{trigger.record.id}}',
+              actions: [
+                discord({ webhookUrl: 'https://discord.com.evil.example/api/webhooks/1/t' }),
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(paths(r)).toEqual(['actions.0.then.0.actions.0.webhookUrl']);
   });
 });

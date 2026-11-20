@@ -1114,6 +1114,19 @@ export type V1AutomationAction =
       text: string;
     }
   | {
+      type: 'discordMessage';
+      webhookUrl?: string;
+      text: string;
+      username?: string;
+      embed?: {
+        title?: string;
+        description?: string;
+        url?: string;
+        color?: string;
+      };
+      mentions: ('users' | 'roles' | 'everyone')[];
+    }
+  | {
       type: 'runScript';
       script: string;
       inputs: Record<string, string>;
@@ -1205,6 +1218,7 @@ export type V1AutomationRunStep = {
     | 'sendEmail'
     | 'httpRequest'
     | 'slackMessage'
+    | 'discordMessage'
     | 'runScript'
     | 'branch'
     | 'repeat';

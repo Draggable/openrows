@@ -67,8 +67,8 @@ Everything below is in this repository, under the AGPL-3.0.
 
 - Automations: triggers on records created, updated or matching a condition, schedules, form
   submissions, incoming webhooks and button clicks; actions that create, update and find records,
-  send email, HTTP requests and Slack messages, and (opt-in) run scripts in a locked-down
-  container. A visual builder with test runs and run history.
+  send email, HTTP requests and Slack and Discord messages, and (opt-in) run scripts in a
+  locked-down container. A visual builder with test runs and run history.
 - Scripts that run against a base in a sandboxed browser worker.
 - Extensions: a panel of sandboxed apps beside your views (chart, print view and URL preview are
   built in), written with the [`@openrows/blocks`](packages/blocks/README.md) SDK.

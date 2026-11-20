@@ -1,5 +1,6 @@
 import {
   type AutomationAction,
+  discordPayload,
   MAX_EMAIL_RECIPIENTS,
   REDACTED,
   renderTemplate,
@@ -19,10 +20,10 @@ import { type SafeFetch, SafeFetchError } from '../lib/safe-fetch/index.js';
 import type { StepSecrets } from './secrets.js';
 
 /**
- * The outbound actions of automations: send email, HTTP request, Slack message. They run
- * inside the run's transaction but reach outside it, so a run retried after a crash may send
- * again (at least once); a step's own failures (a refused URL, a non-2xx answer, the email cap)
- * fail the step, not the job.
+ * The outbound actions of automations: send email, HTTP request, Slack and Discord messages.
+ * They run inside the run's transaction but reach outside it, so a run retried after a crash may
+ * send again (at least once); a step's own failures (a refused URL, a non-2xx answer, the email
+ * cap) fail the step, not the job.
  */
 
 /** What the worker gives outbound steps; without it they fail with "not configured". */
@@ -42,8 +43,8 @@ export interface OutboundDeps {
 }
 
 /**
- * The outbound steps of one live run under its workspace's outbound rate: every HTTP or
- * Slack request (and run-script `fetch`, which uses the same client) takes a token first, and so
+ * The outbound steps of one live run under its workspace's outbound rate: every HTTP, Slack or
+ * Discord request (and run-script `fetch`, which uses the same client) takes a token first, and so
  * does an email step. `acquire` throws OutboundDeferred when the workspace must wait longer.
  */
 export function gatedOutbound(deps: OutboundDeps, acquire: () => Promise<void>): OutboundDeps {
@@ -86,7 +87,7 @@ type Rendered<T extends AutomationAction['type']> = Extract<AutomationAction, { 
 
 /** Fills in the tokens of an outbound action. Secret header values are sent as written. */
 export function renderOutbound(
-  action: Rendered<'sendEmail' | 'httpRequest' | 'slackMessage'>,
+  action: Rendered<'sendEmail' | 'httpRequest' | 'slackMessage' | 'discordMessage'>,
   context: Record<string, unknown>
 ) {
   const text = (s: string) => templateValueText(renderTemplate(s, context));
@@ -107,6 +108,26 @@ export function renderOutbound(
       };
     case 'slackMessage':
       return { ...action, text: text(action.text) };
+    case 'discordMessage': {
+      const { embed, username, ...rest } = action;
+      return {
+        ...rest,
+        text: text(action.text),
+        ...(username !== undefined ? { username: text(username) } : {}),
+        ...(embed
+          ? {
+              embed: {
+                ...embed,
+                ...(embed.title !== undefined ? { title: text(embed.title) } : {}),
+                ...(embed.description !== undefined
+                  ? { description: text(embed.description) }
+                  : {}),
+                ...(embed.url !== undefined ? { url: text(embed.url) } : {}),
+              },
+            }
+          : {}),
+      };
+    }
   }
 }
 
@@ -120,7 +141,7 @@ export function logUrl(url: string): string {
   }
 }
 
-/** What the run log keeps of a rendered outbound step: no header values, no Slack URL. */
+/** What the run log keeps of a rendered outbound step: no header values, no webhook URL. */
 export function logInput(input: ReturnType<typeof renderOutbound>): unknown {
   switch (input.type) {
     case 'httpRequest':
@@ -130,6 +151,7 @@ export function logInput(input: ReturnType<typeof renderOutbound>): unknown {
         headers: input.headers.map((h) => ({ name: h.name, value: REDACTED, secret: h.secret })),
       };
     case 'slackMessage':
+    case 'discordMessage':
       return { ...input, webhookUrl: REDACTED };
     default:
       return input;
@@ -328,6 +350,39 @@ export async function slackMessageStep(
   if (res.status < 200 || res.status > 299) {
     throw new StepFailure(
       `Slack answered ${res.status}${res.statusText ? ` ${res.statusText}` : ''}.`
+    );
+  }
+  return { status: res.status };
+}
+
+/**
+ * Posts to a Discord channel webhook through the safe client, like a Slack message: one request,
+ * no retries (a 429 fails the step with its status, like any non-2xx answer). The body keeps to
+ * Discord's limits and always sets `allowed_mentions`, so nobody is pinged unless the step allows
+ * it. Its output: the response status (204 when Discord accepted it).
+ */
+export async function discordMessageStep(
+  env: OutboundEnv,
+  input: ReturnType<typeof renderOutbound> & { type: 'discordMessage' },
+  secrets: StepSecrets | null | undefined
+) {
+  const deps = configured(env);
+  const url = secrets?.webhookUrl;
+  if (!url) throw new StepFailure('The Discord webhook URL is missing; enter it again.');
+  let payload: ReturnType<typeof discordPayload>;
+  try {
+    payload = discordPayload(input);
+  } catch (err) {
+    throw new StepFailure(err instanceof Error ? err.message : 'The message is invalid.');
+  }
+  const res = await request(deps.http, url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (res.status < 200 || res.status > 299) {
+    throw new StepFailure(
+      `Discord answered ${res.status}${res.statusText ? ` ${res.statusText}` : ''}.`
     );
   }
   return { status: res.status };

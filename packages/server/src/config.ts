@@ -214,7 +214,7 @@ const EnvSchema = z.object({
   AUTOMATION_EMAIL_DAILY_LIMIT: z.coerce.number().int().min(0).max(1_000_000).default(100),
   /**
    * Per-workspace outbound limits in the worker: requests per minute (webhook deliveries,
-   * automations' HTTP, Slack and email steps, run-script `fetch`; 0 turns the rate off), the
+   * automations' HTTP, Slack, Discord and email steps, run-script `fetch`; 0 turns the rate off), the
    * burst after a quiet period, and webhook deliveries (and automation runs) active at once.
    * Over them, work waits in the queue; nothing is dropped.
    */

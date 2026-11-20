@@ -86,6 +86,7 @@ packages/
             and its Zod schema; define.ts, defineTemplate: keys to stable ids; builtin/: the 10
             built-in templates, BUILT_IN_TEMPLATES), automations (src/automations/: schedule.ts, cron and intervals in a time zone with
             DST rules; template.ts, the `{{trigger...}}`/`{{steps.N...}}` tokens, never eval;
+            discord.ts, the Discord action's webhook URL check, limits and message body;
             steps.ts, the step tree: If / Otherwise (`branch`) and Repeat for each (`repeat`)
             groups, step addresses such as `steps.2.then.1`, where a token may point;
             schemas/automation.ts), the ViewQuery
@@ -210,8 +211,8 @@ packages/
                              retryRun, in the request, as the caller): hooks.ts (the
                              public POST /hooks/a/<token> of webhook-received triggers: 100 KB
                              JSON, per-IP and per-URL limits), outbound.ts (send email with the
-                             daily cap, HTTP request and Slack message through safe-fetch),
-                             secrets.ts (secret headers and Slack URLs encrypted apart from the
+                             daily cap, HTTP request, Slack and Discord messages through safe-fetch),
+                             secrets.ts (secret headers, Slack and Discord URLs encrypted apart from the
                              actions, hook tokens); the button click route is in routes.ts; script/ (the
                              run-script step's sandbox: types.ts (ScriptExecutor, ScriptSandbox:
                              the plan hook), local-container.ts (one locked-down `docker run` per

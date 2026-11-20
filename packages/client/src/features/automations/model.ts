@@ -8,6 +8,7 @@ import {
   type AutomationTrigger,
   type AutomationTriggerType,
   countSteps,
+  type DiscordMentionType,
   type FieldMeta,
   getFieldType,
   MAX_STEP_DEPTH,
@@ -61,11 +62,19 @@ export const ACTION_TYPES: readonly AutomationActionType[] = [
   'findRecords',
   'sendEmail',
   'slackMessage',
+  'discordMessage',
   'httpRequest',
   'runScript',
   'branch',
   'repeat',
 ];
+
+/** Who a Discord message may notify, as the builder names them; none by default. */
+export const DISCORD_MENTION_LABELS: Record<DiscordMentionType, string> = {
+  users: 'Mentioned people',
+  roles: 'Mentioned roles',
+  everyone: '@everyone and @here',
+};
 
 /** Steps that hold steps of their own. */
 export const GROUP_TYPES: readonly AutomationActionType[] = ['branch', 'repeat'];
@@ -76,6 +85,7 @@ export const ACTION_LABELS: Record<AutomationActionType, string> = {
   findRecords: 'Find records',
   sendEmail: 'Send email',
   slackMessage: 'Send Slack message',
+  discordMessage: 'Send Discord message',
   httpRequest: 'Send HTTP request',
   runScript: 'Run a script',
   branch: 'If / Otherwise',
@@ -200,6 +210,8 @@ export function defaultAction(
       return { type, to: [], subject: '', body: '' };
     case 'slackMessage':
       return { type, text: '' };
+    case 'discordMessage':
+      return { type, text: '', mentions: [] };
     case 'httpRequest':
       return { type, method: 'POST', url: '', headers: [] };
     case 'runScript':
@@ -438,6 +450,7 @@ function stepTokens(ctx: TokenContext, a: AutomationAction, address: StepAddress
     case 'sendEmail':
       return [{ group, label: 'Emails sent', token: token(`steps.${n}.sent`) }];
     case 'slackMessage':
+    case 'discordMessage':
       return [{ group, label: 'Response status', token: token(`steps.${n}.status`) }];
     case 'runScript':
       return [
@@ -610,7 +623,7 @@ export function problemErrors(err: unknown, fallback: string): ProblemErrors {
 
 /** Paths whose message shows next to its control; others show at the foot of the card. */
 const INLINE_PATH =
-  /^(trigger\.(tableId|fieldIds|viewId|fieldId|schedule\.(every|startAt|expression|timeZone))|actions(\.\d+\.(then|otherwise|actions))*\.\d+\.(tableId|recordId|fields|fields\.[0-9a-f-]{36}|limit|to|subject|body|text|webhookUrl|url|items))$/i;
+  /^(trigger\.(tableId|fieldIds|viewId|fieldId|schedule\.(every|startAt|expression|timeZone))|actions(\.\d+\.(then|otherwise|actions))*\.\d+\.(tableId|recordId|fields|fields\.[0-9a-f-]{36}|limit|to|subject|body|text|webhookUrl|url|items|username|embed\.(title|description|url|color)))$/i;
 
 /** A path under a card's prefix that belongs to a step inside it (`.then.0...`). */
 const NESTED_STEP = /^\.(then|otherwise|actions)\.\d+(\.|$)/;

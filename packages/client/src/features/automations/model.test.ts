@@ -7,6 +7,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/client';
 import {
+  ACTION_LABELS,
   ACTION_TYPES,
   addStep,
   bodyTokens,
@@ -72,21 +73,22 @@ describe('automation builder model (#111)', () => {
       const trigger = defaultTrigger(type, T1, new Date(2026, 9, 27, 15));
       const actions = ACTION_TYPES.map((a) => defaultAction(a, trigger, T2));
       const parsed = createAutomationSchema.safeParse({ name: 'A', trigger, actions });
-      // A new form or button trigger still needs its view or field picked, new email,
-      // Slack and HTTP steps their recipients, text and URL, and a repeat its list (a branch,
+      // A new form or button trigger still needs its view or field picked, new email, Slack,
+      // Discord and HTTP steps their recipients, text and URL, and a repeat its list (a branch,
       // its record without a record trigger): the rest parses as is.
       const issues = parsed.success ? [] : parsed.error.issues.map((i) => i.path.join('.'));
       const expected = [
         ...(type === 'formSubmitted' ? ['trigger.viewId'] : []),
         ...(type === 'buttonClicked' ? ['trigger.fieldId'] : []),
         ...(type === 'scheduled' || type === 'webhookReceived'
-          ? ['actions.1.recordId', 'actions.7.recordId']
+          ? ['actions.1.recordId', 'actions.8.recordId']
           : []),
         'actions.3.to',
         'actions.3.subject',
         'actions.4.text',
-        'actions.5.url',
-        'actions.8.items',
+        'actions.5.text',
+        'actions.6.url',
+        'actions.9.items',
       ];
       expect(issues.sort()).toEqual(expected.sort());
     }
@@ -150,6 +152,33 @@ describe('automation builder model (#111)', () => {
     expect(third.map((t) => t.group)).not.toContain('Step 3: Send email');
     // Every token parses.
     for (const t of third) expect(() => parsePath(t.token.slice(2, -2))).not.toThrow();
+  });
+
+  it('starts a Discord step with no mentions, and offers its response status to later steps', () => {
+    const trigger = defaultTrigger('recordCreated', T1);
+    const discord = defaultAction('discordMessage', trigger, T1);
+    expect(discord).toEqual({ type: 'discordMessage', text: '', mentions: [] });
+    expect(ACTION_LABELS.discordMessage).toBe('Send Discord message');
+    expect(ACTION_TYPES.indexOf('discordMessage')).toBe(ACTION_TYPES.indexOf('slackMessage') + 1);
+    const ctx = { trigger, actions: [discord], fieldsOf: () => [] };
+    expect(tokensFor(ctx, 2)).toContainEqual({
+      group: 'Step 1: Send Discord message',
+      label: 'Response status',
+      token: '{{steps.1.status}}',
+    });
+  });
+
+  it("shows a Discord step's errors next to its controls, nested ones too", () => {
+    const byPath = {
+      'actions.0.webhookUrl': 'A Discord webhook URL starts with https://.',
+      'actions.0.username': 'Too long.',
+      'actions.0.embed.title': 'An embed needs a title or a description.',
+      'actions.0.embed.color': 'Enter a colour as #RRGGBB.',
+      'actions.1.actions.0.embed.url': 'Enter an http or https URL.',
+      'actions.0.mentions.0': 'Invalid option.',
+    };
+    expect(cardErrors(byPath, 'actions.0')).toEqual(['Invalid option.']);
+    expect(cardErrors(byPath, 'actions.1.actions.0')).toEqual([]);
   });
 
   it("lists a webhook sample's leaves as tokens", () => {

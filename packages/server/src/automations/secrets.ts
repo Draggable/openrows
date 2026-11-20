@@ -4,15 +4,17 @@ import { z } from 'zod';
 import type { Cipher } from '../auth/crypto.js';
 
 /**
- * The secret parts of an automation's actions: secret HTTP header values and Slack webhook
- * URLs. They never sit in the `actions` column (which the API returns): the stored actions keep
- * a secret header as `{ name, secret: true }` and a Slack step without its URL, and the values
+ * The secret parts of an automation's actions: secret HTTP header values and Slack and Discord
+ * webhook URLs. They never sit in the `actions` column (which the API returns): the stored
+ * actions keep a secret header as `{ name, secret: true }` and a Slack or Discord step without
+ * its URL, and the values
  * live in `secrets_encrypted`, one AES-GCM document, one entry per step by index. A branch's or
  * repeat's entry holds its lists' entries the same way (`then`, `otherwise`, `actions`).
  */
 export interface StepSecrets {
   /** Secret header values by lower-cased name. */
   headers?: Record<string, string>;
+  /** A Slack or Discord step's webhook URL. */
   webhookUrl?: string;
   then?: AutomationSecrets;
   otherwise?: AutomationSecrets;
@@ -65,8 +67,8 @@ export interface SplitProblem {
 }
 
 /**
- * Takes the secrets out of actions as a client sent them: a secret header or Slack URL with a
- * value is a new secret; one without keeps what the same step (same place and type; for HTTP,
+ * Takes the secrets out of actions as a client sent them: a secret header, Slack or Discord URL
+ * with a value is a new secret; one without keeps what the same step (same place and type; for HTTP,
  * the same URL) had, or is a problem. Steps inside branches and repeats likewise, by their
  * place in the same group's list. Returns the actions to store (no secret values) and the secrets.
  */
@@ -119,12 +121,16 @@ export function splitSecrets(
       secrets.push(Object.keys(headers).length ? { headers } : null);
       return { ...action, headers: out };
     }
-    if (action.type === 'slackMessage') {
+    if (action.type === 'slackMessage' || action.type === 'discordMessage') {
+      // Kept only by a step of the same type: a Slack URL never becomes a Discord one.
       const webhookUrl = action.webhookUrl ?? before?.webhookUrl;
       if (webhookUrl === undefined) {
         problems.push({
           path: `${at}.${i}.webhookUrl`,
-          message: 'Enter the Slack incoming webhook URL.',
+          message:
+            action.type === 'slackMessage'
+              ? 'Enter the Slack incoming webhook URL.'
+              : 'Enter the Discord webhook URL.',
         });
       }
       secrets.push(webhookUrl ? { webhookUrl } : null);

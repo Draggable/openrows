@@ -203,7 +203,7 @@ async function* trimmed(lines: AsyncIterable<string>): AsyncGenerator<string> {
 /**
  * The source's automations in the copy: ids remapped (tables, fields, views; records and
  * files that came along), turned off, created by the person duplicating (whose live role runs
- * them once they turn them on). Secret header values and Slack URLs stay behind, so the
+ * them once they turn them on). Secret header values and Slack and Discord URLs stay behind, so the
  * copy asks for them again; a webhook trigger gets its URL token when it is saved.
  */
 async function copyAutomations(

@@ -23,7 +23,7 @@ To create a base, see [Getting started](getting-started.md#create-a-base). Click
 
 **Duplicate base** in the base menu makes a copy that works on its own: editing one never changes the other. Pick the copy's name, the workspace it goes to (any workspace where you're a creator or owner) and whether to **Copy records, links and attachments**; without them you get the structure only, like a template. The copy is made in the background and opens when it's ready.
 
-The copy has every table, field (links, lookups, rollups and formulas point at the copy's own tables and fields), view (filters, sorts, groups, colours, form settings) and automation. Automations start turned off; secret headers and Slack webhook URLs aren't copied, so enter them again before you turn one on. Share links, webhooks, collaborators, comments, revision history, snapshots and other people's personal views stay with the original. The copy's records and attachments count against the plan of the workspace you copy to.
+The copy has every table, field (links, lookups, rollups and formulas point at the copy's own tables and fields), view (filters, sorts, groups, colours, form settings) and automation. Automations start turned off; secret headers and Slack and Discord webhook URLs aren't copied, so enter them again before you turn one on. Share links, webhooks, collaborators, comments, revision history, snapshots and other people's personal views stay with the original. The copy's records and attachments count against the plan of the workspace you copy to.
 
 ### Templates
 

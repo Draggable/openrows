@@ -5,6 +5,7 @@ import {
   type AutomationScripts,
   type AutomationTrigger,
   type AutomationTriggerType,
+  DISCORD_MENTION_TYPES,
   type FieldMeta,
   type FilterGroup,
   HTTP_METHODS,
@@ -35,6 +36,7 @@ import {
   addressOf,
   addStep,
   cardErrors,
+  DISCORD_MENTION_LABELS,
   defaultAction,
   defaultTrigger,
   errorPathOf,
@@ -926,6 +928,8 @@ function ActionFields({
           </Row>
         </>
       );
+    case 'discordMessage':
+      return <DiscordFields action={action} n={n} tokens={tokens} at={at} onChange={onChange} />;
     case 'httpRequest':
       return <HttpFields action={action} n={n} tokens={tokens} at={at} onChange={onChange} />;
     case 'runScript':
@@ -1297,6 +1301,187 @@ function HttpFields({
           />
         </Row>
       )}
+    </>
+  );
+}
+
+type DiscordAction = AutomationAction & { type: 'discordMessage' };
+type DiscordEmbed = NonNullable<DiscordAction['embed']>;
+
+/**
+ * A Discord step: the webhook URL (a secret, like Slack's), the message, an optional display
+ * name and embed, and whom it may notify (no one unless ticked).
+ */
+function DiscordFields({
+  action,
+  n,
+  tokens,
+  at,
+  onChange,
+}: {
+  action: DiscordAction;
+  n: string;
+  tokens: readonly TokenOption[];
+  at: (rest: string) => string | undefined;
+  onChange: (action: AutomationAction) => void;
+}) {
+  const ids = {
+    url: useId(),
+    text: useId(),
+    username: useId(),
+    title: useId(),
+    description: useId(),
+    link: useId(),
+    color: useId(),
+  };
+  /** Sets one of the step's optional texts; an empty one is left out. */
+  const setOptional = (key: 'webhookUrl' | 'username', value: string) => {
+    const { [key]: _old, ...rest } = action;
+    onChange(value ? { ...rest, [key]: value } : rest);
+  };
+  const setEmbed = (key: keyof DiscordEmbed, value: string) => {
+    const { [key]: _old, ...rest } = action.embed ?? {};
+    onChange({ ...action, embed: value ? { ...rest, [key]: value } : rest });
+  };
+  const embed = action.embed;
+  return (
+    <>
+      <Row
+        label="Discord webhook URL"
+        htmlFor={ids.url}
+        error={at('webhookUrl')}
+        hint="From the channel's settings: Integrations, Webhooks, Copy Webhook URL. Stored encrypted and never shown again. Leave empty to keep the saved one."
+      >
+        <Input
+          id={ids.url}
+          type="url"
+          placeholder="https://discord.com/api/webhooks/…"
+          value={action.webhookUrl ?? ''}
+          aria-invalid={!!at('webhookUrl') || undefined}
+          onChange={(e) => setOptional('webhookUrl', e.target.value)}
+        />
+      </Row>
+      <Row
+        label="Message"
+        htmlFor={ids.text}
+        error={at('text')}
+        hint="Up to 2,000 characters; longer text from values is cut. Optional with an embed."
+      >
+        <TokenInput
+          id={ids.text}
+          multiline
+          label={`step ${n}'s message`}
+          value={action.text}
+          tokens={tokens}
+          invalid={!!at('text')}
+          onChange={(text) => onChange({ ...action, text })}
+        />
+      </Row>
+      <Row
+        label="Display name (optional)"
+        htmlFor={ids.username}
+        error={at('username')}
+        hint="Shown as the sender instead of the webhook's name, up to 80 characters."
+      >
+        <TokenInput
+          id={ids.username}
+          label={`step ${n}'s display name`}
+          value={action.username ?? ''}
+          tokens={tokens}
+          invalid={!!at('username')}
+          onChange={(v) => setOptional('username', v)}
+        />
+      </Row>
+      <label className="flex items-center gap-2 text-small">
+        <input
+          type="checkbox"
+          className={checkboxClass}
+          checked={!!embed}
+          onChange={(e) => {
+            const { embed: _old, ...rest } = action;
+            onChange(e.target.checked ? { ...rest, embed: {} } : rest);
+          }}
+        />
+        Add an embed
+      </label>
+      {embed && (
+        <fieldset className="flex flex-col gap-3 rounded-md border border-border p-3">
+          <legend className="px-1 text-small font-[550] text-text-2">Embed</legend>
+          <Row label="Title" htmlFor={ids.title} error={at('embed.title')}>
+            <TokenInput
+              id={ids.title}
+              label={`step ${n}'s embed title`}
+              value={embed.title ?? ''}
+              tokens={tokens}
+              invalid={!!at('embed.title')}
+              onChange={(v) => setEmbed('title', v)}
+            />
+          </Row>
+          <Row label="Description" htmlFor={ids.description} error={at('embed.description')}>
+            <TokenInput
+              id={ids.description}
+              multiline
+              label={`step ${n}'s embed description`}
+              value={embed.description ?? ''}
+              tokens={tokens}
+              invalid={!!at('embed.description')}
+              onChange={(v) => setEmbed('description', v)}
+            />
+          </Row>
+          <div className="grid grid-cols-[1fr_130px] gap-2">
+            <Row
+              label="Title link"
+              htmlFor={ids.link}
+              error={at('embed.url')}
+              hint="An http or https URL."
+            >
+              <TokenInput
+                id={ids.link}
+                label={`step ${n}'s embed link`}
+                value={embed.url ?? ''}
+                tokens={tokens}
+                invalid={!!at('embed.url')}
+                placeholder="https://example.com/orders/1"
+                onChange={(v) => setEmbed('url', v)}
+              />
+            </Row>
+            <Row label="Colour" htmlFor={ids.color} error={at('embed.color')}>
+              <Input
+                id={ids.color}
+                className="font-mono"
+                placeholder="#5865F2"
+                value={embed.color ?? ''}
+                aria-invalid={!!at('embed.color') || undefined}
+                onChange={(e) => setEmbed('color', e.target.value.trim())}
+              />
+            </Row>
+          </div>
+        </fieldset>
+      )}
+      <fieldset className="flex flex-col gap-1">
+        <legend className="mb-1 text-small font-[550] text-text-2">Notify</legend>
+        {DISCORD_MENTION_TYPES.map((type) => (
+          <label key={type} className="flex items-center gap-2 text-small">
+            <input
+              type="checkbox"
+              className={checkboxClass}
+              checked={action.mentions.includes(type)}
+              onChange={(e) =>
+                onChange({
+                  ...action,
+                  mentions: DISCORD_MENTION_TYPES.filter((t) =>
+                    t === type ? e.target.checked : action.mentions.includes(t)
+                  ),
+                })
+              }
+            />
+            {DISCORD_MENTION_LABELS[type]}
+          </label>
+        ))}
+        <span className="text-small text-text-2">
+          Unticked, mentions show in the message but notify no one.
+        </span>
+      </fieldset>
     </>
   );
 }

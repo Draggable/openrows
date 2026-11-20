@@ -1422,7 +1422,7 @@ export const automations = pgTable(
     lastRunAt: timestamp('last_run_at', { withTimezone: true }),
     lastRunStatus: text('last_run_status'),
     /**
-     * The secret parts of the actions (secret HTTP header values, Slack webhook URLs),
+     * The secret parts of the actions (secret HTTP header values, Slack and Discord webhook URLs),
      * encrypted as one JSON document; the `actions` column never holds them.
      */
     secretsEncrypted: bytea('secrets_encrypted'),

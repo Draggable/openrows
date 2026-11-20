@@ -789,7 +789,7 @@ describe('automation groups', () => {
   });
 
   describe('external steps per run', () => {
-    const limitMessage = `This run reached its limit of ${MAX_RUN_EXTERNAL_ACTIONS} external steps (HTTP requests, Slack messages, emails and scripts); the rest weren't run.`;
+    const limitMessage = `This run reached its limit of ${MAX_RUN_EXTERNAL_ACTIONS} external steps (HTTP requests, Slack and Discord messages, emails and scripts); the rest weren't run.`;
 
     it(`stops a run at ${MAX_RUN_EXTERNAL_ACTIONS} external steps, live and in a test run; record steps still count only toward the actions`, async () => {
       const m = await makeTable('External');

@@ -68,6 +68,7 @@ import {
 } from '../records/service.js';
 import { monthlyRunRoom } from '../usage/quota.js';
 import {
+  discordMessageStep,
   gatedOutbound,
   httpRequestStep,
   logInput,
@@ -115,8 +116,8 @@ import {
  *   checks); one failing stops the group and the run. A run executes at most MAX_RUN_ACTIONS
  *   actions, checks and repeats in all, so repeats can't multiply into unbounded work (a repeat
  *   counts each time it starts, so empty or nested-only repeats can't loop for free). Of
- *   those, at most MAX_RUN_EXTERNAL_ACTIONS are external steps (HTTP, Slack, email, script), so
- *   a repeat can't hold the run's transaction open for hundreds of slow requests.
+ *   those, at most MAX_RUN_EXTERNAL_ACTIONS are external steps (HTTP, Slack, Discord, email,
+ *   script), so a repeat can't hold the run's transaction open for hundreds of slow requests.
  * - **Tests and retries** (testAutomation and retryRun below) run the same steps
  *   (performRun) in the API's request transaction, as the person testing or retrying.
  */
@@ -146,7 +147,7 @@ export interface AutomationRunDeps {
   /** openrows_app; the run is scoped to its workspace (and then its creator). */
   db: Database;
   logger: Pick<Logger, 'info' | 'warn'>;
-  /** Email, HTTP and Slack steps; without it they fail as not configured. */
+  /** Email, HTTP, Slack and Discord steps; without it they fail as not configured. */
   outbound?: OutboundDeps | undefined;
   /** Run-script steps; without it they fail as not available. */
   scripts?: ScriptSandbox | undefined;
@@ -276,7 +277,8 @@ interface RunEnv extends OutboundEnv {
   scripts: ScriptSandbox | undefined;
   /**
    * Actions, branch checks and repeats this run started so far (at most MAX_RUN_ACTIONS), and
-   * of them the external steps: HTTP, Slack, email and script (at most MAX_RUN_EXTERNAL_ACTIONS).
+   * of them the external steps: HTTP, Slack, Discord, email and script (at most
+   * MAX_RUN_EXTERNAL_ACTIONS).
    */
   executed: { count: number; external: number };
 }
@@ -310,7 +312,10 @@ function renderAction(action: LeafAction, context: Record<string, unknown>) {
 function loggedInput(input: ReturnType<typeof renderAction>): unknown {
   // The script is in the automation; its log keeps what it was given.
   if (input.type === 'runScript') return { type: input.type, inputs: input.inputs };
-  return input.type === 'sendEmail' || input.type === 'httpRequest' || input.type === 'slackMessage'
+  return input.type === 'sendEmail' ||
+    input.type === 'httpRequest' ||
+    input.type === 'slackMessage' ||
+    input.type === 'discordMessage'
     ? logInput(input)
     : input;
 }
@@ -340,6 +345,7 @@ async function runAction(
   if (input.type === 'sendEmail') return sendEmailStep(tx, env.db, env, input);
   if (input.type === 'httpRequest') return httpRequestStep(env, input, secrets);
   if (input.type === 'slackMessage') return slackMessageStep(env, input, secrets);
+  if (input.type === 'discordMessage') return discordMessageStep(env, input, secrets);
   if (input.type === 'runScript') return runScriptStep(tx, env, input);
   if (!('tableId' in action)) throw new Error('a record step without a table');
   const table = await stepTable(tx, env, action.tableId);
@@ -485,8 +491,8 @@ interface ListResult {
 
 /**
  * Counts an action, a branch's check or a repeat against the run's ceiling, and an external
- * step (HTTP, Slack, email, script) against the run's external ceiling too: the run is one
- * transaction, which slow steps would hold open. Over either, the step fails before it starts.
+ * step (HTTP, Slack, Discord, email, script) against the run's external ceiling too: the run is
+ * one transaction, which slow steps would hold open. Over either, the step fails before it starts.
  */
 function countExecuted(env: RunEnv, type: AutomationActionType) {
   if (env.executed.count >= MAX_RUN_ACTIONS) {
@@ -497,7 +503,7 @@ function countExecuted(env: RunEnv, type: AutomationActionType) {
   const external = isExternalActionType(type);
   if (external && env.executed.external >= MAX_RUN_EXTERNAL_ACTIONS) {
     throw new StepFailure(
-      `This run reached its limit of ${MAX_RUN_EXTERNAL_ACTIONS} external steps (HTTP requests, Slack messages, emails and scripts); the rest weren't run.`
+      `This run reached its limit of ${MAX_RUN_EXTERNAL_ACTIONS} external steps (HTTP requests, Slack and Discord messages, emails and scripts); the rest weren't run.`
     );
   }
   env.executed.count += 1;
