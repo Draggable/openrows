@@ -285,6 +285,7 @@ async function request(
     method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     headers: Record<string, string>;
     body?: string;
+    maxRedirects?: number;
   }
 ) {
   try {
@@ -295,7 +296,12 @@ async function request(
     });
     return res;
   } catch (err) {
-    if (err instanceof SafeFetchError) throw new StepFailure(`The request failed: ${err.message}.`);
+    if (err instanceof SafeFetchError) {
+      if (err.code === 'TOO_MANY_REDIRECTS' && init.maxRedirects === 0) {
+        throw new StepFailure("The server answered with a redirect; redirects aren't followed.");
+      }
+      throw new StepFailure(`The request failed: ${err.message}.`);
+    }
     throw err;
   }
 }
@@ -359,7 +365,7 @@ export async function slackMessageStep(
  * Posts to a Discord channel webhook through the safe client, like a Slack message: one request,
  * no retries (a 429 fails the step with its status, like any non-2xx answer). The body keeps to
  * Discord's limits and always sets `allowed_mentions`, so nobody is pinged unless the step allows
- * it. Its output: the response status (204 when Discord accepted it).
+ * it. Redirects aren't followed. Its output: the response status (204 when Discord accepted it).
  */
 export async function discordMessageStep(
   env: OutboundEnv,
@@ -375,10 +381,13 @@ export async function discordMessageStep(
   } catch (err) {
     throw new StepFailure(err instanceof Error ? err.message : 'The message is invalid.');
   }
+  // No redirects: a 307/308 would send the message on to a host off Discord's (the rule for
+  // this URL), so a redirect fails the step.
   const res = await request(deps.http, url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    maxRedirects: 0,
   });
   if (res.status < 200 || res.status > 299) {
     throw new StepFailure(

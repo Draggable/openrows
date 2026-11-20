@@ -193,6 +193,8 @@ describe('Send Discord message', () => {
           return;
         }
         if (answer === 429) res.setHeader('retry-after', '1');
+        // Somewhere the safe client itself would reach (allowlisted), but not Discord.
+        if (answer === 307) res.setHeader('location', `http://127.0.0.1:${port}/elsewhere`);
         res.writeHead(answer, answer === 204 ? {} : { 'content-type': 'application/json' });
         res.end(answer === 204 ? undefined : '{"message":"nope"}');
       });
@@ -545,6 +547,22 @@ describe('Send Discord message', () => {
       // One request: no retries, and the step after it never ran.
       expect(received.map((r) => r.url)).toEqual([HOOK_PATH]);
     }
+    answer = 204;
+    await off(a.id);
+  });
+
+  it("doesn't follow a redirect off Discord's hosts: the message isn't sent on", async () => {
+    const a = await create([discord({ text: 'Not for elsewhere' })]);
+    answer = 307;
+    received.length = 0;
+    await fire(a.id, {});
+    const run = await lastRun(a.id);
+    expect(run.status).toBe('failed');
+    expect(run.steps[0]?.error).toBe(
+      "The server answered with a redirect; redirects aren't followed."
+    );
+    expect(received.map((r) => r.url)).toEqual([HOOK_PATH]);
+    expect(JSON.stringify(run)).not.toContain(TOKEN);
     answer = 204;
     await off(a.id);
   });

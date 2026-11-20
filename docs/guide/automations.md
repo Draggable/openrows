@@ -104,7 +104,7 @@ To get a webhook URL, open the Discord channel's settings (**Edit Channel**), go
 - **Add an embed** (optional): a **Title** (up to 256 characters), a **Description** (up to 4,096), a **Title link** (an `http` or `https` URL) and a **Colour** (`#RRGGBB`). An embed needs a title or a description.
 - The message, display name and embed's title, description and link can hold tokens. When the filled-in values are longer than Discord allows, they are cut to the limit and end with "…". A message that is empty once filled in (with no embed) fails the step.
 - **Notify**: by default the message notifies no one. Mentions such as `@everyone`, `@here`, `<@user-id>` or `<@&role-id>` show in the message but don't ping anybody. Tick **Mentioned people**, **Mentioned roles** or **@everyone and @here** to let those mentions notify.
-- The request is sent once, with the same timeout and rules as an HTTP request. An answer other than 2xx fails the step with Discord's status, for example `Discord answered 429 Too Many Requests.` when the channel's webhook is rate-limited; retry the run later.
+- The request is sent once, with the same timeout and rules as an HTTP request, and redirects aren't followed (a redirect fails the step). An answer other than 2xx fails the step with Discord's status, for example `Discord answered 429 Too Many Requests.` when the channel's webhook is rate-limited; retry the run later.
 
 ### Send HTTP request
 
