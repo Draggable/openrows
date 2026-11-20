@@ -271,7 +271,9 @@ packages/
                              `aggregateRecords`/`groupRecordValues`; chartRows: caps, "Other")
 : runtime.ts (a page's records projected like a share link's,
                              the page filter with `me` as the viewer; edits and form submissions
-                             limited to the page), collaborators.ts (interface-only collaborators,
+                             limited to the page; a record review's automation buttons, through
+                             automations/buttons.ts, and the files a page shows, both checked
+                             against the published page per request), collaborators.ts (interface-only collaborators,
                              `interface_members`; invitations through workspaces/service.ts)
     src/templates/           templates: install.ts (a template → snapshot header + record and
                              link lines → restoreBase, formulas by name stored by id in its

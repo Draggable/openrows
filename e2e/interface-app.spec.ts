@@ -6,7 +6,8 @@ import { expect, test } from './helpers/test.js';
 // An interface on its own (/i/:interfaceId) against a mocked API: what an interface-only
 // collaborator uses. Its published pages read and write through the interface's routes only: a
 // form page submits a new record, a kanban page shows its stacks, and a record review page edits
-// the field it makes editable. The access rules themselves are in the server's integration tests
+// the field it makes editable, clicks its button that runs automations and links its files
+// through the page. The access rules themselves are in the server's integration tests
 // (interface-only.test.ts and the authz matrix); e2e/interfaces-shared.spec.ts runs this on the
 // whole stack, with an invitation.
 
@@ -14,7 +15,13 @@ const uuid = (n: number) => `0190f000-0000-7000-8000-${String(n).padStart(12, '0
 const IFACE = uuid(1);
 const BASE = uuid(2);
 const TABLE = uuid(3);
-const F = { title: uuid(10), stage: uuid(11), notes: uuid(12) };
+const F = { title: uuid(10), stage: uuid(11), notes: uuid(12), files: uuid(13), approve: uuid(14) };
+const FILE = uuid(50);
+/** A 1×1 PNG, the thumbnail the page links. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64'
+);
 const PAGES = { form: uuid(20), board: uuid(21), review: uuid(22) };
 
 const stage = {
@@ -31,6 +38,7 @@ const stage = {
 };
 const title = { id: F.title, name: 'Title', type: 'singleLineText', isPrimary: true, options: {} };
 const notes = { id: F.notes, name: 'Notes', type: 'singleLineText', isPrimary: false, options: {} };
+const files = { id: F.files, name: 'Files', type: 'attachment', isPrimary: false, options: {} };
 const base = { layout: 'recordList', tableId: TABLE, sorts: [], fields: [], elements: [] };
 const configs = {
   [PAGES.form]: {
@@ -52,6 +60,17 @@ const configs = {
     fields: [F.stage],
     elements: [
       { id: 'n', type: 'field', x: 0, y: 0, w: 6, h: 2, fieldId: F.notes, editable: true },
+      { id: 'f', type: 'field', x: 6, y: 0, w: 6, h: 2, fieldId: F.files, editable: false },
+      {
+        id: 'a',
+        type: 'button',
+        x: 0,
+        y: 2,
+        w: 3,
+        h: 1,
+        label: 'Approve',
+        action: { type: 'runAutomation', fieldId: F.approve },
+      },
     ],
   },
 };
@@ -66,7 +85,15 @@ const page_ = (id: string, name: string, position: number) => ({
   hasChanges: false,
 });
 const records = [
-  { id: uuid(30), fields: { [F.title]: 'Printer jammed', [F.stage]: 'open', [F.notes]: '' } },
+  {
+    id: uuid(30),
+    fields: {
+      [F.title]: 'Printer jammed',
+      [F.stage]: 'open',
+      [F.notes]: '',
+      [F.files]: [{ id: FILE, filename: 'tray.png', size: 68, type: 'image/png' }],
+    },
+  },
   { id: uuid(31), fields: { [F.title]: 'VPN down', [F.stage]: 'done', [F.notes]: 'Fixed' } },
 ];
 
@@ -98,6 +125,14 @@ async function mockInterface(page: Page) {
         role: 'editor',
       });
     }
+    // The page's files: a thumbnail to draw, never a write.
+    if (path.includes('/attachments/')) {
+      return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+    }
+    if (path.includes('/buttons/')) {
+      writes.push({ method: req.method(), path, body });
+      return json(route, { started: 1 });
+    }
     const m = path.match(/\/pages\/([^/]+)\/(records|submissions)(?:\/([^/]+))?$/);
     const pageId = m?.[1] ?? '';
     if (m?.[2] === 'records' && req.method() === 'POST') {
@@ -109,12 +144,13 @@ async function mockInterface(page: Page) {
             ? [title, notes]
             : layout === 'kanban'
               ? [title, stage]
-              : [title, stage, notes],
+              : [title, stage, notes, files],
         records: layout === 'form' ? [] : records,
         offset: 0,
         total: layout === 'form' ? 0 : records.length,
         editable: layout === 'recordReview' ? [F.notes] : [],
         canSubmit: layout === 'form',
+        buttons: layout === 'recordReview' ? { [F.approve]: 'ready' } : {},
         ...(layout === 'kanban' ? { kanban: { stackFieldId: F.stage, cardFields: [] } } : {}),
       });
     }
@@ -191,5 +227,17 @@ test('an interface-only collaborator submits a form, sees a board and edits a re
       path: `/api/interfaces/${IFACE}/pages/${PAGES.review}/records/${records[0]?.id}`,
       body: { fields: { [F.notes]: 'Paper tray stuck' } },
     });
+  // Its file opens through the page, and its button clicks through the page too.
+  await expect(page.getByRole('link', { name: 'tray.png' })).toHaveAttribute(
+    'href',
+    new RegExp(`/api/interfaces/${IFACE}/pages/${PAGES.review}/attachments/${FILE}$`)
+  );
+  await page.getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByText('Automation started')).toBeVisible();
+  expect(writes.at(-1)).toEqual({
+    method: 'POST',
+    path: `/api/interfaces/${IFACE}/pages/${PAGES.review}/records/${records[0]?.id}/buttons/${F.approve}`,
+    body: undefined,
+  });
   expect(await seriousViolations(page)).toEqual([]);
 });

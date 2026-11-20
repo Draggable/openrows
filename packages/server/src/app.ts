@@ -412,7 +412,14 @@ export function createApp({
   extensionRoutes(routes, { customBundles: config.extensionsCustomBundles });
   extensionSandboxRoutes(routes);
   // Interfaces: pages built on a base, published to its collaborators.
-  interfaceRoutes(routes, { db, appUrl: config.appUrl, email: mail, visibility });
+  interfaceRoutes(routes, {
+    db,
+    appUrl: config.appUrl,
+    email: mail,
+    jobs,
+    store: files,
+    visibility,
+  });
   // Airtable imports: new bases filled by the worker's `airtable.import`.
   airtableRoutes(routes, {
     jobs,

@@ -27,7 +27,7 @@ import { setThemeOverride } from '../../lib/theme';
 import { cn } from '../../lib/utils';
 import { GUTTER_WIDTH, gridColumns, HEADER_HEIGHT, rowHeightOf } from '../grid/layout';
 import { type EmbedTheme, sharePath } from './model';
-import { asFieldMeta, SharedCell } from './SharedCell';
+import { asFieldMeta, SharedCell, shareFileLinks } from './SharedCell';
 import { SharedLayout } from './SharedLayouts';
 import { useTurnstile } from './turnstile';
 
@@ -450,6 +450,7 @@ function SharedGrid({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const fields = useMemo(() => shared.fields.map(asFieldMeta), [shared.fields]);
+  const files = useMemo(() => shareFileLinks(token, viewId), [token, viewId]);
   const columns = useMemo(() => gridColumns(fields, shared.layout), [fields, shared.layout]);
   const rowHeight = rowHeightOf(shared.layout);
   const first = useQuery(shareQueries.records(token, viewId, 0, PAGE));
@@ -558,8 +559,7 @@ function SharedGrid({
                     >
                       {record ? (
                         <SharedCell
-                          token={token}
-                          viewId={viewId}
+                          files={files}
                           field={c.field}
                           value={record.fields[c.field.id] ?? null}
                         />

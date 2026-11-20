@@ -1,12 +1,14 @@
-import { contracts, roleAllows, type SharedInterfaceList } from '@openrows/shared';
+import { contracts, downloads, roleAllows, type SharedInterfaceList } from '@openrows/shared';
 import { sql } from 'drizzle-orm';
 import type { Context } from 'hono';
+import type { ObjectStore } from '../attachments/storage.js';
 import type { ResourceEnv } from '../authz/middleware.js';
 import { interfaceOnly } from '../authz/policy.js';
 import type { RouteRegistry } from '../authz/routes.js';
 import { inScope } from '../authz/scope.js';
 import type { Database, Transaction } from '../db/index.js';
 import type { EmailTransport } from '../email/transport.js';
+import type { Jobs } from '../jobs/send.js';
 import { AppError } from '../lib/errors.js';
 import { allFieldsVisible, type FieldVisibility } from '../realtime/projection.js';
 import {
@@ -22,8 +24,10 @@ import {
 } from './collaborators.js';
 import { pageData } from './data.js';
 import {
+  clickPageButton,
   interfaceAccess,
   type PageContext,
+  pageFileUrl,
   pageRecords,
   submitPageForm,
   updatePageRecord,
@@ -55,6 +59,10 @@ export function interfaceRoutes(
     db: Database;
     appUrl: string;
     email: EmailTransport;
+    /** Button clicks start automation runs in the request's transaction. */
+    jobs: Jobs;
+    /** Where the files pages show are kept. */
+    store: ObjectStore | undefined;
     visibility?: FieldVisibility | undefined;
   }
 ) {
@@ -229,6 +237,43 @@ export function interfaceRoutes(
     c.var.logger.info({ pageId: params.pageId, recordId: created.id }, 'interface form submitted');
     return created;
   });
+
+  // A record review's button that runs automations, on one of its records: the published page
+  // only, for those who may edit the table's records (interface-only editors included).
+  routes.endpoint(i.clickPageButton, write, async (c, { params }) => {
+    const result = await clickPageButton(
+      { ...pageContext(c), jobs: deps.jobs },
+      await pageConfig(c, params.pageId, false),
+      params.recordId,
+      params.fieldId
+    );
+    c.var.logger.info(
+      { pageId: params.pageId, fieldId: params.fieldId, started: result.started },
+      'interface button clicked'
+    );
+    return result;
+  });
+
+  // The files a page shows, for everyone who reads the page; each request is checked against the
+  // page afresh and answers a short-lived signed URL, never cached.
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  for (const [download, thumbnail] of [
+    [downloads.interfaceAttachment, false],
+    [downloads.interfaceAttachmentThumbnail, true],
+  ] as const) {
+    routes.resource(download.method, download.path, view, async (c) => {
+      const pageId = c.req.param('pageId') ?? '';
+      const id = c.req.param('attachmentId') ?? '';
+      if (!uuid.test(pageId) || !uuid.test(id)) {
+        throw new AppError('NOT_FOUND', { detail: 'No such file on this page.' });
+      }
+      const config = await pageConfig(c, pageId, c.req.query('draft') === 'true');
+      const url = await pageFileUrl(pageContext(c), config, deps.store, id, thumbnail);
+      c.header('cache-control', 'private, no-store');
+      c.header('referrer-policy', 'no-referrer');
+      return c.redirect(url, 302);
+    });
+  }
 
   // A page's numbers and charts, as the caller may read them: the published copy, or for
   // editors the saved draft (`draft`); a draft asked for by anyone else is missing.

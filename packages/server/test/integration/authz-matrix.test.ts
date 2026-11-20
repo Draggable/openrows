@@ -130,6 +130,8 @@ interface Params extends Record<string, string> {
   failedRunId: string;
   hookToken: string;
   buttonFieldId: string;
+  /** A button field the interface's published page exposes, with an automation turned on. */
+  pageButtonFieldId: string;
   /** An AI field of the table, its prompt reading the primary field. */
   aiFieldId: string;
   interfaceId: string;
@@ -579,6 +581,17 @@ const CASES: Record<string, Case> = {
   },
   // A published page's numbers and charts.
   'POST /api/interfaces/:interfaceId/pages/:pageId/data': roles(200, ALL, {}),
+  // The page's button that runs automations, on one of its records (editors, as on the base),
+  // and the files it shows (everyone who reads the page).
+  'POST /api/interfaces/:interfaceId/pages/:pageId/records/:recordId/buttons/:fieldId': {
+    ...roles(200, EDITORS),
+    params: { fieldId: 'pageButtonFieldId' },
+  },
+  'GET /api/interfaces/:interfaceId/pages/:pageId/attachments/:attachmentId': roles(302, ALL),
+  'GET /api/interfaces/:interfaceId/pages/:pageId/attachments/:attachmentId/thumbnail': roles(
+    302,
+    ALL
+  ),
   'GET /api/interfaces/:interfaceId/collaborators': roles(200, CREATORS),
   'POST /api/interfaces/:interfaceId/collaborators': roles(201, CREATORS, {
     email: 'interface-guest@example.test',
@@ -1181,6 +1194,16 @@ describe('cross-tenant authorization matrix', () => {
           options: { label: 'Run', action: 'runAutomation' },
         })
     );
+    const pageButtonField = await inScope(
+      t.db,
+      { userId: owner.id, workspaceId: workspace.id },
+      async (tx) =>
+        createField({ tx, workspaceId: workspace.id, userId: owner.id }, table, {
+          name: 'Approve',
+          type: 'button',
+          options: { label: 'Approve', action: 'runAutomation' },
+        })
+    );
     // AI fields with the workspace's own provider (never reached: the worker answers).
     await t.db.insert(workspaceAiSettings).values({
       workspaceId: workspace.id,
@@ -1494,7 +1517,19 @@ describe('cross-tenant authorization matrix', () => {
       status: 'succeeded',
       depth: 1,
     });
-    // An interface with a published page and a page never published.
+    // An automation started by the page's button (its runs are only queued here).
+    await t.db.insert(automations).values({
+      workspaceId: workspace.id,
+      baseId: base.id,
+      name: 'Matrix button',
+      enabled: true,
+      trigger: { type: 'buttonClicked', tableId: table.id, fieldId: pageButtonField.id },
+      triggerType: 'buttonClicked',
+      tableId: table.id,
+      createdBy: owner.id,
+    });
+    // An interface with a published page and a page never published. The record review shows
+    // the record's files and a button that runs the automation above.
     const [iface] = await t.db
       .insert(interfaces)
       .values({ workspaceId: workspace.id, baseId: base.id, name: 'Matrix' })
@@ -1505,7 +1540,19 @@ describe('cross-tenant authorization matrix', () => {
       tableId: table.id,
       sorts: [],
       fields: [],
-      elements: [],
+      elements: [
+        { id: 'files', type: 'field', x: 0, y: 0, w: 6, h: 2, fieldId: attachmentField.id },
+        {
+          id: 'approve',
+          type: 'button',
+          x: 6,
+          y: 0,
+          w: 3,
+          h: 1,
+          label: 'Approve',
+          action: { type: 'runAutomation', fieldId: pageButtonField.id },
+        },
+      ],
     };
     const [page, draftPage] = await t.db
       .insert(interfacePages)
@@ -1654,6 +1701,7 @@ describe('cross-tenant authorization matrix', () => {
       failedRunId: failedRun.id,
       hookToken,
       buttonFieldId: buttonField.id,
+      pageButtonFieldId: pageButtonField.id,
       aiFieldId: aiField.id,
       interfaceId: iface.id,
       pageId: page.id,

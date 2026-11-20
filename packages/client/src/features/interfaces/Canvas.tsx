@@ -1,6 +1,7 @@
 import {
   type FieldMeta,
   INTERFACE_GRID_COLUMNS,
+  type InterfaceButtonState,
   type InterfaceElement,
   roleAllows,
   type TableMeta,
@@ -43,9 +44,25 @@ export interface ElementContext {
   renderField?:
     | ((element: Extract<InterfaceElement, { type: 'field' }>, field: FieldMeta) => ReactNode)
     | undefined;
-  /** Buttons that run automations can't be clicked here (interface-only viewers). */
-  noAutomations?: boolean | undefined;
+  /**
+   * Buttons that run automations on a page read through the interface's own routes: what the
+   * server answers of each for this viewer (by button field id) and the click, through the page.
+   * Without it (the base's own pages), a click goes through the base.
+   */
+  pageButtons?: PageButtons | undefined;
 }
+
+export interface PageButtons {
+  state: (fieldId: string) => InterfaceButtonState;
+  click: (fieldId: string, recordId: string) => Promise<{ started: number }>;
+}
+
+/** Why a page's button can't be clicked, as its viewer reads it. */
+export const BUTTON_STATE_HINTS: Record<Exclude<InterfaceButtonState, 'ready'>, string> = {
+  readOnly: "Your access to this page doesn't include running its buttons.",
+  noAutomation: 'No automation is turned on for this button.',
+  unavailable: 'This button is no longer available.',
+};
 
 const NO_DATA: ElementData = { data: undefined, fields: undefined, loading: true };
 
@@ -361,21 +378,31 @@ function ElementButton({
     );
   }
   const record = context.record;
-  if (context.noAutomations) {
+  const pageButtons = context.pageButtons;
+  const state = pageButtons ? pageButtons.state(action.fieldId) : 'ready';
+  if (state !== 'ready') {
+    const hintId = `button-hint-${element.id}`;
     return (
-      <Button variant="secondary" disabled title="Not available on shared interfaces yet">
-        <PlayIcon />
-        {element.label}
-      </Button>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Button variant="secondary" disabled aria-describedby={hintId}>
+          <PlayIcon />
+          {element.label}
+        </Button>
+        <span id={hintId} className="text-small text-text-2">
+          {BUTTON_STATE_HINTS[state]}
+        </span>
+      </div>
     );
   }
   const run = async () => {
     if (!record) return;
     setBusy(true);
     try {
-      const { started } = await api.automations.clickButton({
-        params: { tableId: context.table.id, recordId: record.id, fieldId: action.fieldId },
-      });
+      const { started } = pageButtons
+        ? await pageButtons.click(action.fieldId, record.id)
+        : await api.automations.clickButton({
+            params: { tableId: context.table.id, recordId: record.id, fieldId: action.fieldId },
+          });
       if (started > 0)
         toast.success(started === 1 ? 'Automation started' : `${started} automations started`);
       else toast.message('No automation is turned on for this button');

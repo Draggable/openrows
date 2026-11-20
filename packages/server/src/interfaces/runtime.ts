@@ -1,25 +1,33 @@
 import {
+  type ButtonOptions,
   filterElementConditions,
   gridLayoutOf,
   type InterfaceAccess,
+  type InterfaceButtonState,
   type InterfacePageConfig,
   type InterfacePageRecords,
   isInterfaceWritableType,
+  permissionAllows,
   pruneViewQuery,
   publicFieldOptions,
   roleAllows,
   type SharedViewShape,
   sharedViewShape,
+  tablePermissionsOf,
   type UserRole,
   VIEW_LIKE_LAYOUTS,
   viewQuerySchema,
 } from '@openrows/shared';
 import { and, eq, isNull } from 'drizzle-orm';
+import { signedDownload } from '../attachments/service.js';
+import type { ObjectStore } from '../attachments/storage.js';
+import { buttonTargets, clickRecordButton } from '../automations/buttons.js';
 import { compileViewQuery } from '../data/query/compile.js';
 import { recordMatches } from '../data/query/execute.js';
 import { bases, interfaces, type Transaction, tables } from '../db/index.js';
 import type { Entitlements } from '../edition/types.js';
 import { fieldType, type TableRow } from '../fields/service.js';
+import type { Jobs } from '../jobs/send.js';
 import { AppError } from '../lib/errors.js';
 import type { FieldVisibility } from '../realtime/projection.js';
 import {
@@ -27,6 +35,7 @@ import {
   type FieldInfo,
   type SharedViewQuery,
   sharedRecords,
+  sharedViewHasFile,
   tableFields,
   toQueryFields,
   updateRecords,
@@ -39,7 +48,9 @@ import { listInterfaces } from './service.js';
  * the fields the page shows, links and people as names, the page filter applied on the server
  * with `me` as the viewer. Writes go through the RecordService with the viewer's role, limited
  * to what the page offers: a record review's editable field elements on a record the page lists,
- * and a form page's fields. Interface-only collaborators reach nothing else.
+ * and a form page's fields. A record review's buttons that run automations click through the page
+ * too, and the files a page shows download through it, each checked against the page on every
+ * request. Interface-only collaborators reach nothing else.
  */
 
 export interface PageContext {
@@ -273,6 +284,7 @@ export async function pageRecords(
     ? await sharedRecords(read, page.shared, q)
     : { records: [], offset: q.offset, total: 0 };
   const writable = writableFields(config, page.fields, ctx.role, page.hidden);
+  const buttons = await buttonStates(ctx, config, page);
   return {
     table: { id: page.table.id, name: page.table.name },
     fields: page.fields
@@ -281,10 +293,120 @@ export async function pageRecords(
     ...answer,
     editable: config.layout === 'recordReview' ? [...writable] : [],
     canSubmit: config.layout === 'form' && roleAllows(ctx.role, 'record:create'),
+    buttons: Object.fromEntries(buttons),
     ...(page.shape.shape?.kanban ? { kanban: page.shape.shape.kanban } : {}),
     ...(page.shape.shape?.calendar ? { calendar: page.shape.shape.calendar } : {}),
     ...(page.shape.shape?.timeline ? { timeline: page.shape.shape.timeline } : {}),
   };
+}
+
+/** The button field ids of a record review page's buttons that run automations. */
+function pageButtons(config: InterfacePageConfig): string[] {
+  if (config.layout !== 'recordReview') return [];
+  return [
+    ...new Set(
+      config.elements.flatMap((el) =>
+        el.type === 'button' && el.action.type === 'runAutomation' ? [el.action.fieldId] : []
+      )
+    ),
+  ];
+}
+
+/** Whether the viewer may edit the table's records: their role and its "edit records" rule. */
+function mayEditRecords(ctx: PageContext, table: TableRow): boolean {
+  return (
+    roleAllows(ctx.role, 'record:update') &&
+    permissionAllows(tablePermissionsOf(table.permissions).editRecords, {
+      role: ctx.role,
+      userId: ctx.userId,
+    })
+  );
+}
+
+/** The page's button field, if it still runs automations and the viewer may see it. */
+function liveButton(page: CompiledPage, fieldId: string): FieldInfo | undefined {
+  const field = page.fields.find((f) => f.row.id === fieldId);
+  if (!field || page.hidden.has(fieldId) || fieldType(field.row) !== 'button') return undefined;
+  return (field.options as ButtonOptions).action === 'runAutomation' ? field : undefined;
+}
+
+/** What the viewer finds on each of the page's buttons that run automations. */
+async function buttonStates(
+  ctx: PageContext,
+  config: InterfacePageConfig,
+  page: CompiledPage
+): Promise<[string, InterfaceButtonState][]> {
+  const editable = mayEditRecords(ctx, page.table);
+  const states: [string, InterfaceButtonState][] = [];
+  for (const fieldId of pageButtons(config)) {
+    const field = liveButton(page, fieldId);
+    if (!field) states.push([fieldId, 'unavailable']);
+    else if (!editable) states.push([fieldId, 'readOnly']);
+    else if ((await buttonTargets(ctx.tx, page.table.id, fieldId)).length === 0) {
+      states.push([fieldId, 'noAutomation']);
+    } else states.push([fieldId, 'ready']);
+  }
+  return states;
+}
+
+/**
+ * Clicks a record review page's button that runs automations, on a record the page lists: only a
+ * button the page has, for a viewer who may edit the table's records (role, then the click's own
+ * checks: the table's "edit records" permission, a live record), starting the automations a
+ * click on the base starts. A click that would start nothing is refused.
+ */
+export async function clickPageButton(
+  ctx: PageContext & { jobs: Jobs },
+  config: InterfacePageConfig,
+  recordId: string,
+  fieldId: string
+): Promise<{ started: number }> {
+  if (!pageButtons(config).includes(fieldId)) {
+    throw new AppError('NOT_FOUND', { detail: 'No such button on this page.' });
+  }
+  if (!roleAllows(ctx.role, 'record:update')) {
+    throw new AppError('FORBIDDEN', {
+      detail: "You can view this page but can't run its buttons.",
+    });
+  }
+  const page = await compilePage(ctx, config, {});
+  const field = liveButton(page, fieldId);
+  if (!field) throw new AppError('NOT_FOUND', { detail: 'This button is no longer available.' });
+  if (!(await recordMatches(ctx.tx, page.table, page.shared.compiled, recordId))) {
+    throw new AppError('NOT_FOUND', { detail: 'No such record on this page.' });
+  }
+  return clickRecordButton(
+    {
+      tx: ctx.tx,
+      workspaceId: ctx.workspaceId,
+      table: page.table,
+      who: { role: ctx.role, userId: ctx.userId },
+      jobs: ctx.jobs,
+    },
+    field,
+    recordId,
+    { requireTarget: true }
+  );
+}
+
+/**
+ * A short-lived signed URL of a file the page shows: in a field the page shows this viewer (less
+ * hidden ones), on a record the page lists (its filter, `me` as the viewer). Pages that list no
+ * records (dashboards, forms) have no files. Anything else is missing, never a hint of the rest.
+ */
+export async function pageFileUrl(
+  ctx: PageContext,
+  config: InterfacePageConfig,
+  store: ObjectStore | undefined,
+  attachmentId: string,
+  thumbnail: boolean
+): Promise<string> {
+  const page = await compilePage(ctx, config, {});
+  const read = { tx: ctx.tx, workspaceId: ctx.workspaceId, table: page.table };
+  if (!page.shape.lists || !(await sharedViewHasFile(read, page.shared, attachmentId))) {
+    throw new AppError('NOT_FOUND', { detail: 'No such file on this page.' });
+  }
+  return signedDownload(read, store, attachmentId, thumbnail);
 }
 
 function refuseFields(ids: string[], what: string): void {

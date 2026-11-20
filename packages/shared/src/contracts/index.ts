@@ -1243,6 +1243,16 @@ export const contracts = {
       response: null,
       status: 204,
     }),
+    clickPageButton: e({
+      method: 'POST',
+      path: '/api/interfaces/:interfaceId/pages/:pageId/records/:recordId/buttons/:fieldId',
+      summary:
+        "Click a published page's button that runs automations, on one of its records (editors who may edit the record)",
+      tag: 'interfaces',
+      params: { interfaceId: z.uuid(), pageId: z.uuid(), recordId: z.uuid(), fieldId: z.uuid() },
+      response: AutomationButtonClickSchema,
+      status: 200,
+    }),
     submitPageForm: e({
       method: 'POST',
       path: '/api/interfaces/:interfaceId/pages/:pageId/submissions',
@@ -2454,6 +2464,20 @@ export const downloads = {
     method: 'GET',
     path: '/api/shared/:shareToken/views/:viewId/attachments/:attachmentId/thumbnail',
     query: z.object({}),
+  },
+  /**
+   * A file a page shows, on one of its records: redirects to a short-lived signed URL, checked
+   * against the page on every request (`draft=true`: the saved draft's, its creators only).
+   */
+  interfaceAttachment: {
+    method: 'GET',
+    path: '/api/interfaces/:interfaceId/pages/:pageId/attachments/:attachmentId',
+    query: z.object({ draft: z.enum(['true']).optional() }),
+  },
+  interfaceAttachmentThumbnail: {
+    method: 'GET',
+    path: '/api/interfaces/:interfaceId/pages/:pageId/attachments/:attachmentId/thumbnail',
+    query: z.object({ draft: z.enum(['true']).optional() }),
   },
   /** A public form's cover or logo image: redirects to a short-lived signed URL. */
   formImage: {
