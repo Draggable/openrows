@@ -3,6 +3,8 @@ import { and, eq, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_COOKIE } from '../../src/auth/session-token.js';
 import { tableSyncRecords, tableSyncs, tables, workspaceMembers } from '../../src/db/index.js';
+import { ossEntitlements } from '../../src/edition/oss.js';
+import type { EntitlementsProvider } from '../../src/edition/types.js';
 import { runSyncJob, type SyncRunDeps } from '../../src/syncs/run.js';
 import { testApp } from '../helpers/app.js';
 import { useTestDb } from '../helpers/db.js';
@@ -65,7 +67,7 @@ describe('two-way synced tables', () => {
   /** "Sync now" on one source (unless a run is queued), run as the worker would. */
   async function syncNow(
     sync: TableSync,
-    opts: Pick<SyncRunDeps, 'batchSize'> & { as?: string } = {}
+    opts: Pick<SyncRunDeps, 'batchSize' | 'entitlements'> & { as?: string } = {}
   ) {
     const as = opts.as ?? owner;
     let current = (await sources(sync.tableId, as)).find((s) => s.id === sync.id);
@@ -77,7 +79,11 @@ describe('two-way synced tables', () => {
     const queued = current.runs.find((r) => r.status === 'queued');
     if (!queued) throw new Error('no queued run');
     return runSyncJob(
-      { db: t.appDb, ...(opts.batchSize ? { batchSize: opts.batchSize } : {}) },
+      {
+        db: t.appDb,
+        ...(opts.batchSize ? { batchSize: opts.batchSize } : {}),
+        ...(opts.entitlements ? { entitlements: opts.entitlements } : {}),
+      },
       { workspaceId: homes.get(sync.id) ?? workspaceId, syncId: sync.id, runId: queued.id }
     );
   }
@@ -719,5 +725,116 @@ describe('two-way synced tables', () => {
     expect(await syncNow(first)).toMatchObject({ ...quiet, unchanged: 1 });
     expect((await cell(south, 'K'))?.[0]).toBe(6);
     expect((await cell(north, 'K'))?.[0]).toBe(1);
+  });
+
+  /**
+   * Runs `during` once, while a run is under way: on the run's `nth` look-up of its home
+   * workspace's plan (each batch's and the run's end each make one), before that step writes.
+   */
+  function midRun(nth: number, during: () => Promise<void>): EntitlementsProvider {
+    let calls = 0;
+    return {
+      id: 'test',
+      forWorkspace: async (id, tx) => {
+        if (id === workspaceId && ++calls === nth) await during();
+        return ossEntitlements.forWorkspace(id, tx);
+      },
+    };
+  }
+
+  it('keeps a source record whose synced record was restored while the run was under way', async () => {
+    const tasks = await sourceTable(crm, 'Errands', [
+      { name: 'M', points: 1 },
+      { name: 'N', points: 2 },
+    ]);
+    const sync = await syncedFrom(tasks, { twoWay: true });
+    const synced = await meta(sync.tableId);
+    const m = await byName(synced, 'M');
+    await ok(remove(synced, m), 204);
+    // Restored after the run found it deleted, before the run's end.
+    const restore = midRun(2, async () => {
+      await ok(json('POST', `/api/tables/${synced.id}/records/restore`, { recordIds: [m.id] }));
+    });
+    expect(await syncNow(sync, { entitlements: restore })).toMatchObject({
+      ...quiet,
+      removedFromSource: 0,
+    });
+    expect(Object.keys(await cells(tasks)).sort()).toEqual(['M', 'N']);
+    expect(Object.keys(await cells(synced)).sort()).toEqual(['M', 'N']);
+    // Both sides still have it, and later runs keep it and write nothing.
+    expect(await syncNow(sync)).toMatchObject({ ...quiet, unchanged: 2 });
+    expect(Object.keys(await cells(tasks)).sort()).toEqual(['M', 'N']);
+  });
+
+  it("doesn't fail when a record that left the source is deleted here during the run", async () => {
+    const tasks = await sourceTable(crm, 'Visits', [
+      { name: 'O', points: 1 },
+      { name: 'P', points: 2 },
+    ]);
+    const sync = await syncedFrom(tasks, { twoWay: true });
+    const synced = await meta(sync.tableId);
+    await ok(remove(tasks, await byName(tasks, 'O')), 204);
+    const o = await byName(synced, 'O');
+    const during = midRun(2, async () => {
+      await ok(remove(synced, o), 204);
+    });
+    expect(await syncNow(sync, { entitlements: during })).toMatchObject({
+      ...quiet,
+      unchanged: 1,
+    });
+    expect(Object.keys(await cells(tasks))).toEqual(['P']);
+    expect(Object.keys(await cells(synced))).toEqual(['P']);
+    expect(await syncNow(sync)).toMatchObject({ ...quiet, unchanged: 1 });
+  });
+
+  it('never overwrites a source edit made while the run decides', async () => {
+    const tasks = await sourceTable(crm, 'Tickets', [{ name: 'Z', points: 1 }]);
+    const sync = await syncedFrom(tasks, { twoWay: true });
+    const synced = await meta(sync.tableId);
+    await ok(patch(synced, await byName(synced, 'Z'), { Points: 10 }));
+    const z = await byName(tasks, 'Z');
+    // Someone edits the source record after the run read it, before the write-back: their edit
+    // waits for the run's batch and lands after it, so it is the one that stays.
+    let edit: Promise<Response> | undefined;
+    // The look-ups: the batch's (1), then the source's before its write-back (2).
+    const provider = midRun(2, async () => {
+      edit = Promise.resolve(patch(tasks, z, { Points: 99 }));
+      await new Promise((r) => setTimeout(r, 300));
+    });
+    const run = await syncNow(sync, { entitlements: provider });
+    expect(run).toMatchObject({ status: 'succeeded' });
+    if (!edit) throw new Error('no edit was made');
+    await ok(edit);
+    expect((await cell(tasks, 'Z'))?.[0]).toBe(99);
+    expect(await syncNow(sync)).toMatchObject({ ...quiet, updated: 1 });
+    expect((await cell(synced, 'Z'))?.[0]).toBe(99);
+    expect(await syncNow(sync)).toMatchObject({ ...quiet, unchanged: 1 });
+  });
+
+  it('pauses, rather than fails every run, when a write-back needs a select option its creator may not add', async () => {
+    const tasks = await sourceTable(crm, 'Bugs', [
+      { name: 'AA', points: 1 },
+      { name: 'AB', points: 2 },
+    ]);
+    const sync = await syncedFrom(tasks, { twoWay: true });
+    const synced = await meta(sync.tableId);
+    const member = await addMember(t.db, workspaceId, 'editor');
+    await t.db.update(tableSyncs).set({ createdBy: member.id }).where(eq(tableSyncs.id, sync.id));
+    // "Done" leaves the source's options; the synced field still has it.
+    const status = (await meta(tasks.id)).fields.find((f) => f.name === 'Status');
+    const choices =
+      (status?.options as { choices?: { name: string }[] } | undefined)?.choices ?? [];
+    await ok(
+      json('PATCH', `/api/fields/${fieldId(tasks, 'Status')}`, {
+        options: { choices: choices.filter((c) => c.name !== 'Done') },
+      })
+    );
+    await ok(patch(synced, await byName(synced, 'AA'), { Status: 'Done' }));
+    expect(await syncNow(sync)).toEqual({ status: 'paused', reason: 'write_access_lost' });
+    expect((await cell(tasks, 'AA'))?.[2]).toBe('Todo');
+    // Resumed by the owner, who may add the option: it goes back.
+    await ok(json('PATCH', `/api/tables/${sync.tableId}/sync`, { paused: false }));
+    expect(await syncNow(sync)).toMatchObject({ ...quiet, writtenBack: 1, unchanged: 1 });
+    expect((await cell(tasks, 'AA'))?.[2]).toBe('Done');
   });
 });

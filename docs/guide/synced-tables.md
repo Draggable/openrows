@@ -95,7 +95,7 @@ A value written back that the source already holds changes nothing. After a run 
 ### Deleting records
 
 - **A record deleted in the source** is deleted in the synced table, as for a one-way sync. An edit of it in the synced table doesn't bring it back, and nothing is written to the source.
-- **A record deleted in the synced table** is deleted in the source at the end of the next run, as long as the sync's creator may delete records there; otherwise the sync pauses (see [Permissions](#permissions)) and the synced record stays deleted. An edit of the source record meanwhile doesn't bring it back. Restoring the synced record from the trash before that run cancels the delete.
+- **A record deleted in the synced table** is deleted in the source at the end of the next run, as long as the sync's creator may delete records there; otherwise the sync pauses (see [Permissions](#permissions)) and the synced record stays deleted. An edit of the source record meanwhile doesn't bring it back. Restoring the synced record from the trash before that run ends cancels the delete.
 - **A view's filter**: when a source record no longer matches the view, it leaves the synced table, but it is never deleted from the source table. It comes back if it matches the view again. Deleting a synced record of a view still deletes it in the source table.
 
 As for one-way syncs, deletes happen only at the end of a run, once the whole source has been read. A run that fails or pauses partway deletes nothing on either side, and the next run picks up from there; a run over unchanged tables writes nothing on either side.
@@ -105,7 +105,7 @@ As for one-way syncs, deletes happen only at the end of a run, once the whole so
 A two-way run writes to the source as its creator, with their access as it is at that moment, exactly as if they made the change themselves:
 
 - Turning it on needs edit access to the source's records: an editor or more there, allowed to edit records by the table's permissions. Without it, the change is refused. Resuming a two-way source checks the same for the person resuming it.
-- If the creator can no longer edit the source's records (or a field being written back, or delete a record that was deleted in the synced table), the run pauses with **Can no longer edit the source** and writes nothing more to the source. Changes it already wrote in that run stay; the synced table keeps its edits and deletes, which go back once the sync is resumed by someone who may make them.
+- If the creator can no longer edit the source's records (or a field being written back, add a select option a value written back needs, or delete a record that was deleted in the synced table), the run pauses with **Can no longer edit the source** and writes nothing more to the source. Changes it already wrote in that run stay; the synced table keeps its edits and deletes, which go back once the sync is resumed by someone who may make them.
 - A run never writes into a base the creator can't edit, including a source in another base or workspace.
 
 Anyone who can edit the synced table can edit the source's records through it, within the creator's rights in the source. Turn two-way on only for synced tables whose editors should be able to do that.
@@ -147,7 +147,7 @@ The table header shows the sync's state and its last runs. A paused sync says wh
 - **Access lost**: its creator can no longer read the source, edit the synced table or use their connected account. Resuming makes you the sync's reader, with your own access.
 - **Source deleted**: the source table or view was deleted.
 - **Too many records**: the source has more than 100,000 records.
-- **Can no longer edit the source** (two-way): its creator can no longer edit the source's records, a field being written back, or delete a record deleted in the synced table. Nothing more was written to the source. Resuming makes you the sync's reader and writer, if you may edit the source.
+- **Can no longer edit the source** (two-way): its creator can no longer edit the source's records or a field being written back, add a select option a value written back needs, or delete a record deleted in the synced table. Nothing more was written to the source. Resuming makes you the sync's reader and writer, if you may edit the source.
 
 A failed run keeps the sync active and says what went wrong, such as a URL that answers with a web page or a key column that left the source. The next run tries again.
 
