@@ -22,7 +22,7 @@ import {
   outboundPolicy,
   type ResolvedAddress,
 } from '../../src/lib/safe-fetch/index.js';
-import { runSyncJob } from '../../src/syncs/run.js';
+import { runSyncJob, type SyncRunDeps } from '../../src/syncs/run.js';
 import { createSyncSources, type SyncSources } from '../../src/syncs/sources/index.js';
 import { testApp } from '../helpers/app.js';
 import { createDatabase, useTestDb } from '../helpers/db.js';
@@ -48,6 +48,7 @@ describe('synced tables from CSV URLs and Postgres', () => {
   // The fixture HTTP server: /people.csv (ETag), /html, /redirect (to the metadata address).
   let csv = 'id,Name,Active\n1,Ada,true\n2,Bob,false\n3,Cy,true\n';
   let etag = '"v1"';
+  let cutShort = false;
   const requests: { path: string; ifNoneMatch: string | undefined }[] = [];
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     requests.push({ path: req.url ?? '', ifNoneMatch: req.headers['if-none-match'] });
@@ -64,6 +65,29 @@ describe('synced tables from CSV URLs and Postgres', () => {
     if (req.url === '/big.csv') {
       res.writeHead(200, { 'content-type': 'text/csv' });
       res.end(`n\n${Array.from({ length: 10_001 }, (_, i) => i).join('\n')}\n`);
+      return;
+    }
+    if (req.url === '/huge.csv') {
+      // One row past MAX_SYNC_RECORDS, sent in pieces.
+      res.writeHead(200, { 'content-type': 'text/csv' });
+      res.write('n\n');
+      for (let from = 0; from < 100_001; from += 10_000) {
+        const to = Math.min(from + 10_000, 100_001);
+        res.write(`${Array.from({ length: to - from }, (_, i) => from + i).join('\n')}\n`);
+      }
+      res.end();
+      return;
+    }
+    if (req.url === '/cut.csv') {
+      const full = 'id,Name\n1,Ada\n2,Bob\n3,Cy\n';
+      res.writeHead(200, { 'content-type': 'text/csv', 'content-length': String(full.length) });
+      if (!cutShort) {
+        res.end(full);
+        return;
+      }
+      // The connection drops after the first row.
+      res.write('id,Name\n1,Ada\n');
+      setTimeout(() => res.socket?.destroy(), 20);
       return;
     }
     if (req.url === '/html') {
@@ -126,8 +150,22 @@ describe('synced tables from CSV URLs and Postgres', () => {
       )
       .sort((a, b) => String(a['Sync source']).localeCompare(String(b['Sync source'])));
   }
-  /** Queues "Sync now" (unless a run is queued) and runs it as the worker would. */
-  async function syncNow(sync: TableSync, with_: SyncSources = sources) {
+  /** The table's live records, counted. */
+  const total = async (tableId: string) =>
+    (
+      await ok<{ total: number }>(
+        json('POST', `/api/tables/${tableId}/records/query`, { limit: 1, count: true })
+      )
+    ).total;
+  /**
+   * Queues "Sync now" (unless a run is queued) and runs it as the worker would (with the
+   * engine's limits changed by `limits`: a lower cap).
+   */
+  async function syncNow(
+    sync: TableSync,
+    with_: SyncSources = sources,
+    limits: Pick<SyncRunDeps, 'maxRecords'> = {}
+  ) {
     let current = await ok<TableSync>(json('GET', `/api/tables/${sync.tableId}/sync`));
     if (!current.runs.some((r) => r.status === 'queued')) {
       current = await ok<TableSync>(json('POST', `/api/tables/${sync.tableId}/sync/run`));
@@ -135,7 +173,7 @@ describe('synced tables from CSV URLs and Postgres', () => {
     const queued = current.runs.find((r) => r.status === 'queued');
     if (!queued) throw new Error('no queued run');
     return runSyncJob(
-      { db: t.appDb, sources: with_ },
+      { db: t.appDb, sources: with_, ...limits },
       { workspaceId, syncId: sync.id, runId: queued.id }
     );
   }
@@ -285,7 +323,7 @@ describe('synced tables from CSV URLs and Postgres', () => {
     expect(after.status).toBe('active');
   });
 
-  it('pauses a CSV past 10,000 rows', async () => {
+  it('syncs a CSV past 10,000 rows, re-runs as a no-op and pauses past the cap', async () => {
     const sync = await ok<TableSync>(
       json('POST', `/api/bases/${base.id}/syncs`, {
         source: { kind: 'csv', url: `${httpBase}/big.csv` },
@@ -294,8 +332,66 @@ describe('synced tables from CSV URLs and Postgres', () => {
       }),
       201
     );
+    expect(await syncNow(sync)).toEqual({
+      status: 'succeeded',
+      created: 10_001,
+      updated: 0,
+      deleted: 0,
+      unchanged: 0,
+      skipped: 0,
+    });
+    expect(await total(sync.tableId)).toBe(10_001);
+    expect(await syncNow(sync)).toMatchObject({
+      status: 'succeeded',
+      created: 0,
+      updated: 0,
+      deleted: 0,
+      unchanged: 10_001,
+    });
+    // Past the cap (lowered here): the sync pauses and keeps its records.
+    expect(await syncNow(sync, sources, { maxRecords: 10_000 })).toEqual({
+      status: 'paused',
+      reason: 'too_many_records',
+    });
+    expect(await total(sync.tableId)).toBe(10_001);
+  });
+
+  it('pauses a CSV past 100,000 rows before writing anything', async () => {
+    const sync = await ok<TableSync>(
+      json('POST', `/api/bases/${base.id}/syncs`, {
+        source: { kind: 'csv', url: `${httpBase}/huge.csv` },
+        columns: [{ name: 'n' }],
+        schedule: 'manual',
+      }),
+      201
+    );
     expect(await syncNow(sync)).toEqual({ status: 'paused', reason: 'too_many_records' });
-    expect(await rows(sync.tableId)).toEqual([]);
+    expect(await total(sync.tableId)).toBe(0);
+    const status = await ok<TableSync>(json('GET', `/api/tables/${sync.tableId}/sync`));
+    expect(status.runs[0]?.error).toBe('The source has more than 100,000 records.');
+  });
+
+  it('fails a run whose download is cut short, deleting nothing', async () => {
+    const sync = await ok<TableSync>(
+      json('POST', `/api/bases/${base.id}/syncs`, {
+        source: { kind: 'csv', url: `${httpBase}/cut.csv` },
+        columns: [{ name: 'Name' }, { name: 'id' }],
+        keyColumn: 'id',
+        schedule: 'manual',
+      }),
+      201
+    );
+    expect(await syncNow(sync)).toMatchObject({ status: 'succeeded', created: 3 });
+    cutShort = true;
+    try {
+      const outcome = await syncNow(sync);
+      expect(outcome).toMatchObject({ status: 'failed' });
+      expect(outcome.status === 'failed' && outcome.error).toMatch(/Couldn't download the file/);
+      expect((await rows(sync.tableId)).map((r) => r['Name'])).toEqual(['Ada', 'Bob', 'Cy']);
+    } finally {
+      cutShort = false;
+    }
+    expect(await syncNow(sync)).toMatchObject({ status: 'succeeded', unchanged: 3, deleted: 0 });
   });
 
   it('refuses private, loopback and metadata URLs and redirects to them', async () => {
@@ -432,6 +528,75 @@ describe('synced tables from CSV URLs and Postgres', () => {
     });
     expect(await syncNow(sync)).toMatchObject({ status: 'succeeded', unchanged: 2, updated: 0 });
     await admin.query("INSERT INTO people VALUES (3, 'Cy', true, '2026-03-04', null)");
+  });
+
+  it('syncs a Postgres table past 10,000 rows and pauses past the cap', async () => {
+    await admin.query(`
+      CREATE TABLE many AS SELECT g AS id, 'Row ' || g AS label FROM generate_series(1, 10001) g;
+      ALTER TABLE many ADD PRIMARY KEY (id);
+      GRANT SELECT ON many TO ${reader};
+    `);
+    const sync = await ok<TableSync>(
+      json('POST', `/api/bases/${base.id}/syncs`, {
+        source: { kind: 'postgres', connectionString: pgConn, table: 'public.many' },
+        columns: [{ name: 'label' }, { name: 'id', type: 'number' }],
+        keyColumn: 'id',
+        schedule: 'manual',
+      }),
+      201
+    );
+    expect(await syncNow(sync)).toMatchObject({ status: 'succeeded', created: 10_001 });
+    expect(await total(sync.tableId)).toBe(10_001);
+    await admin.query(
+      "UPDATE many SET label = 'Changed' WHERE id = 5; DELETE FROM many WHERE id = 7"
+    );
+    expect(await syncNow(sync)).toMatchObject({
+      status: 'succeeded',
+      created: 0,
+      updated: 1,
+      deleted: 1,
+      unchanged: 9_999,
+    });
+    expect(await syncNow(sync, sources, { maxRecords: 9_999 })).toEqual({
+      status: 'paused',
+      reason: 'too_many_records',
+    });
+    expect(await total(sync.tableId)).toBe(10_000);
+  });
+
+  it("checks a database host's address again when the run connects", async () => {
+    // Public when the sync is made, private when it runs: the run's own check refuses it.
+    const answers: ResolvedAddress[] = [{ address: '93.184.215.14', family: 4 }];
+    const resolve = async () => answers;
+    const policy = outboundPolicy();
+    const rebinding: SyncSources = {
+      ...sources,
+      postgres: { hostCheck: createHostCheck(policy, { resolve }), requireTls: true },
+    };
+    const rebindApp = testApp({ db: t.appDb, syncSources: rebinding }).app;
+    const sync = await ok<TableSync>(
+      json(
+        'POST',
+        `/api/bases/${base.id}/syncs`,
+        {
+          source: {
+            kind: 'postgres',
+            connectionString: 'postgres://u:p@db.example.com/crm',
+            table: 'people',
+          },
+          columns: [{ name: 'name' }],
+          schedule: 'manual',
+        },
+        rebindApp
+      ),
+      201
+    );
+    answers[0] = { address: '10.1.2.3', family: 4 };
+    const outcome = await syncNow(sync, rebinding);
+    expect(outcome).toMatchObject({ status: 'failed' });
+    expect(outcome.status === 'failed' && outcome.error).toMatch(/private or reserved address/);
+    expect(outcome.status === 'failed' && outcome.error).not.toContain('10.1.2.3');
+    expect(await total(sync.tableId)).toBe(0);
   });
 
   it('syncs one SELECT query and never writes to the source', async () => {

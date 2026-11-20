@@ -72,7 +72,18 @@ export interface SafeFetchInit {
   /** Per connection, until the socket (and TLS) is up (default 5 s). */
   connectTimeoutMs?: number;
   signal?: AbortSignal;
+  /**
+   * Streams the final response's body instead of buffering it: called with the response's
+   * status and headers (after any redirects), it may return a sink that gets each chunk of the
+   * body as it arrives (the reading pauses while a returned promise settles); `body` is then
+   * empty. `maxBytes`, the deadline and every address rule apply as they do to a buffered body.
+   * An error thrown here or by the sink (or a rejected promise) ends the request with it.
+   */
+  stream?: (head: { status: number; headers: Headers }) => BodySink | null | undefined;
 }
+
+/** A streamed body's chunks, in order. */
+export type BodySink = (chunk: Buffer) => void | Promise<void>;
 
 export interface SafeResponse {
   status: number;
@@ -328,10 +339,6 @@ export function createSafeFetch(policy: OutboundPolicy, deps: SafeFetchDeps = {}
           url = next;
           continue;
         }
-        // HEAD has no body, whatever Content-Length says.
-        if (method === 'HEAD') res.destroy();
-        const data =
-          method === 'HEAD' ? Buffer.alloc(0) : await readBody(res, maxBytes, controller.signal);
         const responseHeaders = new Headers();
         for (let i = 0; i + 1 < res.rawHeaders.length; i += 2) {
           try {
@@ -340,6 +347,19 @@ export function createSafeFetch(policy: OutboundPolicy, deps: SafeFetchDeps = {}
             // A header fetch's Headers refuses is left out.
           }
         }
+        // HEAD has no body, whatever Content-Length says.
+        if (method === 'HEAD') res.destroy();
+        let sink: BodySink | null | undefined;
+        try {
+          sink = method === 'HEAD' ? null : init.stream?.({ status, headers: responseHeaders });
+        } catch (err) {
+          res.destroy();
+          throw err;
+        }
+        const data =
+          method === 'HEAD'
+            ? Buffer.alloc(0)
+            : await readBody(res, maxBytes, controller.signal, sink ?? undefined);
         return {
           status,
           statusText: res.statusMessage ?? '',
@@ -455,10 +475,12 @@ function send(
   });
 }
 
+/** The body, up to `maxBytes`: buffered, or passed chunk by chunk to `sink` (then empty). */
 function readBody(
   res: http.IncomingMessage,
   maxBytes: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  sink?: BodySink
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const tooLarge = () =>
@@ -471,6 +493,8 @@ function readBody(
     }
     const chunks: Buffer[] = [];
     let size = 0;
+    // The sink's last pending chunk: the end waits for it.
+    let pending: Promise<void> = Promise.resolve();
     const onAbort = () => {
       res.destroy();
       reject(signal.reason);
@@ -481,19 +505,51 @@ function readBody(
     }
     signal.addEventListener('abort', onAbort, { once: true });
     const done = () => signal.removeEventListener('abort', onAbort);
+    const fail = (err: unknown) => {
+      done();
+      res.destroy();
+      reject(err);
+    };
     res.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > maxBytes) {
-        done();
-        res.destroy();
-        reject(tooLarge());
+        fail(tooLarge());
         return;
       }
-      chunks.push(chunk);
+      if (!sink) {
+        chunks.push(chunk);
+        return;
+      }
+      let result: void | Promise<void>;
+      try {
+        result = sink(chunk);
+      } catch (err) {
+        fail(err);
+        return;
+      }
+      if (result instanceof Promise) {
+        res.pause();
+        pending = result.then(
+          () => {
+            res.resume();
+          },
+          (err: unknown) => {
+            fail(err);
+            throw err;
+          }
+        );
+        // Handled by `fail` (and by the end, which waits for it).
+        pending.catch(() => {});
+      }
     });
     res.on('end', () => {
-      done();
-      resolve(Buffer.concat(chunks));
+      pending.then(
+        () => {
+          done();
+          resolve(sink ? Buffer.alloc(0) : Buffer.concat(chunks));
+        },
+        () => {}
+      );
     });
     res.on('error', (err) => {
       done();

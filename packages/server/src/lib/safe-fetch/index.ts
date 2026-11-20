@@ -6,6 +6,7 @@ export {
   parseRule,
 } from './address.js';
 export {
+  type BodySink,
   createHostCheck,
   createSafeFetch,
   createUrlCheck,

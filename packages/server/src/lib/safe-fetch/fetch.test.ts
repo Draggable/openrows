@@ -455,6 +455,87 @@ describe('safeFetch: size and time limits', () => {
   });
 });
 
+describe('safeFetch: streamed bodies', () => {
+  it("hands the final response's chunks to the sink, pausing for its promises", async () => {
+    const heads: number[] = [];
+    let bytes = 0;
+    let busy = false;
+    const res = await client()(`http://${HOST}:${httpPort}/redirect/1`, {
+      stream: (head) => {
+        heads.push(head.status);
+        expect(head.headers.get('content-type')).toBe('application/json');
+        return async (chunk) => {
+          expect(busy).toBe(false);
+          busy = true;
+          bytes += chunk.length;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          busy = false;
+        };
+      },
+    });
+    expect(heads).toEqual([200]);
+    expect(res.body.length).toBe(0);
+    expect(bytes).toBeGreaterThan(0);
+    const big = await client()(`http://${HOST}:${httpPort}/big`, {
+      maxBytes: 4 * 1024 * 1024,
+      stream: () => async () => {},
+    });
+    expect(big.body.length).toBe(0);
+  });
+
+  it('keeps the cap, the deadline and the address rules', async () => {
+    let streamed = 0;
+    const sink = () => (chunk: Buffer) => {
+      streamed += chunk.length;
+    };
+    const tooLarge = await failure(
+      client()(`http://${HOST}:${httpPort}/big`, { maxBytes: 256 * 1024, stream: sink })
+    );
+    expect(tooLarge.code).toBe('RESPONSE_TOO_LARGE');
+    expect(streamed).toBeLessThanOrEqual(256 * 1024);
+    const declared = await failure(
+      client()(`http://${HOST}:${httpPort}/big-declared`, { stream: sink })
+    );
+    expect(declared.code).toBe('RESPONSE_TOO_LARGE');
+    const slow = await failure(
+      client()(`http://${HOST}:${httpPort}/slow`, { timeoutMs: 300, stream: sink })
+    );
+    expect(slow.code).toBe('TIMEOUT');
+    const metadata = await failure(
+      client()(`http://${HOST}:${httpPort}/to-metadata`, { stream: sink })
+    );
+    expect(metadata.code).toBe('ADDRESS_NOT_ALLOWED');
+  });
+
+  it("ends the request with the head callback's or the sink's error", async () => {
+    const refused = new Error('not this one');
+    await expect(
+      client()(`http://${HOST}:${httpPort}/echo`, {
+        stream: () => {
+          throw refused;
+        },
+      })
+    ).rejects.toBe(refused);
+    const enough = new Error('enough');
+    await expect(
+      client()(`http://${HOST}:${httpPort}/big`, {
+        maxBytes: 4 * 1024 * 1024,
+        stream: () => () => {
+          throw enough;
+        },
+      })
+    ).rejects.toBe(enough);
+    await expect(
+      client()(`http://${HOST}:${httpPort}/big`, {
+        maxBytes: 4 * 1024 * 1024,
+        stream: () => async () => {
+          throw enough;
+        },
+      })
+    ).rejects.toBe(enough);
+  });
+});
+
 describe('createUrlCheck: the same rules, without connecting (#107)', () => {
   const check = (config: Partial<OutboundConfig> = {}) =>
     createUrlCheck(

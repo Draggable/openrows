@@ -1,9 +1,12 @@
 import type { Base, RecordData as RecordT, TableMeta, TableSync } from '@openrows/shared';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import pg from 'pg';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_COOKIE } from '../../src/auth/session-token.js';
 import { tableSyncs, workspaceMembers } from '../../src/db/index.js';
-import { runSyncJob } from '../../src/syncs/run.js';
+import { ossEntitlements } from '../../src/edition/oss.js';
+import type { EntitlementsProvider } from '../../src/edition/types.js';
+import { runSyncJob, type SyncRunDeps, syncRunLockName } from '../../src/syncs/run.js';
 import { scheduleDueSyncs } from '../../src/syncs/service.js';
 import { testApp } from '../helpers/app.js';
 import { useTestDb } from '../helpers/db.js';
@@ -67,6 +70,28 @@ describe('synced tables', () => {
     await ok<TableSync>(json('POST', `/api/tables/${sync.tableId}/sync/run`));
     return run(sync);
   }
+  /** "Sync now", run with the engine's limits changed (a lower cap, smaller batches). */
+  async function syncNowWith(
+    sync: TableSync,
+    limits: Pick<SyncRunDeps, 'maxRecords' | 'batchSize'>
+  ) {
+    const current = await ok<TableSync>(json('POST', `/api/tables/${sync.tableId}/sync/run`));
+    const queued = current.runs.find((r) => r.status === 'queued');
+    if (!queued) throw new Error('no queued run');
+    return runSyncJob(
+      { db: t.appDb, ...limits },
+      { workspaceId: workspaceOf(sync), syncId: sync.id, runId: queued.id }
+    );
+  }
+  /** The table's live records, counted. */
+  const total = async (tableId: string) =>
+    (
+      await ok<{ total: number }>(
+        json('POST', `/api/tables/${tableId}/records/query`, { limit: 1, count: true })
+      )
+    ).total;
+  const names = async (table: TableMeta) =>
+    (await records(table.id)).map((r) => r.fields[fieldId(table, 'Name')]).sort();
 
   beforeAll(async () => {
     ({ app } = testApp({ db: t.appDb }));
@@ -451,6 +476,282 @@ describe('synced tables', () => {
     expect(sent.filter((s) => (s as { data: { syncId: string } }).data.syncId === sync.id)).toEqual(
       []
     );
+  });
+
+  it('syncs a table past 10,000 records, re-runs as a no-op and pauses past the cap', {
+    timeout: 180_000,
+  }, async () => {
+    const many = await ok<TableMeta>(
+      json('POST', `/api/bases/${source.id}/tables`, { name: 'Many' }),
+      201
+    );
+    const name = fieldId(many, 'Name');
+    for (let i = 0; i < 10_001; i += 1000) {
+      const count = Math.min(1000, 10_001 - i);
+      await ok(
+        json('POST', `/api/tables/${many.id}/records`, {
+          records: Array.from({ length: count }, (_, j) => ({
+            fields: { [name]: `Item ${i + j}` },
+          })),
+        }),
+        201
+      );
+    }
+    const sync = await ok<TableSync>(
+      json('POST', `/api/bases/${target.id}/syncs`, {
+        source: { baseId: source.id, tableId: many.id },
+        schedule: 'manual',
+      }),
+      201
+    );
+    expect(await run(sync)).toEqual({
+      status: 'succeeded',
+      created: 10_001,
+      updated: 0,
+      deleted: 0,
+      unchanged: 0,
+      skipped: 0,
+    });
+    expect(await total(sync.tableId)).toBe(10_001);
+    const first = await records(sync.tableId);
+
+    // Again, unchanged: nothing is written, no version moves.
+    expect(await syncNow(sync)).toMatchObject({
+      status: 'succeeded',
+      created: 0,
+      updated: 0,
+      deleted: 0,
+      unchanged: 10_001,
+    });
+    expect((await records(sync.tableId)).map((r) => [r.id, r.version])).toEqual(
+      first.map((r) => [r.id, r.version])
+    );
+
+    // One edit and one deletion in the source: only those are written.
+    const [edited, removed] = await records(many.id);
+    if (!edited || !removed) throw new Error('source records');
+    await ok(
+      json('PATCH', `/api/tables/${many.id}/records/${edited.id}`, {
+        fields: { [name]: 'Edited' },
+      })
+    );
+    await ok(json('DELETE', `/api/tables/${many.id}/records/${removed.id}`), 204);
+    expect(await syncNow(sync)).toMatchObject({
+      status: 'succeeded',
+      created: 0,
+      updated: 1,
+      deleted: 1,
+      unchanged: 9_999,
+    });
+    expect(await total(sync.tableId)).toBe(10_000);
+
+    // Past the cap (lowered here): the sync pauses and keeps its records.
+    expect(await syncNowWith(sync, { maxRecords: 9_999 })).toEqual({
+      status: 'paused',
+      reason: 'too_many_records',
+    });
+    expect(await total(sync.tableId)).toBe(10_000);
+    const paused = await ok<TableSync>(json('GET', `/api/tables/${sync.tableId}/sync`));
+    expect(paused).toMatchObject({ status: 'paused', pauseReason: 'too_many_records' });
+  });
+
+  it("deletes nothing when a run fails midway on the creator's permissions, then converges", async () => {
+    const items = await ok<TableMeta>(
+      json('POST', `/api/bases/${source.id}/tables`, { name: 'Items' }),
+      201
+    );
+    const name = fieldId(items, 'Name');
+    await ok(
+      json('POST', `/api/tables/${items.id}/records`, {
+        records: [1, 2, 3, 4].map((n) => ({ fields: { [name]: `Item ${n}` } })),
+      }),
+      201
+    );
+    const sync = await ok<TableSync>(
+      json('POST', `/api/bases/${target.id}/syncs`, {
+        source: { baseId: source.id, tableId: items.id },
+        schedule: 'manual',
+      }),
+      201
+    );
+    expect(await run(sync)).toMatchObject({ status: 'succeeded', created: 4 });
+    const synced = await ok<TableMeta>(json('GET', `/api/tables/${sync.tableId}`));
+
+    // The source changes: an edit early in its order, a deletion, two new records at its end.
+    const src = await records(items.id);
+    const byName = (n: string) => src.find((r) => r.fields[name] === n)?.id;
+    await ok(
+      json('PATCH', `/api/tables/${items.id}/records/${byName('Item 1')}`, {
+        fields: { [name]: 'Item 1 (edited)' },
+      })
+    );
+    await ok(json('DELETE', `/api/tables/${items.id}/records/${byName('Item 2')}`), 204);
+    await ok(
+      json('POST', `/api/tables/${items.id}/records`, {
+        records: [5, 6].map((n) => ({ fields: { [name]: `Item ${n}` } })),
+      }),
+      201
+    );
+    // Nobody may add records to the synced table, its sync's creator included: in batches of 2,
+    // the first (the edit) is written, the second (a new record) fails the run.
+    await ok(
+      json('PATCH', `/api/tables/${sync.tableId}`, {
+        permissions: { addRecords: { level: 'nobody' } },
+      })
+    );
+    const failed = await syncNowWith(sync, { batchSize: 2 });
+    expect(failed).toMatchObject({ status: 'failed' });
+    expect(failed.status === 'failed' && failed.error).toMatch(/permission to add records/);
+    // The record that left the source is still there: deletes only follow a whole read.
+    expect(await names(synced)).toEqual(['Item 1 (edited)', 'Item 2', 'Item 3', 'Item 4']);
+    const status = await ok<TableSync>(json('GET', `/api/tables/${sync.tableId}/sync`));
+    expect(status).toMatchObject({ status: 'active', lastSyncedAt: expect.any(String) });
+    expect(status.runs[0]).toMatchObject({ status: 'failed' });
+
+    // Allowed again, the next run converges, and the one after writes nothing.
+    await ok(
+      json('PATCH', `/api/tables/${sync.tableId}`, {
+        permissions: { addRecords: { level: 'editors' } },
+      })
+    );
+    expect(await syncNowWith(sync, { batchSize: 2 })).toMatchObject({
+      status: 'succeeded',
+      created: 2,
+      updated: 0,
+      deleted: 1,
+      unchanged: 3,
+    });
+    expect(await names(synced)).toEqual([
+      'Item 1 (edited)',
+      'Item 3',
+      'Item 4',
+      'Item 5',
+      'Item 6',
+    ]);
+    expect(await syncNow(sync)).toMatchObject({ status: 'succeeded', unchanged: 5, updated: 0 });
+  });
+
+  it('runs a sync once at a time: an attempt waits while another holds it', async () => {
+    const sync = await ok<TableSync>(
+      json('POST', `/api/bases/${target.id}/syncs`, {
+        name: 'One at a time',
+        source: { baseId: source.id, tableId: tasks.id },
+        schedule: 'manual',
+      }),
+      201
+    );
+    const holder = new pg.Client({ connectionString: t.url });
+    await holder.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        syncRunLockName(sync.id),
+      ]);
+      const queued = sync.runs[0];
+      if (!queued) throw new Error('no run');
+      expect(
+        await runSyncJob({ db: t.appDb }, { workspaceId, syncId: sync.id, runId: queued.id })
+      ).toEqual({ status: 'busy' });
+      // Left as it was, for the attempt that holds it.
+      const waiting = await ok<TableSync>(json('GET', `/api/tables/${sync.tableId}/sync`));
+      expect(waiting.runs[0]).toMatchObject({ id: queued.id, status: 'queued' });
+      expect(await total(sync.tableId)).toBe(0);
+    } finally {
+      await holder.query('ROLLBACK');
+      await holder.end();
+    }
+    expect(await run(sync)).toMatchObject({ status: 'succeeded' });
+  });
+
+  it('runs on one connection with no transaction open between batches; a lost one frees the sync', async () => {
+    const items = await ok<TableMeta>(
+      json('POST', `/api/bases/${source.id}/tables`, { name: 'Batched' }),
+      201
+    );
+    const name = fieldId(items, 'Name');
+    await ok(
+      json('POST', `/api/tables/${items.id}/records`, {
+        records: [1, 2, 3, 4, 5].map((n) => ({ fields: { [name]: `Row ${n}` } })),
+      }),
+      201
+    );
+    const sync = await ok<TableSync>(
+      json('POST', `/api/bases/${target.id}/syncs`, {
+        source: { baseId: source.id, tableId: items.id },
+        schedule: 'manual',
+      }),
+      201
+    );
+    const queued = sync.runs[0];
+    if (!queued) throw new Error('no run');
+    // Seen from outside, in this file's database only (the other test files share the server):
+    // the backends holding this sync's run lock (a bigint key: classid is its high half, objid its
+    // low half), and the client backends with a transaction open, the observer's own left out.
+    const lockName = syncRunLockName(sync.id);
+    const observe = async () => {
+      const [row] = (
+        await t.db.execute<{ holders: number[]; open: number[] }>(sql`
+          SELECT
+            (SELECT coalesce(array_agg(l.pid ORDER BY l.pid), '{}')
+               FROM pg_locks l
+              WHERE l.locktype = 'advisory' AND l.granted AND l.objsubid = 1
+                AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+                AND ((l.classid::int8 << 32) | l.objid::int8) = hashtextextended(${lockName}, 0)
+            ) AS holders,
+            (SELECT coalesce(array_agg(a.pid ORDER BY a.pid), '{}')
+               FROM pg_stat_activity a
+              WHERE a.datname = current_database() AND a.backend_type = 'client backend'
+                AND a.xact_start IS NOT NULL AND a.pid <> pg_backend_pid()
+            ) AS open`)
+      ).rows;
+      if (!row) throw new Error('nothing observed');
+      return row;
+    };
+    // In each batch: the backends holding the sync's lock, whether the batch's own backend is the
+    // only one and the only one with a transaction open, and when the batch's transaction began.
+    const seen: { holders: number; ownTransactionOnly: boolean }[] = [];
+    const began: string[] = [];
+    let kill = false;
+    const entitlements: EntitlementsProvider = {
+      ...ossEntitlements,
+      forWorkspace: async (id, tx) => {
+        const [own] = (
+          await tx.execute<{ pid: number; began: string }>(
+            sql`SELECT pg_backend_pid() AS pid, now()::text AS began`
+          )
+        ).rows;
+        const { holders, open } = await observe();
+        seen.push({
+          holders: holders.length,
+          ownTransactionOnly: holders[0] === own?.pid && open.length === 1 && open[0] === own?.pid,
+        });
+        if (own) began.push(own.began);
+        if (kill && own) {
+          // The run's connection is lost midway, as when its worker dies.
+          await t.db.execute(sql`SELECT pg_terminate_backend(${own.pid}, 5000)`);
+        }
+        return ossEntitlements.forWorkspace(id, tx);
+      },
+    };
+    const job = { workspaceId, syncId: sync.id, runId: queued.id };
+    kill = true;
+    await expect(runSyncJob({ db: t.appDb, entitlements, batchSize: 2 }, job)).rejects.toThrow();
+    expect(seen).toEqual([{ holders: 1, ownTransactionOnly: true }]);
+    // Postgres let go of the lost connection's lock: the job's retry runs, it isn't deferred.
+    expect((await observe()).holders).toEqual([]);
+    kill = false;
+    seen.length = 0;
+    began.length = 0;
+    expect(await runSyncJob({ db: t.appDb, entitlements, batchSize: 2 }, job)).toMatchObject({
+      status: 'succeeded',
+      created: 5,
+    });
+    // Three batches of 2 and the run's end, each a transaction of its own on the connection
+    // holding the lock: no other transaction (and no other connection) is held across them.
+    expect(seen).toEqual(Array(4).fill({ holders: 1, ownTransactionOnly: true }));
+    // Each one a new transaction, not savepoints of one held across the run.
+    expect(new Set(began).size).toBe(4);
+    expect((await observe()).holders).toEqual([]);
   });
 
   it('pauses when the source table is deleted', async () => {

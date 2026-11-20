@@ -91,7 +91,7 @@ packages/
             groups, step addresses such as `steps.2.then.1`, where a token may point;
             schemas/automation.ts), the ViewQuery
             spec (src/query/; `within` and `dateRange`), CSV parse/write and type inference
-            (src/csv/), Excel workbooks for import (src/xlsx/: readXlsx, one sheet as rows of
+            (src/csv/; stream.ts: CsvRowStream, parsing as the text arrives), Excel workbooks for import (src/xlsx/: readXlsx, one sheet as rows of
             text; zip.ts inflates against MAX_XLSX_UNPACKED_BYTES, format.ts: number formats
             and date serials; never macros or external links), the endpoint contracts (and `downloads`, the file routes), typed
             client builder and OpenAPI generator (src/contracts/; v1/: the REST API v1). Built to dist/ by tsc;
@@ -232,10 +232,15 @@ packages/
     src/syncs/               synced tables: service.ts (create: the source re-read in its
                              workspace's scope, the table with copied fields and its Sync source
                              field; schedule, pause, remove; queueRun; `syncs.schedule` through
-                             `table_syncs_due`), run.ts (the worker's `syncs.run`: access
-                             re-checked, pauses, upserts and deletes by key through the
-                             RecordService with `ctx.sync`, idempotent), routes.ts; sources/
-                             (csv.ts, a CSV URL through safe-fetch with conditional GETs;
+                             `table_syncs_due`), run.ts (the worker's `syncs.run`: one run per
+                             sync at a time (a session advisory lock on the run's own connection,
+                             db/index.ts's pinConnection; no transaction held across its steps),
+                             access re-checked, pauses, the source read in one snapshot or as it
+                             downloads into a temp table before any write, upserts
+                             in batches and deletes at the end by key through the RecordService
+                             with `ctx.sync`, idempotent; MAX_SYNC_RECORDS), routes.ts; sources/
+                             (csv.ts, a CSV URL through safe-fetch with conditional GETs, parsed
+                             as it streams;
                              postgres.ts, a table or SELECT on a pinned, checked address
                              (safe-fetch's createHostCheck), READ ONLY, statement timeout,
                              cursor pages, row and byte caps; index.ts: checkSource, the preview,

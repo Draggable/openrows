@@ -7,7 +7,7 @@ import {
 } from '@openrows/shared';
 import pg from 'pg';
 import { SafeFetchError } from '../../lib/safe-fetch/index.js';
-import { columnNames, type ExternalRows, SourceError, TooManyRows } from './types.js';
+import { columnNames, type ExternalRows, type RowSink, SourceError, TooManyRows } from './types.js';
 
 /**
  * A Postgres table or SELECT query as a sync source. The connection string is parsed here
@@ -16,7 +16,8 @@ import { columnNames, type ExternalRows, SourceError, TooManyRows } from './type
  * (private, loopback, link-local and metadata addresses refused unless OUTBOUND_HTTP_ALLOW lets
  * them), then the client connects to that pinned address with the hostname kept for TLS. Reads
  * run in a READ ONLY transaction with a statement timeout, through a cursor in pages, capped in
- * rows and bytes; the query is sent with the extended protocol, so it is one statement.
+ * rows and bytes (a run hands each page on as it comes); the query is sent with the extended
+ * protocol, so it is one statement.
  * Every value comes back as Postgres' text (no type parsing), booleans as true/false.
  */
 
@@ -49,8 +50,10 @@ export interface PostgresSourceConfig {
   query?: string | undefined;
 }
 
-/** The whole read's deadline, connection included. */
+/** A preview's whole read, connection included. */
 export const POSTGRES_DEADLINE_MS = 120_000;
+/** A run's whole read, connection included, up to MAX_SYNC_RECORDS rows. */
+export const POSTGRES_RUN_DEADLINE_MS = 10 * 60_000;
 const CONNECT_TIMEOUT_MS = 10_000;
 const PAGE = 500;
 
@@ -215,25 +218,33 @@ export function postgresProblem(err: unknown): SourceError {
   return new SourceError("Couldn't connect to the database.", { cause: err });
 }
 
+/** An error of the caller's `onRows`, passed through as it is. */
+class SinkError extends Error {
+  constructor(readonly error: unknown) {
+    super('the rows could not be handed on');
+  }
+}
+
 /** Every value as text: no type parsers, so dates and numbers stay what Postgres printed. */
 const textTypes = { getTypeParser: () => (value: string) => value };
 
 /**
- * Reads the source's rows (up to `maxRows`, else TooManyRows; `limit` for a preview), as text.
- * Throws SourceError with a safe message for every failure.
+ * Reads the source's rows (up to `maxRows`, else TooManyRows; `limit` for a preview), as text:
+ * kept in `rows`, or handed to `onRows` a page at a time (then `rows` is empty). Throws
+ * SourceError with a safe message for every failure.
  */
 export async function readPostgres(
   deps: PostgresSourceDeps,
   connectionString: string,
   config: PostgresSourceConfig,
-  opts: { maxRows: number; limit?: number }
-): Promise<ExternalRows & { types: number[] }> {
+  opts: { maxRows: number; limit?: number; deadlineMs?: number; onRows?: RowSink }
+): Promise<ExternalRows & { types: number[]; count: number }> {
   const conn = parseConnectionString(connectionString, deps.requireTls);
   const sql = sourceSql(config);
   let client: pg.Client | undefined;
   const deadline = setTimeout(() => {
     client?.end().catch(() => {});
-  }, POSTGRES_DEADLINE_MS);
+  }, opts.deadlineMs ?? POSTGRES_DEADLINE_MS);
   try {
     const { hostname, address } = await deps.hostCheck(conn.host);
     client = new pg.Client({
@@ -273,6 +284,7 @@ export async function readPostgres(
     let names: string[] | undefined;
     let types: number[] = [];
     const rows: (string | null)[][] = [];
+    let count = 0;
     let bytes = 0;
     for (;;) {
       const page = await client.query<unknown[]>({
@@ -283,6 +295,7 @@ export async function readPostgres(
         names = columnNames(page.fields.map((f) => f.name));
         types = page.fields.map((f) => f.dataTypeID);
       }
+      const pageRows: (string | null)[][] = [];
       for (const raw of page.rows) {
         const row = raw.map((value, i) => {
           if (value === null || value === undefined) return null;
@@ -291,20 +304,32 @@ export async function readPostgres(
           bytes += text.length;
           return text.length > MAX_SYNC_CELL_CHARS ? text.slice(0, MAX_SYNC_CELL_CHARS) : text;
         });
-        rows.push(row);
+        pageRows.push(row);
       }
-      if (rows.length > opts.maxRows) throw new TooManyRows();
+      count += pageRows.length;
+      if (count > opts.maxRows) throw new TooManyRows();
       if (bytes > MAX_SYNC_POSTGRES_BYTES) {
         throw new SourceError(
           `The rows weigh more than ${MAX_SYNC_POSTGRES_BYTES / 1024 / 1024} MB as text.`
         );
       }
+      if (opts.onRows) {
+        try {
+          if (pageRows.length) await opts.onRows(pageRows);
+        } catch (err) {
+          throw new SinkError(err);
+        }
+      } else {
+        rows.push(...pageRows);
+      }
       if (page.rows.length < PAGE) break;
     }
     await client.query('ROLLBACK');
-    return { columns: names ?? [], rows, types, state: {} };
+    return { columns: names ?? [], rows, types, state: {}, count };
   } catch (err) {
     if (err instanceof TooManyRows) throw err;
+    // The caller's own failure, not the source database's.
+    if (err instanceof SinkError) throw err.error;
     throw postgresProblem(err);
   } finally {
     clearTimeout(deadline);

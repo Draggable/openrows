@@ -1,12 +1,13 @@
-import type {
-  SyncColumn,
-  SyncColumnType,
-  SyncPauseReason,
-  SyncPreview,
-  SyncRun,
-  SyncSchedule,
-  SyncSourceKind,
-  TableSync,
+import {
+  MAX_SYNC_RECORDS,
+  type SyncColumn,
+  type SyncColumnType,
+  type SyncPauseReason,
+  type SyncPreview,
+  type SyncRun,
+  type SyncSchedule,
+  type SyncSourceKind,
+  type TableSync,
 } from '@openrows/shared';
 
 /**
@@ -25,7 +26,7 @@ export const PAUSE_LABELS: Record<SyncPauseReason, string> = {
   paused: 'The sync is paused.',
   access_lost: 'The sync is paused: its creator can no longer read the source or edit this table.',
   source_deleted: 'The sync is paused: the source table or view was deleted.',
-  too_many_records: 'The sync is paused: the source has more than 10,000 records.',
+  too_many_records: `The sync is paused: the source has more than ${MAX_SYNC_RECORDS.toLocaleString('en')} records.`,
 };
 
 /** Whether a run is waiting or going. */

@@ -160,8 +160,12 @@ export const JOB_QUEUES = {
     heartbeatSeconds: 30,
   },
   /**
-   * One run of a synced table, queued by "Sync now", the schedule or the sync's creation.
-   * One transaction, so a retry starts over; the run row makes a finished run a no-op.
+   * One run of a synced table, queued by "Sync now", the schedule or the sync's creation. Up to
+   * MAX_SYNC_RECORDS records, written in batches: the worker heartbeats while it runs, so a
+   * killed worker's run is retried within a minute, and a retry reads the source again and
+   * converges. The run row makes a finished run a no-op; a sync's advisory lock, held by the
+   * run's own connection (so a dead worker's goes with it), keeps a retry from overlapping a run
+   * still going (it is deferred instead).
    */
   'syncs.run': {
     policy: 'standard',
@@ -170,7 +174,8 @@ export const JOB_QUEUES = {
     retryDelay: 30,
     retryBackoff: true,
     retryDelayMax: 600,
-    expireInSeconds: 15 * 60,
+    expireInSeconds: 2 * 3600,
+    heartbeatSeconds: 30,
   },
   /** Scheduled syncs whose next run is due. */
   'syncs.schedule': {
