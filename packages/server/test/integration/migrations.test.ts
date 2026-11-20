@@ -96,6 +96,7 @@ describe('migrations', () => {
       'storage_garbage',
       'sync_connector_accounts',
       'table_record_counts',
+      'table_sync_records',
       'table_sync_runs',
       'table_syncs',
       'tables',

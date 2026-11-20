@@ -1,12 +1,15 @@
 import type { FieldMeta, SyncRun, TableSync } from '@openrows/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  canSyncBothWays,
   columnChoices,
   columnsBody,
   defaultTargets,
   isBusy,
+  PAUSE_LABELS,
   relativeTime,
   runSummary,
+  sourceLine,
   sourcesStatusLine,
   statusLine,
   suggestedKey,
@@ -22,6 +25,8 @@ const run = (over: Partial<SyncRun> = {}): SyncRun => ({
   deleted: 0,
   unchanged: 3,
   skipped: 0,
+  writtenBack: 0,
+  removedFromSource: 0,
   error: null,
   createdAt: '2026-10-29T10:00:00.000Z',
   startedAt: '2026-10-29T10:00:00.000Z',
@@ -47,6 +52,9 @@ const sync = (over: Partial<TableSync> = {}): TableSync => ({
   fields: [],
   sourceFieldId: '01900000-0000-7000-8000-000000000008',
   ownerFieldId: null,
+  ownsUnattributed: false,
+  twoWay: false,
+  writeBackFieldIds: [],
   schedule: 'hourly',
   status: 'active',
   pauseReason: null,
@@ -176,5 +184,26 @@ describe('tables with several sources', () => {
         [{ id: 'n', name: 'N', type: 'number', synced: true, isPrimary: true }]
       )
     ).toEqual({ a: null });
+  });
+});
+
+describe('two-way sources', () => {
+  it('offers two-way for tables and views only', () => {
+    expect(canSyncBothWays('table')).toBe(true);
+    expect(canSyncBothWays('csv')).toBe(false);
+    expect(canSyncBothWays('postgres')).toBe(false);
+    expect(canSyncBothWays('connector')).toBe(false);
+  });
+
+  it('says which way a source syncs and what a run wrote back', () => {
+    expect(sourceLine(sync())).toBe('Synced from CRM / Tasks');
+    expect(sourceLine(sync({ twoWay: true }))).toBe('Synced both ways with CRM / Tasks');
+    expect(runSummary(run({ updated: 1, writtenBack: 2, removedFromSource: 1 }))).toBe(
+      '0 added, 1 updated, 0 removed; in the source: 2 updated, 1 removed'
+    );
+    expect(runSummary(run({ updated: 1 }))).toBe('0 added, 1 updated, 0 removed');
+    expect(statusLine(sync({ status: 'paused', pauseReason: 'write_access_lost' }))).toBe(
+      PAUSE_LABELS.write_access_lost
+    );
   });
 });

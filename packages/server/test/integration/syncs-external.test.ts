@@ -307,6 +307,15 @@ describe('synced tables from CSV URLs and Postgres', () => {
       records: [{ fields: {} }],
     });
     expect(res.status).toBe(403);
+
+    // A CSV source syncs one way only: two-way is refused, and nothing changes.
+    const twoWay = await json('PATCH', `/api/tables/${sync.tableId}/sync`, { twoWay: true });
+    expect(twoWay.status).toBe(422);
+    expect(await twoWay.text()).toMatch(/Only a table or view/);
+    expect(await ok<TableSync>(json('GET', `/api/tables/${sync.tableId}/sync`))).toMatchObject({
+      twoWay: false,
+      writeBackFieldIds: [],
+    });
   });
 
   it('adds a table source to a CSV-synced table, keeping each source to its own records', async () => {
@@ -445,6 +454,8 @@ describe('synced tables from CSV URLs and Postgres', () => {
       deleted: 0,
       unchanged: 0,
       skipped: 0,
+      writtenBack: 0,
+      removedFromSource: 0,
     });
     expect(await total(sync.tableId)).toBe(10_001);
     expect(await syncNow(sync)).toMatchObject({

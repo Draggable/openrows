@@ -3,14 +3,17 @@ import {
   type FieldTypeDef,
   getFieldType,
   MAX_SYNC_RECORDS,
+  permissionAllows,
   QUERY_PAGE_MAX,
   queryRecordsSchema,
   type RecordData,
   roleAllows,
   type SyncPauseReason,
   type SyncSchedule,
+  syncWritesBack,
+  tablePermissionsOf,
 } from '@openrows/shared';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { effectiveRole } from '../authz/policy.js';
 import { resolveResource } from '../authz/resolve.js';
@@ -19,13 +22,14 @@ import {
   type Database,
   pinConnection,
   type Transaction,
+  tableSyncRecords,
   tableSyncRuns,
   tableSyncs,
   tables,
 } from '../db/index.js';
 import { ossEntitlements } from '../edition/oss.js';
 import type { EntitlementsProvider } from '../edition/types.js';
-import { type FieldRow, liveFields, type TableRow } from '../fields/service.js';
+import { type FieldRow, fieldType, liveFields, type TableRow } from '../fields/service.js';
 import { withTenant } from '../jobs/tenant.js';
 import { AppError } from '../lib/errors.js';
 import type { Logger } from '../lib/logger.js';
@@ -91,6 +95,26 @@ import {
  * is two records and one source never touches another's (or records no source owns). A run
  * that finds the table's sources changed under it (a source added meanwhile) fails before
  * writing, and the next one starts afresh.
+ *
+ * Two-way (a table or view source whose creator opted in): the run also takes edits and deletes
+ * of its records on this table back to the source, through the RecordService as the creator,
+ * with their live role and the source table's edit permissions (lost rights pause the sync,
+ * `write_access_lost`, rather than write). Only the written-back fields are (syncWritesBack:
+ * copied as themselves, not the key). Per record, `table_sync_records` keeps a short hash of
+ * each such field's value as last applied on both sides; a run compares each side with it:
+ *
+ * - equal on both sides: nothing to do (an unchanged rerun writes nothing, on either side);
+ * - only the source changed: the synced record follows, as one-way;
+ * - only the synced record changed: the value is written to the source record;
+ * - both changed: the record updated last wins (its `updatedAt`), the source on a tie;
+ * - no last applied value (the first two-way run, a new record): the source's value.
+ *
+ * A synced record deleted by a person (it has last applied values, its key is still in the
+ * source) deletes its source record at the run's end, with the other deletes; a source record
+ * gone from the source (or from its view) deletes the synced record only, as one-way. Both sides
+ * of a batch are written in one transaction (the source in its own workspace's scope), the source
+ * first: a pause or failure writes neither. After a write-back both sides and the last applied
+ * values agree, so the next run (of this sync or another of the same source) writes nothing.
  */
 
 export const syncJobData = z.object({
@@ -124,6 +148,9 @@ interface Counts {
   deleted: number;
   unchanged: number;
   skipped: number;
+  /** Two-way: source records updated, and deleted. */
+  writtenBack: number;
+  removedFromSource: number;
 }
 
 export type SyncRunOutcome =
@@ -187,6 +214,8 @@ function keyOf(key: TypedField, value: unknown): string | null {
 interface Wanted {
   key: string | null;
   cells: Record<string, unknown>;
+  /** Two-way: the source record's id. */
+  sid?: string;
 }
 
 /** A source being read: its records a page at a time, or unchanged since the last good run. */
@@ -198,6 +227,8 @@ type SourceRead =
       label?: string | undefined;
       /** What the next run's conditional read sends. */
       state?: Record<string, string> | undefined;
+      /** A two-way source's write-back side. */
+      twoWay?: TwoWaySource | undefined;
     }
   | { notModified: true };
 
@@ -307,6 +338,8 @@ async function runHeld(
 const GONE_MESSAGE = 'The synced table is gone.';
 const SOURCES_CHANGED =
   "The table's sources changed during the run: nothing was deleted, and the next run catches up.";
+const SYNC_CHANGED =
+  'The sync was changed during the run: nothing was deleted, and the next run catches up.';
 
 export const PAUSE_MESSAGES: Record<SyncPauseReason, string> = {
   paused: 'The sync was paused.',
@@ -314,6 +347,8 @@ export const PAUSE_MESSAGES: Record<SyncPauseReason, string> = {
     "The sync's creator can no longer read the source (or their connected account is gone), or edit this table.",
   source_deleted: 'The source table or view was deleted.',
   too_many_records: `The source has more than ${MAX_SYNC_RECORDS.toLocaleString('en')} records.`,
+  write_access_lost:
+    "The sync's creator can no longer edit (or delete) the source's records, which syncing both ways needs: nothing was written to the source.",
 };
 
 async function finish(
@@ -331,6 +366,8 @@ async function finish(
         deleted: result.deleted ?? 0,
         unchanged: result.unchanged ?? 0,
         skipped: result.skipped ?? 0,
+        writtenBack: result.writtenBack ?? 0,
+        removedFromSource: result.removedFromSource ?? 0,
         error: result.error,
         finishedAt: new Date(),
       })
@@ -357,7 +394,15 @@ async function runSync(
       ? await tableSource(deps, staging, setup, { maxRecords, batchSize })
       : await externalSource(deps, staging, setup, { maxRecords, batchSize });
 
-  const counts: Counts = { created: 0, updated: 0, deleted: 0, unchanged: 0, skipped: 0 };
+  const counts: Counts = {
+    created: 0,
+    updated: 0,
+    deleted: 0,
+    unchanged: 0,
+    skipped: 0,
+    writtenBack: 0,
+    removedFromSource: 0,
+  };
   if (source.notModified) {
     // Not modified since the last good run (a CSV's 304): nothing to write.
     counts.unchanged = await countRecords(db, setup);
@@ -367,9 +412,16 @@ async function runSync(
   }
 
   const existing = await syncedRecords(db, setup);
+  const twoWay = source.twoWay
+    ? { source: source.twoWay, applied: await appliedKeys(db, setup), removed: [] as Removed[] }
+    : null;
   const seen = new Set<string>();
   const writes = { stateCleared: false };
-  let batch: { key: string; cells: Record<string, unknown> }[] = [];
+  let batch: Staged[] = [];
+  const write = (rows: Staged[]) =>
+    twoWay
+      ? writeTwoWayBatch(deps, setup, twoWay.source, existing, rows, counts, twoWay.removed)
+      : writeBatch(deps, setup, existing, rows, counts, writes);
   for await (const page of source.pages) {
     for (const record of page) {
       const { key } = record;
@@ -379,14 +431,14 @@ async function runSync(
         continue;
       }
       seen.add(digest);
-      batch.push({ key, cells: record.cells });
+      batch.push({ key, cells: record.cells, ...(record.sid ? { sid: record.sid } : {}) });
       if (batch.length >= batchSize) {
-        await writeBatch(deps, setup, existing, batch, counts, writes);
+        await write(batch);
         batch = [];
       }
     }
   }
-  if (batch.length) await writeBatch(deps, setup, existing, batch, counts, writes);
+  if (batch.length) await write(batch);
 
   // The whole source was read: what left it goes, in one transaction with the run's end.
   const gone: string[] = [];
@@ -397,6 +449,19 @@ async function runSync(
     batchSize,
     label: source.label,
     state: source.state,
+    ...(twoWay
+      ? {
+          twoWay: {
+            source: twoWay.source,
+            removed: twoWay.removed,
+            // Last applied values of keys no longer in the source (or deleted with it below).
+            dropped: [
+              ...[...twoWay.applied].filter((d) => !seen.has(d)),
+              ...twoWay.removed.map((r) => r.digest),
+            ],
+          },
+        }
+      : {}),
   });
   deps.logger?.info({ syncId: sync.id, ...counts }, 'sync run done');
   return { status: 'succeeded', ...counts };
@@ -475,6 +540,10 @@ async function writeContext(
     sync.ownsUnattributed !== setup.sync.ownsUnattributed
   ) {
     throw new AppError('CONFLICT', { detail: SOURCES_CHANGED });
+  }
+  // Two-way was turned on or off (or the source got another creator) during the run.
+  if (sync.twoWay !== setup.sync.twoWay || sync.createdBy !== setup.sync.createdBy) {
+    throw new AppError('CONFLICT', { detail: SYNC_CHANGED });
   }
   const [table] = await tx.select().from(tables).where(eq(tables.id, setup.table.id));
   if (!table || table.deletedAt) throw new Gone();
@@ -641,7 +710,7 @@ async function writeBatch(
   deps: SyncRunDeps,
   setup: Setup,
   existing: Held,
-  batch: { key: string; cells: Record<string, unknown> }[],
+  batch: Staged[],
   counts: Counts,
   writes: { stateCleared: boolean }
 ): Promise<void> {
@@ -709,6 +778,8 @@ async function endRun(
     batchSize: number;
     label?: string | undefined;
     state?: Record<string, string> | undefined;
+    /** Two-way: the source records to delete, and the last applied values to drop. */
+    twoWay?: { source: TwoWaySource; removed: Removed[]; dropped: string[] } | undefined;
   }
 ): Promise<void> {
   await withTenant(deps.db, setup.sync.workspaceId, async (tx) => {
@@ -719,18 +790,48 @@ async function endRun(
       await deleteRecords(ctx, ids);
       deleted += ids.length;
     }
+    let removed = 0;
+    if (end.twoWay) {
+      const { source, dropped } = end.twoWay;
+      if (end.twoWay.removed.length) {
+        // Deleted on this table by a person: their source records go too, if the creator may.
+        const sctx = await sourceContext(deps, tx, setup, source, 'record:delete');
+        for (let i = 0; i < end.twoWay.removed.length; i += end.batchSize) {
+          const sids = end.twoWay.removed.slice(i, i + end.batchSize).map((r) => r.sid);
+          // Already gone from the source (deleted there meanwhile): nothing to do.
+          const live = (await readLiveRecords(sctx, sids)).records.map((r) => r.id);
+          if (live.length) await asCreator(() => deleteRecords(sctx, live));
+          removed += live.length;
+        }
+        await setScope(tx, homeScope(setup));
+      }
+      for (let i = 0; i < dropped.length; i += SNAPSHOT_BATCH) {
+        await tx
+          .delete(tableSyncRecords)
+          .where(
+            and(
+              eq(tableSyncRecords.syncId, sync.id),
+              inArray(tableSyncRecords.keyDigest, dropped.slice(i, i + SNAPSHOT_BATCH))
+            )
+          );
+      }
+    }
     const now = new Date();
     await tx
       .update(tableSyncs)
       .set({
         ...(end.label !== undefined ? { sourceLabel: end.label } : {}),
         ...(end.state !== undefined ? { sourceState: end.state } : {}),
+        ...(end.twoWay
+          ? { writeBackFieldIds: end.twoWay.source.fields.map((f) => f.to.row.id) }
+          : {}),
         lastSyncedAt: now,
         nextRunAt: nextRunAt(sync.schedule as SyncSchedule, now),
         updatedAt: now,
       })
       .where(eq(tableSyncs.id, sync.id));
     end.counts.deleted += deleted;
+    end.counts.removedFromSource += removed;
   });
 }
 
@@ -750,6 +851,7 @@ async function tableSource(
 ): Promise<SourceRead> {
   const { sync, userId, targetFields } = setup;
   if (!sync.sourceTableId || !sync.sourceWorkspaceId) throw new Paused('source_deleted');
+  let writeBack: TwoWaySource | undefined;
   const source = { tableId: sync.sourceTableId, viewId: sync.sourceViewId };
   const sourceWorkspaceId = sync.sourceWorkspaceId;
   const label = await deps.db.transaction(
@@ -777,14 +879,41 @@ async function tableSource(
         const to = targetFields.get(m.fieldId);
         return to ? [{ from: from ? typed(from) : undefined, to }] : [];
       });
+      const twoWay = sync.twoWay;
       const toWanted = (r: RecordData): Wanted => {
         const cells: Record<string, unknown> = {};
         for (const { from, to } of map) {
           // A field the creator can no longer read (or that left the source) syncs empty.
           cells[to.id] = from ? cellInput(from, to, r.fields[from.row.id] ?? null) : null;
         }
-        return { key: key ? keyOf(key, r.fields[key.row.id]) : r.id, cells };
+        const wanted: Wanted = { key: key ? keyOf(key, r.fields[key.row.id]) : r.id, cells };
+        if (twoWay) wanted.sid = r.id;
+        return wanted;
       };
+      if (twoWay) {
+        // Writing back needs the creator's edit rights on the source, as a person there would.
+        const who = { role: access.role, userId };
+        if (
+          shape.table.synced ||
+          !roleAllows(access.role, 'record:update') ||
+          !permissionAllows(tablePermissionsOf(shape.table.permissions).editRecords, who)
+        ) {
+          throw new Paused('write_access_lost');
+        }
+        writeBack = {
+          sourceWorkspaceId,
+          sourceTable: shape.table,
+          toWanted,
+          fields: map.flatMap(({ from, to }) =>
+            from &&
+            !from.def.readOnly &&
+            !from.def.computed &&
+            syncWritesBack(fieldType(from.row), fieldType(to), from.row.id === sync.keyFieldId)
+              ? [{ from, to: typed(to) }]
+              : []
+          ),
+        };
+      }
 
       // The transaction reads only the source from here on: it stays in its scope.
       await setScope(tx, { userId, workspaceId: sourceWorkspaceId });
@@ -819,7 +948,7 @@ async function tableSource(
       yield rows.map(({ item }) => item as Wanted);
     }
   }
-  return { notModified: false, pages: pages(), label };
+  return { notModified: false, pages: pages(), label, twoWay: writeBack };
 }
 
 /**
@@ -948,4 +1077,356 @@ async function externalSource(
     state: read.state,
     ...(read.label !== undefined ? { label: read.label } : {}),
   };
+}
+
+/** A source record staged for writing: its key (unique in the run) and cells. */
+interface Staged {
+  key: string;
+  cells: Record<string, unknown>;
+  /** Two-way: the source record's id. */
+  sid?: string;
+}
+
+/** Two-way: a key whose synced record a person deleted, and its source record. */
+interface Removed {
+  digest: string;
+  sid: string;
+}
+
+/** A two-way source, as the run's read found it: where it is and what it writes back. */
+interface TwoWaySource {
+  sourceWorkspaceId: string;
+  sourceTable: TableRow;
+  /** A source record as the synced table would hold it (with its id). */
+  toWanted: (r: RecordData) => Wanted;
+  /** The written-back fields: the synced field and the source field it writes to. */
+  fields: { from: TypedField; to: TypedField }[];
+}
+
+/** Last applied values: field id → hash of the value. */
+type Applied = Record<string, string>;
+
+/** Last applied values read or written per statement. */
+const SNAPSHOT_BATCH = 1000;
+
+/** The scope a run's write transaction works in (withTenant's). */
+const homeScope = (setup: Setup) => ({ userId: '', workspaceId: setup.sync.workspaceId });
+
+/** A short hash of a compared value (as `normalized` gives it). */
+function shortHash(text: string): string {
+  return createHash('sha1').update(text).digest('base64').slice(0, 16);
+}
+
+/** The hash of a value the synced field holds. */
+function heldHash(f: TypedField, value: unknown): string {
+  return shortHash(normalized(value ?? null, f.def.emptyValue));
+}
+
+/**
+ * The hash a source cell would have in the synced field: its coerced value's, or (a choice the
+ * field doesn't have yet) one that matches no held value.
+ */
+function inputHash(f: TypedField, input: unknown): string {
+  if ((f.def.unknownChoices?.(input, f.options).length ?? 0) > 0) {
+    return shortHash(`pending\0${JSON.stringify(input)}`);
+  }
+  return heldHash(f, input === null || input === undefined ? null : f.def.coerce(input, f.options));
+}
+
+function sameApplied(a: Applied | undefined, b: Applied): boolean {
+  if (!a) return false;
+  const keys = Object.keys(b);
+  return keys.length === Object.keys(a).length && keys.every((k) => a[k] === b[k]);
+}
+
+/** What a synced field's value is written to its source field as (choices by name). */
+function sourceValue(f: TypedField, value: unknown): unknown {
+  if (value === undefined || value === null) return null;
+  if (f.def.withChoices) return f.def.toPrimitive(value as never, f.options as never);
+  return value;
+}
+
+/**
+ * A write to the source as its creator: a refusal of their rights there (the table's or a
+ * field's edit permissions) pauses the sync instead, and the transaction writes nothing.
+ */
+async function asCreator<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof AppError && (err.code === 'EDIT_RESTRICTED' || err.code === 'FORBIDDEN')) {
+      throw new Paused('write_access_lost');
+    }
+    throw err;
+  }
+}
+
+/**
+ * Switches `tx` to the source workspace's scope and answers the RecordService context of a
+ * write there as the creator, after checking their live role allows `action` on the source
+ * table (editors and up), which must still be a live table that isn't synced itself. The caller
+ * switches back (homeScope) when done.
+ */
+async function sourceContext(
+  deps: SyncRunDeps,
+  tx: Transaction,
+  setup: Setup,
+  source: TwoWaySource,
+  action: 'record:update' | 'record:delete'
+): Promise<RecordContext> {
+  const { userId } = setup;
+  const resolved = await resolveResource(tx, 'table', source.sourceTable.id, userId);
+  if (!resolved || resolved.workspaceId !== source.sourceWorkspaceId) {
+    throw new Paused('source_deleted');
+  }
+  const role = resolved.suspended ? null : effectiveRole(resolved);
+  if (!role || !roleAllows(role, action)) throw new Paused('write_access_lost');
+  await setScope(tx, { userId, workspaceId: source.sourceWorkspaceId });
+  const [table] = await tx.select().from(tables).where(eq(tables.id, source.sourceTable.id));
+  if (!table || table.deletedAt) throw new Paused('source_deleted');
+  // Never into a synced table: its records are its own sources'.
+  if (table.synced) throw new Paused('write_access_lost');
+  return {
+    tx,
+    workspaceId: source.sourceWorkspaceId,
+    userId,
+    table,
+    role,
+    typecast: true,
+    mayAddChoices: roleAllows(role, 'field:update'),
+    unmatchedLinks: 'skip',
+    entitlements: await (deps.entitlements ?? ossEntitlements).forWorkspace(
+      source.sourceWorkspaceId,
+      tx
+    ),
+  };
+}
+
+/** The keys (digests) the sync has last applied values for. */
+async function appliedKeys(db: Database, setup: Setup): Promise<Set<string>> {
+  return withTenant(db, setup.sync.workspaceId, async (tx) => {
+    const rows = await tx
+      .select({ digest: tableSyncRecords.keyDigest })
+      .from(tableSyncRecords)
+      .where(eq(tableSyncRecords.syncId, setup.sync.id));
+    return new Set(rows.map((r) => r.digest));
+  });
+}
+
+/** The last applied values of these keys. */
+async function readApplied(
+  tx: Transaction,
+  syncId: string,
+  digests: string[]
+): Promise<Map<string, Applied>> {
+  const out = new Map<string, Applied>();
+  for (let i = 0; i < digests.length; i += SNAPSHOT_BATCH) {
+    const rows = await tx
+      .select({ digest: tableSyncRecords.keyDigest, cells: tableSyncRecords.cells })
+      .from(tableSyncRecords)
+      .where(
+        and(
+          eq(tableSyncRecords.syncId, syncId),
+          inArray(tableSyncRecords.keyDigest, digests.slice(i, i + SNAPSHOT_BATCH))
+        )
+      );
+    for (const r of rows) out.set(r.digest, (r.cells ?? {}) as Applied);
+  }
+  return out;
+}
+
+async function writeApplied(tx: Transaction, setup: Setup, values: Map<string, Applied>) {
+  const rows = [...values].map(([keyDigest, cells]) => ({
+    workspaceId: setup.sync.workspaceId,
+    syncId: setup.sync.id,
+    keyDigest,
+    cells,
+  }));
+  for (let i = 0; i < rows.length; i += SNAPSHOT_BATCH) {
+    await tx
+      .insert(tableSyncRecords)
+      .values(rows.slice(i, i + SNAPSHOT_BATCH))
+      .onConflictDoUpdate({
+        target: [tableSyncRecords.syncId, tableSyncRecords.keyDigest],
+        set: { cells: sql`excluded.cells` },
+      });
+  }
+}
+
+/**
+ * One record's two-way decision, field by field: the cells the synced record takes (source
+ * inputs by synced field) and the cells its source record takes (by source field). `cells` are
+ * the live source record's, `record` the live synced one's.
+ */
+function decide(
+  setup: Setup,
+  source: TwoWaySource,
+  cells: Record<string, unknown>,
+  record: RecordData,
+  sourceUpdatedAt: string,
+  applied: Applied | undefined
+): { dest: Record<string, unknown>; back: Record<string, unknown> } {
+  const writable = new Map(source.fields.map((f) => [f.to.row.id, f]));
+  // Both sides changed a field: the record updated last wins, the source on a tie.
+  const destNewer = Date.parse(record.updatedAt) > Date.parse(sourceUpdatedAt);
+  const dest: Record<string, unknown> = {};
+  const back: Record<string, unknown> = {};
+  for (const f of setup.compared) {
+    const id = f.row.id;
+    const input = cells[id] ?? null;
+    const held = heldHash(f, record.fields[id]);
+    const wanted = inputHash(f, input);
+    if (wanted === held) continue;
+    const w = writable.get(id);
+    const last = applied?.[id];
+    // Not written back, no last applied value, or only the source changed: the source's value.
+    if (!w || last === undefined || held === last) {
+      dest[id] = input;
+      continue;
+    }
+    // Only this table changed, or both did and this record is newer: back to the source.
+    if (wanted === last || destNewer) back[w.from.row.id] = sourceValue(w.to, record.fields[id]);
+    else dest[id] = input;
+  }
+  return { dest, back };
+}
+
+/** The last applied values a synced record's cells make. */
+function appliedOf(source: TwoWaySource, fields: Record<string, unknown>): Applied {
+  return Object.fromEntries(
+    source.fields.map((f) => [f.to.row.id, heldHash(f.to, fields[f.to.row.id])])
+  );
+}
+
+/**
+ * One batch of a two-way source, in one transaction: new keys created; records equal on both
+ * sides only get their last applied values (when those differ); the others are decided field by
+ * field against the live records of both sides (`decide`), the source written first (as the
+ * creator, `asCreator`), then this table, then the last applied values. A key whose synced record
+ * is gone though it has last applied values was deleted by a person: `removed` collects it for
+ * the run's end. A record changed or deleted on either side since the read is left to the next
+ * run.
+ */
+async function writeTwoWayBatch(
+  deps: SyncRunDeps,
+  setup: Setup,
+  source: TwoWaySource,
+  existing: Held,
+  batch: Staged[],
+  counts: Counts,
+  removed: Removed[]
+): Promise<void> {
+  const keyFieldId = setup.keyField.id;
+  const owned = setup.owner ? { [setup.owner.field.id]: setup.sync.id } : {};
+  await withTenant(deps.db, setup.sync.workspaceId, async (tx) => {
+    const { ctx } = await writeContext(deps, tx, setup);
+    const digests = batch.map((b) => keyDigest(b.key));
+    const applied = await readApplied(tx, setup.sync.id, digests);
+    const next = new Map<string, Applied>();
+    const settle = (digest: string, values: Applied) => {
+      if (!sameApplied(applied.get(digest), values)) next.set(digest, values);
+    };
+    const creates: { digest: string; input: Record<string, unknown> }[] = [];
+    const differing: { id: string; digest: string; sid: string }[] = [];
+    const deletedHere: Removed[] = [];
+    let unchanged = 0;
+    batch.forEach((b, i) => {
+      const digest = digests[i] as string;
+      const held = existing.get(digest);
+      if (!held || !b.sid) {
+        if (applied.has(digest) && b.sid) deletedHere.push({ digest, sid: b.sid });
+        else creates.push({ digest, input: { ...b.cells, [keyFieldId]: b.key, ...owned } });
+        return;
+      }
+      const wanted = wantedPrint(setup.compared, b.cells);
+      if (!wanted.pending && wanted.print === held.print) {
+        unchanged++;
+        settle(
+          digest,
+          Object.fromEntries(
+            source.fields.map((f) => [f.to.row.id, inputHash(f.to, b.cells[f.to.row.id] ?? null)])
+          )
+        );
+        return;
+      }
+      differing.push({ id: held.id, digest, sid: b.sid });
+    });
+
+    const destPatches: { id: string; fields: Record<string, unknown> }[] = [];
+    const backPatches: { id: string; fields: Record<string, unknown> }[] = [];
+    const decided: { digest: string; record: RecordData }[] = [];
+    if (differing.length) {
+      const live = new Map(
+        (
+          await readLiveRecords(
+            ctx,
+            differing.map((d) => d.id)
+          )
+        ).records.map((r) => [r.id, r])
+      );
+      await setScope(tx, { userId: setup.userId, workspaceId: source.sourceWorkspaceId });
+      const sourceRead = {
+        tx,
+        workspaceId: source.sourceWorkspaceId,
+        userId: setup.userId,
+        table: source.sourceTable,
+      };
+      const sourceLive = new Map(
+        (
+          await readLiveRecords(
+            sourceRead,
+            differing.map((d) => d.sid)
+          )
+        ).records.map((r) => [r.id, r])
+      );
+      await setScope(tx, homeScope(setup));
+      for (const d of differing) {
+        const record = live.get(d.id);
+        const from = sourceLive.get(d.sid);
+        if (!record || !from) continue;
+        const { dest, back } = decide(
+          setup,
+          source,
+          source.toWanted(from).cells,
+          record,
+          from.updatedAt,
+          applied.get(d.digest)
+        );
+        if (Object.keys(dest).length) destPatches.push({ id: d.id, fields: dest });
+        if (Object.keys(back).length) backPatches.push({ id: d.sid, fields: back });
+        if (!Object.keys(dest).length && !Object.keys(back).length) unchanged++;
+        decided.push({ digest: d.digest, record });
+      }
+    }
+
+    // The source first: a refusal there pauses the sync before this table is written.
+    let writtenBack = 0;
+    if (backPatches.length) {
+      const sctx = await sourceContext(deps, tx, setup, source, 'record:update');
+      writtenBack = (await asCreator(() => updateRecords(sctx, backPatches))).length;
+      await setScope(tx, homeScope(setup));
+    }
+    const created = creates.length
+      ? await createRecords(
+          ctx,
+          creates.map((c) => c.input)
+        )
+      : [];
+    created.forEach((r, i) => {
+      const c = creates[i];
+      if (c) next.set(c.digest, appliedOf(source, r.fields));
+    });
+    const updated = destPatches.length ? await updateRecords(ctx, destPatches) : [];
+    const after = new Map(updated.map((r) => [r.id, r]));
+    for (const { digest, record } of decided) {
+      settle(digest, appliedOf(source, (after.get(record.id) ?? record).fields));
+    }
+    if (next.size) await writeApplied(tx, setup, next);
+    // Counted once the batch's writes are in (a failed batch fails the run).
+    removed.push(...deletedHere);
+    counts.created += created.length;
+    counts.updated += updated.length;
+    counts.unchanged += unchanged;
+    counts.writtenBack += writtenBack;
+  });
 }

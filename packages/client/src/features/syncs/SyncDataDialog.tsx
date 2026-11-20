@@ -33,10 +33,12 @@ import {
 } from '../../components/ui';
 import { type ExternalDraft, ExternalSource } from './ExternalSource';
 import {
+  canSyncBothWays,
   defaultTargets,
   SCHEDULE_LABELS,
   SOURCE_KIND_LABELS,
   type SourceCopy,
+  TWO_WAY_HELP,
   targetChoices,
 } from './model';
 
@@ -46,7 +48,9 @@ const selectClass =
 /**
  * "Sync data" under the base sidebar's tables (creators and up): pick a table, and
  * optionally one of its views, from any base you can read (in any of your workspaces), and how
- * often it syncs. The new table is synced one way: its records follow the source.
+ * often it syncs. The new table is synced one way: its records follow the source. A table or view
+ * source can also sync both ways ("Sync both ways", off by default; the server checks the caller
+ * can edit the source and that no loop forms).
  *
  * With `addTo`, "Add a source" of that synced table (creators and up): the same source picker,
  * then where each of the source's fields (or columns) goes: an existing synced field of a fitting
@@ -71,6 +75,7 @@ export function SyncDataDialog({
   const [tableId, setTableId] = useState<string | undefined>();
   const [viewId, setViewId] = useState('');
   const [schedule, setSchedule] = useState<SyncSchedule>('hourly');
+  const [twoWay, setTwoWay] = useState(false);
   const [name, setName] = useState('');
   // a CSV URL or a Postgres database instead of a table: an edition's connector
   // (`connector:<id>`, e.g. Google Sheets) when the instance has one.
@@ -97,6 +102,7 @@ export function SyncDataDialog({
     schedule: useId(),
     name: useId(),
     key: useId(),
+    twoWayHelp: useId(),
   };
 
   const bases = useQuery({ ...baseQueries.list(workspaceId), enabled: open });
@@ -146,6 +152,7 @@ export function SyncDataDialog({
     setTableId(undefined);
     setViewId('');
     setSchedule('hourly');
+    setTwoWay(false);
     setName('');
     setDraft(null);
     setKeyFieldId('');
@@ -182,6 +189,7 @@ export function SyncDataDialog({
         source: { baseId: chosenBase, tableId: chosenTable, viewId: viewId || null },
         keyFieldId: keyFieldId || null,
         schedule,
+        ...(twoWay ? { twoWay } : {}),
         targets: mapped,
       };
     } else {
@@ -210,6 +218,7 @@ export function SyncDataDialog({
         ...named,
         source: { baseId: chosenBase, tableId: chosenTable, viewId: viewId || null },
         schedule,
+        ...(twoWay ? { twoWay } : {}),
       };
     } else {
       if (!draft) return;
@@ -419,6 +428,23 @@ export function SyncDataDialog({
               ))}
             </select>
           </div>
+          {canSyncBothWays(kind) && (
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center gap-2 text-body text-text">
+                <input
+                  type="checkbox"
+                  checked={twoWay}
+                  onChange={(e) => setTwoWay(e.target.checked)}
+                  aria-describedby={ids.twoWayHelp}
+                  className="size-4 accent-[var(--accent)]"
+                />
+                <span>Sync both ways</span>
+              </label>
+              <p id={ids.twoWayHelp} className="pl-6 text-small text-text-2">
+                {TWO_WAY_HELP} You need to be able to edit the source's records.
+              </p>
+            </div>
+          )}
           {!addTo && (
             <div className="flex flex-col gap-1.5">
               <label htmlFor={ids.name} className="text-small text-text-2">

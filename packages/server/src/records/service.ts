@@ -90,12 +90,7 @@ import {
   resolveTokens,
   writeLinks,
 } from './links.js';
-import {
-  assertCellsAllowed,
-  assertNoSyncedCells,
-  assertNotSyncedTable,
-  assertTableAllows,
-} from './permissions.js';
+import { assertCellsAllowed, assertNotSyncedTable, assertTableAllows } from './permissions.js';
 import {
   insertRows,
   lockByIds,
@@ -108,6 +103,7 @@ import {
   updateRows,
   type WriteColumn,
 } from './repo.js';
+import { assertSyncedCellsWritable, assertSyncedRecordsRemovable } from './synced.js';
 
 /**
  * The RecordService (ADR-003): every record mutation (REST today; forms, the public API,
@@ -872,7 +868,14 @@ export async function updateRecords(
   assertUnique(patches.map((p) => p.id));
   const withPaths = patches.map((p, i) => ({ path: `records.${i}.fields`, cells: p.fields }));
   const loaded = await loadFields(ctx);
-  if (!ctx.sync) assertNoSyncedCells(loaded, withPaths);
+  if (!ctx.sync) {
+    await assertSyncedCellsWritable(
+      ctx.tx,
+      ctx.table,
+      loaded,
+      patches.map((p, i) => ({ id: p.id, path: `records.${i}.fields`, cells: p.fields }))
+    );
+  }
   if (withPaths.some((p) => Object.keys(p.cells).length > 0)) {
     assertTableAllows(ctx.table, 'editRecords', who(ctx));
   }
@@ -1008,7 +1011,10 @@ export async function updateRecords(
 /** Soft-deletes live records of this table (404 if any isn't one). */
 export async function deleteRecords(ctx: RecordContext, ids: string[]) {
   assertUnique(ids);
-  if (!ctx.sync) assertNotSyncedTable(ctx.table, 'delete');
+  if (!ctx.sync && ctx.table.synced) {
+    const rows = (await loadFields(ctx)).map((f) => f.row);
+    await assertSyncedRecordsRemovable(ctx.tx, ctx.table, rows, ids, 'delete');
+  }
   assertTableAllows(ctx.table, 'deleteRecords', who(ctx));
   const locked = new Map((await lockByIds(ctx.tx, ctx.table, ids)).map((r) => [r.id, r]));
   const missing = ids.filter((id) => !locked.get(id) || locked.get(id)?.deleted);
@@ -1043,7 +1049,10 @@ export async function deleteRecords(ctx: RecordContext, ids: string[]) {
 export async function restoreRecords(ctx: RecordContext, ids: string[]) {
   assertUnique(ids);
   // Restoring undoes a delete: the same permission.
-  if (!ctx.sync) assertNotSyncedTable(ctx.table, 'restore');
+  if (!ctx.sync && ctx.table.synced) {
+    const rows = (await loadFields(ctx)).map((f) => f.row);
+    await assertSyncedRecordsRemovable(ctx.tx, ctx.table, rows, ids, 'restore');
+  }
   assertTableAllows(ctx.table, 'deleteRecords', who(ctx));
   const locked = new Map((await lockByIds(ctx.tx, ctx.table, ids)).map((r) => [r.id, r]));
   const missing = ids.filter((id) => !locked.get(id)?.deleted);

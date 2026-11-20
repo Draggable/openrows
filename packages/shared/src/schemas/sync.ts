@@ -15,6 +15,14 @@ import { z } from 'zod';
  * disjoint records, so the same key from two sources makes two records; a run of one source never
  * writes another source's records. Records synced while the table had one source keep an empty
  * "Sync source ID" and stay that first source's.
+ *
+ * Two-way (opt-in per source, a table or view source only): the source's records on the synced
+ * table become editable in their written-back fields (syncWritesBack), and deleting one deletes
+ * its source record. A run compares each side with the values it last applied (per record) to
+ * tell which side changed: only the source → the synced record follows; only the synced record →
+ * the change is written to the source as the sync's creator, with their live edit rights; both →
+ * the record updated last wins, the source on a tie. Two-way syncs among tables never form a
+ * loop (refused when turned on).
  */
 
 /** How often a sync runs on its own: never (only "Sync now"), every 5 minutes, hourly, daily. */
@@ -44,13 +52,15 @@ export const SYNC_RUN_HISTORY = 20;
 
 /**
  * Why a sync stopped running: its creator paused it, lost access to the source (or to this
- * base), the source table or view was deleted, or it grew past MAX_SYNC_RECORDS.
+ * base), the source table or view was deleted, it grew past MAX_SYNC_RECORDS, or (two-way) its
+ * creator may no longer edit or delete the source records it has to write back.
  */
 export const SYNC_PAUSE_REASONS = [
   'paused',
   'access_lost',
   'source_deleted',
   'too_many_records',
+  'write_access_lost',
 ] as const;
 export type SyncPauseReason = (typeof SYNC_PAUSE_REASONS)[number];
 
@@ -213,6 +223,11 @@ export const createSyncSchema = z
     /** The column whose text identifies a row of an external source; null: the row number. */
     keyColumn: z.string().min(1).max(255).nullable().default(null),
     schedule: z.enum(SYNC_SCHEDULES).default('hourly'),
+    /**
+     * Two-way: edits and deletes of this source's records on the synced table go back to the
+     * source. A table or view source only, and the caller must be able to edit its records.
+     */
+    twoWay: z.boolean().default(false),
   })
   .strict();
 
@@ -259,6 +274,15 @@ export const SYNC_COPIED_TYPES: readonly string[] = [
   'barcode',
 ];
 
+/**
+ * Whether a two-way source writes a synced field back: a field copied as itself (a type of
+ * SYNC_COPIED_TYPES, the same type on both sides) that isn't the source's key. Fields copied as
+ * text, fields people added to the synced table and the "Sync source" fields never are.
+ */
+export function syncWritesBack(sourceType: string, targetType: string, isKey: boolean): boolean {
+  return !isKey && sourceType === targetType && SYNC_COPIED_TYPES.includes(sourceType);
+}
+
 /** The type a table source's field of `type` has on the synced table. */
 export function syncedTypeOf(type: string): string {
   return SYNC_COPIED_TYPES.includes(type) ? type : 'longText';
@@ -287,6 +311,7 @@ export const addSyncSourceSchema = z
     columns: createSyncSchema.shape.columns,
     keyColumn: createSyncSchema.shape.keyColumn,
     schedule: createSyncSchema.shape.schedule,
+    twoWay: createSyncSchema.shape.twoWay,
     targets: z.array(syncTargetSchema).max(MAX_SYNC_FIELDS).default([]),
   })
   .strict();
@@ -312,6 +337,11 @@ export const updateSyncSchema = z
     schedule: z.enum(SYNC_SCHEDULES).optional(),
     /** true pauses the sync; false resumes it (and runs it). */
     paused: z.boolean().optional(),
+    /**
+     * Turns two-way on (a table or view source the caller can edit; they become the source's
+     * creator, and a run is queued) or off.
+     */
+    twoWay: z.boolean().optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: 'Nothing to change.' });
@@ -331,6 +361,10 @@ export const SyncRunSchema = z.object({
   unchanged: z.number().int(),
   /** Source records left out: no key, or a key another record already has. */
   skipped: z.number().int(),
+  /** Two-way: source records updated with the synced table's edits. */
+  writtenBack: z.number().int(),
+  /** Two-way: source records deleted because their synced record was deleted. */
+  removedFromSource: z.number().int(),
   error: z.string().nullable(),
   createdAt: at,
   startedAt: at.nullable(),
@@ -372,6 +406,18 @@ export const TableSyncSchema = z.object({
    * table has only ever had one source (that source owns every synced record).
    */
   ownerFieldId: z.uuid().nullable(),
+  /**
+   * Whether this source also owns the records with a key and an empty "Sync source ID" (the
+   * table's first source, once it has more than one).
+   */
+  ownsUnattributed: z.boolean(),
+  /** Two-way: edits and deletes of this source's records go back to the source. */
+  twoWay: z.boolean(),
+  /**
+   * The synced fields a two-way source writes back: editable on its records. Empty for one-way
+   * sources, and until a two-way source's first run.
+   */
+  writeBackFieldIds: z.array(z.uuid()),
   schedule: z.enum(SYNC_SCHEDULES),
   status: z.enum(['active', 'paused']),
   pauseReason: z.enum(SYNC_PAUSE_REASONS).nullable(),
@@ -403,6 +449,26 @@ export const SyncConnectorSchema = z.object({
     })
     .nullable(),
 });
+
+/**
+ * The source a synced record belongs to, by its "Sync source" (key) and "Sync source ID" cells:
+ * the source its "Sync source ID" names; with that cell empty (or no such field yet), the source
+ * owning the records synced before the table had a second one. Null: no key, or a removed source.
+ * `sources` are the table's, oldest first.
+ */
+export function syncOwnerOf<
+  S extends Pick<TableSync, 'id' | 'sourceFieldId' | 'ownerFieldId' | 'ownsUnattributed'>,
+>(sources: readonly S[], fields: Record<string, unknown>): S | null {
+  const [first] = sources;
+  if (!first) return null;
+  const key = fields[first.sourceFieldId];
+  if (typeof key !== 'string' || key === '') return null;
+  const ownerFieldId = sources.find((s) => s.ownerFieldId)?.ownerFieldId ?? null;
+  if (!ownerFieldId) return first;
+  const owner = fields[ownerFieldId];
+  if (typeof owner === 'string' && owner !== '') return sources.find((s) => s.id === owner) ?? null;
+  return sources.find((s) => s.ownsUnattributed) ?? null;
+}
 
 /** A synced table's sources, oldest (the one the table was made with) first. */
 export const TableSyncListSchema = z.object({ sources: z.array(TableSyncSchema) });

@@ -190,7 +190,9 @@ export function Grid({
   const rights = useEditRights(table, role);
   // Live comments per record, for the row header badges.
   const commentCounts = useQuery(commentQueries.counts(table.id)).data?.counts;
-  const canEditCell = (field: FieldMeta) => canEditRecords && rights.canEditField(field);
+  // A record's cell: on a two-way synced table, its source's written-back fields too.
+  const canEditCell = (field: FieldMeta, record?: RecordData) =>
+    canEditRecords && (record ? rights.canEditCell(field, record) : rights.canEditField(field));
   const canAddRecords = canEditRecords && rights.canAdd;
   const canDeleteRecords = canEditRecords && rights.canDelete;
   const [permissionsField, setPermissionsField] = useState<FieldMeta | null>(null);
@@ -487,7 +489,7 @@ export function Grid({
     const column = columns[cell.col];
     const record = data.getRow(cell.row);
     if (!canEditRecords || !column || !record) return;
-    if (!canEditCell(column.field)) {
+    if (!canEditCell(column.field, record)) {
       if (column.field.synced) {
         toast(`${column.field.name} is synced from another table`);
       } else if (editorKind(column.field) !== 'none') {
@@ -541,7 +543,7 @@ export function Grid({
   const qc = useQueryClient();
   const history = useRecordHistory(table.id);
   const fieldsOf = columns.map((c) => c.field);
-  const editableIds = new Set(table.fields.filter(canEditCell).map((f) => f.id));
+  const editableIds = new Set(table.fields.filter((f) => canEditCell(f)).map((f) => f.id));
   const settableIds = new Set(
     table.fields.filter((f) => canEditRecords && rights.canSetOnCreate(f)).map((f) => f.id)
   );
@@ -996,7 +998,7 @@ export function Grid({
     const value = record?.fields[column.field.id];
     const error = record ? cellErrors.get(errorKey(record.id, column.field.id)) : undefined;
     const kind = editorKind(column.field);
-    const cellEditable = canEditCell(column.field);
+    const cellEditable = canEditCell(column.field, record);
     const inPlace = cellEditable && (kind === 'checkbox' || kind === 'rating');
     const canDrop = cellEditable && kind === 'attachment' && record !== undefined;
     const dropping = canDrop && dropCell === cellKey(cell);

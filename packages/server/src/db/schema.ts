@@ -1628,6 +1628,17 @@ export const tableSyncs = pgTable(
      * records with a key and an empty "Sync source ID" (synced before that field existed).
      */
     ownsUnattributed: boolean('owns_unattributed').notNull().default(false),
+    /**
+     * Two-way (a table source only, opted into by a creator): people's edits and deletes of this
+     * source's records on the synced table go back to the source table, as `created_by`.
+     */
+    twoWay: boolean('two_way').notNull().default(false),
+    /**
+     * The synced fields a two-way source writes back (field ids), as its last run found them:
+     * mapped fields copied as themselves, never the key. Empty until the first two-way run (and
+     * for one-way sources); only these are editable on the source's records.
+     */
+    writeBackFieldIds: jsonb('write_back_field_ids').notNull().default([]),
     /** `manual`, `5m`, `hourly` or `daily` (SYNC_SCHEDULES). */
     schedule: text('schedule').notNull(),
     /** `active` or `paused` (then `pause_reason`, SYNC_PAUSE_REASONS). */
@@ -1671,6 +1682,10 @@ export const tableSyncRuns = pgTable(
     deleted: integer('deleted').notNull().default(0),
     unchanged: integer('unchanged').notNull().default(0),
     skipped: integer('skipped').notNull().default(0),
+    /** Two-way: source records updated with the synced table's edits. */
+    writtenBack: integer('written_back').notNull().default(0),
+    /** Two-way: source records deleted because their synced record was deleted. */
+    removedFromSource: integer('removed_from_source').notNull().default(0),
     error: text('error'),
     createdAt: createdAt(),
     startedAt: timestamp('started_at', { withTimezone: true }),
@@ -1680,6 +1695,31 @@ export const tableSyncRuns = pgTable(
     index('table_sync_runs_sync_id_idx').on(t.syncId, t.createdAt),
     foreignKey({
       name: 'table_sync_runs_sync_fk',
+      columns: [t.workspaceId, t.syncId],
+      foreignColumns: [tableSyncs.workspaceId, tableSyncs.id],
+    }).onDelete('cascade'),
+  ]
+);
+
+/**
+ * A two-way sync's last applied values: per source key (its digest), a short hash of each
+ * written-back field's value as both sides held it after the last successful run. A run compares
+ * each side with it to tell which one changed; one-way sources have none.
+ */
+export const tableSyncRecords = pgTable(
+  'table_sync_records',
+  {
+    workspaceId: uuid('workspace_id').notNull(),
+    syncId: uuid('sync_id').notNull(),
+    /** The source key's digest (base64 SHA-1). */
+    keyDigest: text('key_digest').notNull(),
+    /** Field id → hash of the value last applied on both sides. */
+    cells: jsonb('cells').notNull(),
+  },
+  (t) => [
+    primaryKey({ name: 'table_sync_records_pk', columns: [t.syncId, t.keyDigest] }),
+    foreignKey({
+      name: 'table_sync_records_sync_fk',
       columns: [t.workspaceId, t.syncId],
       foreignColumns: [tableSyncs.workspaceId, tableSyncs.id],
     }).onDelete('cascade'),

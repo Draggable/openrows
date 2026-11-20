@@ -29,7 +29,22 @@ export const PAUSE_LABELS: Record<SyncPauseReason, string> = {
   access_lost: 'The sync is paused: its creator can no longer read the source or edit this table.',
   source_deleted: 'The sync is paused: the source table or view was deleted.',
   too_many_records: `The sync is paused: the source has more than ${MAX_SYNC_RECORDS.toLocaleString('en')} records.`,
+  write_access_lost:
+    "The sync is paused: its creator can no longer edit or delete the source's records, which syncing both ways needs.",
 };
+
+/** The "Sync both ways" option: what it does, in one breath, for the builder and settings. */
+export const TWO_WAY_HELP =
+  "Edits to synced fields and deleted records here go back to the source, as the sync's creator. When both sides change the same field, the record updated last wins (the source on a tie); a record removed from the source or its view is removed here only. Fields copied as text, your own fields and the key stay one-way.";
+
+/** Whether a source can sync both ways: a table or view of OpenRows only. */
+export const canSyncBothWays = (kind: SyncSourceKind) => kind === 'table';
+
+/** "Synced both ways with …" or "Synced from …" for one source. */
+export function sourceLine(sync: Pick<TableSync, 'twoWay' | 'source'>): string {
+  const label = sync.source.label || 'another table';
+  return sync.twoWay ? `Synced both ways with ${label}` : `Synced from ${label}`;
+}
 
 /** Whether a run is waiting or going. */
 export const isBusy = (sync: Pick<TableSync, 'runs'> | undefined) =>
@@ -52,9 +67,12 @@ export function runSummary(run: SyncRun): string {
   if (run.status === 'paused') return run.error ?? 'The sync paused.';
   if (run.status === 'queued') return 'Waiting to sync…';
   if (run.status === 'running') return 'Syncing…';
-  const changed = run.created + run.updated + run.deleted;
+  const back = run.writtenBack + run.removedFromSource;
+  const changed = run.created + run.updated + run.deleted + back;
   if (changed === 0) return 'Up to date';
-  return `${run.created} added, ${run.updated} updated, ${run.deleted} removed`;
+  const here = `${run.created} added, ${run.updated} updated, ${run.deleted} removed`;
+  if (!back) return here;
+  return `${here}; in the source: ${run.writtenBack} updated, ${run.removedFromSource} removed`;
 }
 
 /** The sync's status line: syncing, paused, the last run's problem or when it last synced. */

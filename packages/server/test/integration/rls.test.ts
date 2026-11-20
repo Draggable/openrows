@@ -134,6 +134,7 @@ describe('row-level security', () => {
       'shares',
       'storage_garbage',
       'table_record_counts',
+      'table_sync_records',
       'table_sync_runs',
       'table_syncs',
       'tables',

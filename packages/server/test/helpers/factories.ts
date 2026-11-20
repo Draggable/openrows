@@ -43,6 +43,7 @@ import {
   storageGarbage,
   type Transaction,
   tableRecordCounts,
+  tableSyncRecords,
   tableSyncRuns,
   tableSyncs,
   tables,
@@ -471,6 +472,10 @@ export async function createTenant(db: Database) {
     await db
       .insert(tableSyncRuns)
       .values({ workspaceId: workspace.id, syncId: sync.id, trigger: 'manual' });
+    // A two-way sync's last applied values of one record.
+    await db
+      .insert(tableSyncRecords)
+      .values({ workspaceId: workspace.id, syncId: sync.id, keyDigest: 'tenant', cells: {} });
   }
   // An AI field cell's generation state.
   await db

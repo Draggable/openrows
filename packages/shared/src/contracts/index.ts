@@ -1427,7 +1427,10 @@ export const contracts = {
       status: 204,
     }),
   },
-  /** Synced tables: one-way syncs from another table or view, run by the worker. */
+  /**
+   * Synced tables: syncs from another table or view (one way, or both ways) or from an external
+   * source, run by the worker.
+   */
   syncs: {
     create: e({
       method: 'POST',
