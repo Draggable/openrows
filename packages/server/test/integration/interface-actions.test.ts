@@ -16,6 +16,7 @@ import { runAutomationJob } from '../../src/automations/run.js';
 import { qualified } from '../../src/data/columns.js';
 import { attachments, automations, fields, interfaceMembers, tables } from '../../src/db/index.js';
 import { createLogger } from '../../src/lib/logger.js';
+import type { FieldVisibility } from '../../src/realtime/projection.js';
 import { testApp } from '../helpers/app.js';
 import { useTestDb } from '../helpers/db.js';
 import { addMember, createSession, createUser, createWorkspace } from '../helpers/factories.js';
@@ -421,6 +422,9 @@ describe('interface page actions: automation buttons and files', () => {
       ['GET', fileUrl(fileIds.hidden)],
       ['GET', fileUrl(fileIds.unlisted)],
       ['GET', fileUrl(uuidv7())],
+      ['GET', fileUrl(fileIds.hidden, pages['review'], '/thumbnail')],
+      ['GET', fileUrl(fileIds.unlisted, pages['review'], '/thumbnail')],
+      ['GET', fileUrl(fileIds.shown, pages['dashboard'], '/thumbnail')],
       // Pages that list no records, aren't published, or belong to another interface.
       ['GET', fileUrl(fileIds.shown, pages['dashboard'])],
       ['GET', fileUrl(fileIds.shown, pages['draft'])],
@@ -449,6 +453,37 @@ describe('interface page actions: automation buttons and files', () => {
     const listed = await pageRecords(guestId);
     expect(JSON.stringify(listed)).not.toContain(fileIds.hidden);
     expect(JSON.stringify(listed)).not.toContain(fileIds.unlisted);
+  });
+
+  it('refuses a button and files in fields hidden from the viewer, though the page has them', async () => {
+    const hidden: ReadonlySet<string> = new Set([files.id, approve.id]);
+    const visibility: FieldVisibility = {
+      hiddenFields: (v) => (v.userId === guestId || v.userId === viewerId ? hidden : new Set()),
+    };
+    const open = app;
+    ({ app } = testApp({ db: t.appDb, objectStore: store, visibility }));
+    try {
+      const listed = await pageRecords(guestId);
+      expect(listed.buttons).toEqual({ [approve.id]: 'unavailable' });
+      expect(listed.fields.map((f) => f.id)).not.toContain(files.id);
+      expect(JSON.stringify(listed)).not.toContain(fileIds.shown);
+      expect((await click(guestId, records.mine)).status).toBe(404);
+      for (const who of [guestId, viewerId]) {
+        expect((await request(who, 'GET', fileUrl(fileIds.shown))).status).toBe(404);
+        const thumb = fileUrl(fileIds.shown, pages['review'], '/thumbnail');
+        expect((await request(who, 'GET', thumb)).status).toBe(404);
+      }
+      // Base members the rule doesn't hide them from keep both.
+      expect((await pageRecords(memberId)).buttons).toEqual({ [approve.id]: 'ready' });
+      expect((await request(memberId, 'GET', fileUrl(fileIds.shown))).status).toBe(302);
+      // Nothing started.
+      const { rows } = await t.db.execute<{ id: string }>(
+        sql`SELECT id FROM pgboss.job WHERE name = 'automations.run'`
+      );
+      expect(rows.filter((r) => !seen.has(r.id))).toEqual([]);
+    } finally {
+      app = open;
+    }
   });
 
   it('a removed collaborator loses the files and buttons at once', async () => {
