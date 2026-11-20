@@ -138,8 +138,9 @@ interface Params extends Record<string, string> {
   scriptId: string;
   /** An installed extension of the base. */
   extensionId: string;
-  /** A table of the base synced from the world's table. */
+  /** A table of the base synced from the world's table, and that sync (its first source). */
   syncTableId: string;
+  syncId: string;
   /** A form page of the interface. */
   formPageId: string;
   /** The interface's read-only interface-only collaborator, and a pending interface invitation. */
@@ -502,6 +503,28 @@ const CASES: Record<string, Case> = {
     params: { tableId: 'syncTableId' },
   },
   'DELETE /api/tables/:tableId/sync': {
+    ...roles(204, CREATORS),
+    params: { tableId: 'syncTableId' },
+  },
+  // A synced table's sources, one by one: anyone reads them, creators add another (sessions
+  // only), change, pause or remove one, editors run one.
+  'GET /api/tables/:tableId/syncs': { ...roles(200, ALL), params: { tableId: 'syncTableId' } },
+  'POST /api/tables/:tableId/syncs': {
+    ...roles(201, CREATORS, (p) => ({
+      source: { baseId: p['baseId'], tableId: p['tableId'] },
+      schedule: 'manual',
+    })),
+    params: { tableId: 'syncTableId' },
+  },
+  'PATCH /api/tables/:tableId/syncs/:syncId': {
+    ...roles(200, CREATORS, { schedule: 'daily' }),
+    params: { tableId: 'syncTableId' },
+  },
+  'POST /api/tables/:tableId/syncs/:syncId/run': {
+    ...roles(200, EDITORS),
+    params: { tableId: 'syncTableId' },
+  },
+  'DELETE /api/tables/:tableId/syncs/:syncId': {
     ...roles(204, CREATORS),
     params: { tableId: 'syncTableId' },
   },
@@ -1637,6 +1660,7 @@ describe('cross-tenant authorization matrix', () => {
       scriptId: script.id,
       extensionId: extension.id,
       syncTableId: mirror.id,
+      syncId: mirrorSync.id,
       formPageId: formPage.id,
       interfaceMemberId: users.interfaceViewer.id,
       interfaceInvitationId: interfaceInvitation.id,

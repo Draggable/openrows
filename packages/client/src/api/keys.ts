@@ -83,7 +83,7 @@ export const queryKeys = {
   imports: {
     detail: (importId: string) => ['imports', importId] as const,
   },
-  /** A synced table's sync: top-level, as its polling invalidates the table and records. */
+  /** A synced table's sources: top-level, as their polling invalidates the table and records. */
   syncs: {
     detail: (tableId: string) => ['syncs', tableId] as const,
   },

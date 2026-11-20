@@ -203,6 +203,7 @@ import {
   updateSnapshotSettingsSchema,
 } from '../schemas/snapshot.js';
 import {
+  addSyncSourceSchema,
   browseConnectorSchema,
   ConnectorItemsSchema,
   connectStartQuerySchema,
@@ -211,6 +212,7 @@ import {
   SYNC_CONNECTOR_ID,
   SyncConnectorListSchema,
   SyncPreviewSchema,
+  TableSyncListSchema,
   TableSyncSchema,
   updateSyncSchema,
 } from '../schemas/sync.js';
@@ -1473,10 +1475,14 @@ export const contracts = {
       response: null,
       status: 204,
     }),
+    /**
+     * The table-wide routes: a table with one source reads and manages it; with more, `get`
+     * answers the first source and the others act on every source of the table.
+     */
     get: e({
       method: 'GET',
       path: '/api/tables/:tableId/sync',
-      summary: "A synced table's source, schedule and recent runs",
+      summary: "A synced table's (first) source, schedule and recent runs",
       tag: 'syncs',
       response: TableSyncSchema,
       status: 200,
@@ -1484,7 +1490,8 @@ export const contracts = {
     update: e({
       method: 'PATCH',
       path: '/api/tables/:tableId/sync',
-      summary: "Change a sync's schedule, pause or resume it (creators and up)",
+      summary:
+        'Change the schedule of every source of a table, pause or resume them (creators and up)',
       tag: 'syncs',
       body: updateSyncSchema,
       response: TableSyncSchema,
@@ -1493,7 +1500,7 @@ export const contracts = {
     run: e({
       method: 'POST',
       path: '/api/tables/:tableId/sync/run',
-      summary: 'Sync now: queue a run of the sync (editors and up)',
+      summary: 'Sync now: queue a run of every active source of the table (editors and up)',
       tag: 'syncs',
       response: TableSyncSchema,
       status: 200,
@@ -1501,8 +1508,56 @@ export const contracts = {
     delete: e({
       method: 'DELETE',
       path: '/api/tables/:tableId/sync',
-      summary: 'Stop syncing: the table keeps its records as a normal table (creators and up)',
+      summary:
+        'Stop syncing: every source is removed and the table keeps its records as a normal table (creators and up)',
       tag: 'syncs',
+      response: null,
+      status: 204,
+    }),
+    /** a synced table's sources, each with its own schedule, status and runs. */
+    sources: e({
+      method: 'GET',
+      path: '/api/tables/:tableId/syncs',
+      summary: "A synced table's sources, oldest first",
+      tag: 'syncs',
+      response: TableSyncListSchema,
+      status: 200,
+    }),
+    addSource: e({
+      method: 'POST',
+      path: '/api/tables/:tableId/syncs',
+      summary: 'Add a source to a synced table (creators and up)',
+      tag: 'syncs',
+      body: addSyncSourceSchema,
+      response: TableSyncSchema,
+      status: 201,
+    }),
+    updateSource: e({
+      method: 'PATCH',
+      path: '/api/tables/:tableId/syncs/:syncId',
+      summary: "Change one source's schedule, pause or resume it (creators and up)",
+      tag: 'syncs',
+      params: { syncId: z.uuid() },
+      body: updateSyncSchema,
+      response: TableSyncSchema,
+      status: 200,
+    }),
+    runSource: e({
+      method: 'POST',
+      path: '/api/tables/:tableId/syncs/:syncId/run',
+      summary: 'Sync now: queue a run of one source (editors and up)',
+      tag: 'syncs',
+      params: { syncId: z.uuid() },
+      response: TableSyncSchema,
+      status: 200,
+    }),
+    removeSource: e({
+      method: 'DELETE',
+      path: '/api/tables/:tableId/syncs/:syncId',
+      summary:
+        "Remove one source: its records stay, owned by no source; the last source's removal stops syncing (creators and up)",
+      tag: 'syncs',
+      params: { syncId: z.uuid() },
       response: null,
       status: 204,
     }),

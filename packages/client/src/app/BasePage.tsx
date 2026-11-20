@@ -270,7 +270,9 @@ export function BasePage({
           <OfflineBanner />
           <BasePaymentBanner base={base.data} />
           <BaseUsageBanner base={base.data} />
-          {table.data?.synced && <SyncBar table={table.data} role={base.data?.role} />}
+          {table.data?.synced && (
+            <SyncBar table={table.data} base={base.data} role={base.data?.role} />
+          )}
           {canAssist && (
             <BaseAssistantDialog baseId={baseId} open={assisting} onOpenChange={setAssisting} />
           )}

@@ -2,11 +2,19 @@ import { z } from 'zod';
 
 /**
  * Synced tables: a table whose records come from another table or view the creator can
- * read (in this base, another base, or another workspace they're a member of). A run reads the
- * source as the sync's creator, with their live access re-checked, then upserts and deletes the
- * synced records idempotently by key (the source record's id, or a key field's text, kept in the
- * table's "Sync source" field). Synced fields are read-only; fields added to the table stay
- * editable. The engine is packages/server/src/syncs/.
+ * read (in this base, another base, or another workspace they're a member of), or from an
+ * external source. A run reads the source as the sync's creator, with their live access
+ * re-checked, then upserts and deletes the synced records idempotently by key (the source record's
+ * id, or a key field's text, kept in the table's "Sync source" field). Synced fields are
+ * read-only; fields added to the table stay editable. The engine is packages/server/src/syncs/.
+ *
+ * A synced table starts with one source and may get more (creators add them, at most
+ * MAX_SYNC_SOURCES_PER_TABLE). Each source is a sync of its own (a `TableSync`: its schedule,
+ * runs, field map and creator), and its records are its own: a record's identity is its source
+ * plus its key, kept in the "Sync source ID" field (the source's id) beside the key. Sources own
+ * disjoint records, so the same key from two sources makes two records; a run of one source never
+ * writes another source's records. Records synced while the table had one source keep an empty
+ * "Sync source ID" and stay that first source's.
  */
 
 /** How often a sync runs on its own: never (only "Sync now"), every 5 minutes, hourly, daily. */
@@ -27,8 +35,10 @@ export const SYNC_SCHEDULE_MINUTES: Record<Exclude<SyncSchedule, 'manual'>, numb
 export const MAX_SYNC_RECORDS = 100_000;
 /** Source fields one sync copies. */
 export const MAX_SYNC_FIELDS = 100;
-/** Synced tables per base. */
+/** Sync sources per base (each source of a table counts). */
 export const MAX_SYNCS_PER_BASE = 50;
+/** Sources one synced table syncs from. */
+export const MAX_SYNC_SOURCES_PER_TABLE = 10;
 /** Runs the history shows (and keeps) per sync. */
 export const SYNC_RUN_HISTORY = 20;
 
@@ -206,6 +216,81 @@ export const createSyncSchema = z
   })
   .strict();
 
+/**
+ * Where one of a new source's fields (a table source) or columns (an external one) goes on the
+ * synced table: an existing synced field of the table (`fieldId`), or a new field (`null`).
+ * The target must take the source's values as they are: the same field type, or a text field
+ * (single line or long text) that takes their text.
+ */
+export const syncTargetSchema = z
+  .object({
+    sourceFieldId: z.uuid().optional(),
+    column: z.string().min(1).max(255).optional(),
+    fieldId: z.uuid().nullable(),
+  })
+  .strict()
+  .refine((t) => (t.sourceFieldId === undefined) !== (t.column === undefined), {
+    message: 'Give a source field or a column.',
+    path: ['sourceFieldId'],
+  });
+
+/**
+ * Source field types a table source copies as they are (same type and options); every other
+ * type (links, lookups, formulas, attachments, people, system fields…) is copied as its display
+ * text in a long text field, so a synced table never points at records, files or people of the
+ * source.
+ */
+export const SYNC_COPIED_TYPES: readonly string[] = [
+  'singleLineText',
+  'longText',
+  'number',
+  'currency',
+  'percent',
+  'checkbox',
+  'date',
+  'dateTime',
+  'duration',
+  'rating',
+  'singleSelect',
+  'multipleSelect',
+  'email',
+  'url',
+  'phone',
+  'barcode',
+];
+
+/** The type a table source's field of `type` has on the synced table. */
+export function syncedTypeOf(type: string): string {
+  return SYNC_COPIED_TYPES.includes(type) ? type : 'longText';
+}
+
+/**
+ * Whether a source field or column that would become a `fromType` field may fill an existing
+ * field of `toType` when a source is added: the same type, or a text field (single line or long
+ * text), which takes any value's text. Anything else is refused rather than converted.
+ */
+export function syncTargetCompatible(fromType: string, toType: string): boolean {
+  return fromType === toType || toType === 'singleLineText' || toType === 'longText';
+}
+
+/**
+ * Adds a source to a synced table (creators and up): the source and its fields or columns as
+ * for a new synced table, and where they go. The source's primary field (or first column) fills
+ * the table's primary field unless `targets` says otherwise; every other field or column gets a
+ * new synced field unless `targets` names an existing one.
+ */
+export const addSyncSourceSchema = z
+  .object({
+    source: createSyncSchema.shape.source,
+    fieldIds: createSyncSchema.shape.fieldIds,
+    keyFieldId: createSyncSchema.shape.keyFieldId,
+    columns: createSyncSchema.shape.columns,
+    keyColumn: createSyncSchema.shape.keyColumn,
+    schedule: createSyncSchema.shape.schedule,
+    targets: z.array(syncTargetSchema).max(MAX_SYNC_FIELDS).default([]),
+  })
+  .strict();
+
 /** "Preview": an external source's columns, the suggested types and its first rows. */
 export const previewSyncSchema = z.object({ source: externalSyncSourceSchema }).strict();
 
@@ -282,6 +367,11 @@ export const TableSyncSchema = z.object({
   ),
   /** The "Sync source" field: each record's source key. */
   sourceFieldId: z.uuid(),
+  /**
+   * The "Sync source ID" field: the id of the source each record belongs to. Null while the
+   * table has only ever had one source (that source owns every synced record).
+   */
+  ownerFieldId: z.uuid().nullable(),
   schedule: z.enum(SYNC_SCHEDULES),
   status: z.enum(['active', 'paused']),
   pauseReason: z.enum(SYNC_PAUSE_REASONS).nullable(),
@@ -313,6 +403,9 @@ export const SyncConnectorSchema = z.object({
     })
     .nullable(),
 });
+
+/** A synced table's sources, oldest (the one the table was made with) first. */
+export const TableSyncListSchema = z.object({ sources: z.array(TableSyncSchema) });
 
 export const SyncConnectorListSchema = z.object({ connectors: z.array(SyncConnectorSchema) });
 
@@ -349,6 +442,9 @@ export type SyncConnectorInfo = z.infer<typeof SyncConnectorSchema>;
 export type BrowseConnectorInput = z.input<typeof browseConnectorSchema>;
 export type ConnectorItems = z.infer<typeof ConnectorItemsSchema>;
 export type CreateSyncInput = z.input<typeof createSyncSchema>;
+export type AddSyncSourceInput = z.input<typeof addSyncSourceSchema>;
+export type SyncTarget = z.infer<typeof syncTargetSchema>;
+export type TableSyncList = z.infer<typeof TableSyncListSchema>;
 export type ExternalSyncSource = z.infer<typeof externalSyncSourceSchema>;
 export type SyncColumn = z.infer<typeof syncColumnSchema>;
 export type SyncPreview = z.infer<typeof SyncPreviewSchema>;

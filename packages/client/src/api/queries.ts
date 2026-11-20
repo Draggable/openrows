@@ -1,4 +1,5 @@
 import type {
+  AddSyncSourceInput,
   AirtableImportList,
   AssistantPlan,
   AutomationRunStatus,
@@ -25,6 +26,7 @@ import type {
   PreviewSyncInput,
   SharedRecord,
   TableSync,
+  TableSyncList,
   TestAutomationInput,
   UpdateAutomationInput,
   UpdateExtensionInput,
@@ -1987,30 +1989,30 @@ export function useApplyAssistantBasePlan(workspaceId: string) {
   });
 }
 
+const busyOf = (list: TableSyncList | undefined) =>
+  list?.sources.some((s) => s.runs.some((r) => r.status === 'queued' || r.status === 'running')) ??
+  false;
+
 /**
- * A synced table's sync: source, schedule, status and recent runs. Polled while a run is
- * queued or running; when one finishes, the table (synced choices) and its records refresh.
+ * A synced table's sources (one, or more once someone added another): each one's source,
+ * schedule, status and recent runs. Polled while a run is queued or running; when the last one
+ * finishes, the table (synced choices and fields) and its records refresh.
  */
-export function useTableSync(tableId: string, enabled: boolean) {
+export function useTableSources(tableId: string, enabled: boolean) {
   const qc = useQueryClient();
   return useQuery({
     queryKey: queryKeys.syncs.detail(tableId),
     enabled,
     queryFn: async () => {
-      const previous = qc.getQueryData<TableSync>(queryKeys.syncs.detail(tableId));
-      const sync = await api.syncs.get({ params: { tableId } });
-      const wasBusy = previous?.runs.some((r) => r.status === 'queued' || r.status === 'running');
-      const busy = sync.runs.some((r) => r.status === 'queued' || r.status === 'running');
-      if (wasBusy && !busy) {
+      const previous = qc.getQueryData<TableSyncList>(queryKeys.syncs.detail(tableId));
+      const list = await api.syncs.sources({ params: { tableId } });
+      if (busyOf(previous) && !busyOf(list)) {
         void qc.invalidateQueries({ queryKey: queryKeys.tables.detail(tableId) });
         void qc.invalidateQueries({ queryKey: queryKeys.records.table(tableId) });
       }
-      return sync;
+      return list;
     },
-    refetchInterval: (query) =>
-      query.state.data?.runs.some((r) => r.status === 'queued' || r.status === 'running')
-        ? 2000
-        : 60_000,
+    refetchInterval: (query) => (busyOf(query.state.data) ? 2000 : 60_000),
   });
 }
 
@@ -2019,7 +2021,7 @@ export function useCreateSync(baseId: string) {
   return useMutation({
     mutationFn: (body: CreateSyncInput) => api.syncs.create({ params: { baseId }, body }),
     onSuccess: (sync) => {
-      qc.setQueryData(queryKeys.syncs.detail(sync.tableId), sync);
+      qc.setQueryData<TableSyncList>(queryKeys.syncs.detail(sync.tableId), { sources: [sync] });
       return qc.invalidateQueries({ queryKey: queryKeys.tables.list(baseId) });
     },
   });
@@ -2072,9 +2074,32 @@ export function useDisconnectConnector() {
   });
 }
 
+/**
+ * A synced table's sync changes: the table-wide ones (`run`, `update`, `remove`: every source)
+ * and one source's (`runSource`, `updateSource`, `removeSource`), and adding a source.
+ */
 export function useSyncMutations(tableId: string) {
   const qc = useQueryClient();
-  const put = (sync: TableSync) => qc.setQueryData(queryKeys.syncs.detail(tableId), sync);
+  const key = queryKeys.syncs.detail(tableId);
+  // The changed source in the list at once, then the whole list again (others may change too).
+  const put = (sync: TableSync) => {
+    qc.setQueryData<TableSyncList>(key, (list) =>
+      list
+        ? {
+            sources: list.sources.some((s) => s.id === sync.id)
+              ? list.sources.map((s) => (s.id === sync.id ? sync : s))
+              : [...list.sources, sync],
+          }
+        : { sources: [sync] }
+    );
+    return qc.invalidateQueries({ queryKey: key });
+  };
+  const refresh = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: key }),
+      qc.invalidateQueries({ queryKey: queryKeys.tables.detail(tableId) }),
+      qc.invalidateQueries({ queryKey: queryKeys.records.table(tableId) }),
+    ]);
   return {
     run: useMutation({
       mutationFn: () => api.syncs.run({ params: { tableId } }),
@@ -2087,8 +2112,32 @@ export function useSyncMutations(tableId: string) {
     remove: useMutation({
       mutationFn: () => api.syncs.delete({ params: { tableId } }),
       onSuccess: () => {
-        qc.removeQueries({ queryKey: queryKeys.syncs.detail(tableId) });
+        qc.removeQueries({ queryKey: key });
         return qc.invalidateQueries({ queryKey: queryKeys.tables.all() });
+      },
+    }),
+    runSource: useMutation({
+      mutationFn: (syncId: string) => api.syncs.runSource({ params: { tableId, syncId } }),
+      onSuccess: put,
+    }),
+    updateSource: useMutation({
+      mutationFn: ({ syncId, body }: { syncId: string; body: UpdateSyncInput }) =>
+        api.syncs.updateSource({ params: { tableId, syncId }, body }),
+      onSuccess: put,
+    }),
+    removeSource: useMutation({
+      mutationFn: (syncId: string) => api.syncs.removeSource({ params: { tableId, syncId } }),
+      onSuccess: async () => {
+        await refresh();
+        // The last source's removal stops syncing: the sidebar's icon changes.
+        return qc.invalidateQueries({ queryKey: queryKeys.tables.all() });
+      },
+    }),
+    addSource: useMutation({
+      mutationFn: (body: AddSyncSourceInput) => api.syncs.addSource({ params: { tableId }, body }),
+      onSuccess: async (sync) => {
+        await put(sync);
+        return refresh();
       },
     }),
   };

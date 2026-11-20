@@ -1,6 +1,6 @@
 # Synced tables
 
-A synced table copies its records from somewhere else and keeps them up to date: another table or view (in this base, another base, or another workspace you belong to), a CSV file at a URL, or a Postgres table or query. The sync goes one way: changes in the source reach the synced table, never the other way round.
+A synced table copies its records from somewhere else and keeps them up to date: another table or view (in this base, another base, or another workspace you belong to), a CSV file at a URL, or a Postgres table or query. A synced table starts with one source and can sync from several. The sync goes one way: changes in a source reach the synced table, never the other way round.
 
 ## Add a synced table
 
@@ -26,15 +26,46 @@ Synced fields are read-only. You can add your own fields to a synced table, such
 
 The **Sync settings** menu in the table header changes the schedule, pauses the sync or stops it. **Stop syncing** keeps the table's records: it becomes an ordinary, editable table.
 
+## Sync from more than one source
+
+A synced table can bring together records from up to 10 sources, for example the same list kept in two bases, or a table and a CSV file. A table keeps working exactly as before until someone adds a second source.
+
+To add one, open **Sync settings** in the table header and click **Add a source…** (creators and owners). Pick the source as for a new synced table, then choose where each of its fields (or columns) goes:
+
+- **An existing synced field** of the table. It must take the source's values as they are: a field of the same type, or a text field (single line or long text), which takes any value as text. Any other mapping is refused, rather than converted.
+- **A new field**, added to the table as a synced field.
+
+The source's primary field (or first column) goes into the table's primary field by default. Fields you added to the table yourself can't take a source's values: they stay editable.
+
+Each source is a sync of its own: it has its own schedule, pause and resume, run history and field mapping, and it runs as the person who added it, with their access checked at every run. With more than one source, the table header says how many there are; **Sources** lists them, with **Sync now**, the schedule, **Pause**, **Resume** and **Remove** for each one. **Sync now** in the header runs every active source, and **Pause all sources** and **Stop syncing** act on all of them.
+
+### Which records belong to which source
+
+Each record belongs to exactly one source: its identity is the source it came from plus its key. Once a table has a second source it gets a **Sync source ID** field next to **Sync source**: it holds the id of the source each record came from. Records synced while the table had one source keep an empty **Sync source ID**; they belong to the table's first source, and their keys aren't rewritten.
+
+Sources own separate records:
+
+- A run of one source adds, updates and deletes only that source's records. It never changes another source's records, even when they share a key.
+- The same key from two sources makes two records, one per source. Records are never merged across sources, and no source overwrites another's values.
+- A key that appears twice in one source is skipped after its first record, as with a single source.
+- A run that fails or pauses deletes nothing, and doesn't touch other sources' records.
+
+### Remove a source
+
+**Remove** in **Sources** takes one source off the table. Its records stay in the table, owned by no source: no run updates or deletes them any more. Like every record of a synced table, they stay read-only while the table has other sources; once the last source is gone, the whole table is ordinary and editable. Fields that no remaining source fills become ordinary, editable fields. The other sources keep running.
+
+Removing the last source is the same as **Stop syncing**: the table keeps all its records and becomes an ordinary, editable table.
+
 ## Large sources
 
 A sync copies up to 100,000 records. Before writing anything, a run counts the source (or reads it to the end, for a CSV file or a database). If it has more, the sync pauses and says so, and the synced table keeps the records it has. Make the source smaller, for example with a view's filter or a query's `WHERE`, then resume the sync.
 
-A run reads the source a page at a time and writes its changes in batches, so a large first run takes a while: records appear in the table while it runs. Records are deleted only at the end of a run, once the whole source has been read. If a run fails partway, for example because the download breaks off or the database stops answering, the changes it wrote so far stay, nothing is deleted, and the next run picks up from there. One run of a sync goes at a time; **Sync now** during a run doesn't start a second one.
+A run reads the source a page at a time and writes its changes in batches, so a large first run takes a while: records appear in the table while it runs. Records are deleted only at the end of a run, once the whole source has been read. If a run fails partway, for example because the download breaks off or the database stops answering, the changes it wrote so far stay, nothing is deleted, and the next run picks up from there. One run of a source goes at a time; **Sync now** during a run doesn't start a second one. The 100,000-record limit applies to each source on its own: a source past it pauses, and the table's other sources keep running.
 
 ## Limits
 
-- 100,000 records and 100 fields per synced table, and 50 synced tables per base.
+- 100,000 records and 100 fields per source.
+- 10 sources per synced table, and 50 sources per base (each source of a table counts, the first one too).
 - A CSV file up to 200 MB, each of its rows up to 16 million characters; a database source's rows up to 200 MB as text. Cells longer than 100,000 characters are cut.
 - A database query up to 10,000 characters, one SELECT (or WITH … SELECT) statement, run in a read-only transaction. Each page of rows must arrive within 30 seconds.
 - A run reads a CSV file or a database within 10 minutes.
