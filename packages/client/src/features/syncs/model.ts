@@ -1,4 +1,5 @@
 import {
+  type FieldMeta,
   MAX_SYNC_RECORDS,
   type SyncColumn,
   type SyncColumnType,
@@ -7,6 +8,7 @@ import {
   type SyncRun,
   type SyncSchedule,
   type SyncSourceKind,
+  syncTargetCompatible,
   type TableSync,
 } from '@openrows/shared';
 
@@ -107,4 +109,69 @@ export function columnsBody(
     .filter((c) => c.include)
     .map((c) => ({ name: c.name, type: c.type, options: c.options }));
   return { columns, keyColumn: key && columns.some((c) => c.name === key) ? key : null };
+}
+
+/**
+ * A table with several sources: one line for all of them. Paused ones are counted, a run in
+ * progress says so, otherwise the latest sync of any source.
+ */
+export function sourcesStatusLine(sources: readonly TableSync[], now: Date = new Date()): string {
+  if (sources.some((s) => isBusy(s))) return 'Syncing…';
+  const paused = sources.filter((s) => s.status === 'paused').length;
+  const failed = sources.filter(
+    (s) =>
+      s.status !== 'paused' &&
+      s.runs.find((r) => r.status !== 'queued' && r.status !== 'running')?.status === 'failed'
+  ).length;
+  const latest = sources
+    .map((s) => s.lastSyncedAt)
+    .filter((at): at is string => at !== null)
+    .sort()
+    .at(-1);
+  const parts = [
+    ...(paused ? [`${paused} paused`] : []),
+    ...(failed ? [`${failed} failed`] : []),
+    latest ? `Last synced ${relativeTime(latest, now)}` : 'Not synced yet',
+  ];
+  return parts.join(' · ');
+}
+
+/** What a new source copies: a source field or a column, the type it has here, its name. */
+export interface SourceCopy {
+  /** The source field's id (a table source) or the column's name (an external one). */
+  ref: string;
+  name: string;
+  type: string;
+}
+
+/** The synced table's fields a copy may fill: synced, not the engine's, of a fitting type. */
+export function targetChoices(
+  copy: Pick<SourceCopy, 'type'>,
+  fields: readonly Pick<FieldMeta, 'id' | 'name' | 'type' | 'synced'>[]
+): Pick<FieldMeta, 'id' | 'name' | 'type'>[] {
+  return fields.filter(
+    (f) => f.synced === true && f.type !== 'syncSource' && syncTargetCompatible(copy.type, f.type)
+  );
+}
+
+/**
+ * Where each copy goes by default: the first (the source's primary field, or first column) into
+ * the table's primary field, the others into a synced field of the same name, when they fit and
+ * aren't taken; else a new field (null).
+ */
+export function defaultTargets(
+  copies: readonly SourceCopy[],
+  fields: readonly Pick<FieldMeta, 'id' | 'name' | 'type' | 'synced' | 'isPrimary'>[]
+): Record<string, string | null> {
+  const taken = new Set<string>();
+  const out: Record<string, string | null> = {};
+  copies.forEach((copy, i) => {
+    const choices = targetChoices(copy, fields).filter((f) => !taken.has(f.id));
+    const pick =
+      (i === 0 ? choices.find((f) => fields.find((x) => x.id === f.id)?.isPrimary) : undefined) ??
+      choices.find((f) => f.name.trim().toLowerCase() === copy.name.trim().toLowerCase());
+    if (pick) taken.add(pick.id);
+    out[copy.ref] = pick?.id ?? null;
+  });
+  return out;
 }

@@ -799,6 +799,13 @@
       "when": 1793284276593,
       "tag": "0113_sync_connector_accounts_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1795191815891,
+      "tag": "0114_table_sync_sources",
+      "breakpoints": true
     }
   ]
 }

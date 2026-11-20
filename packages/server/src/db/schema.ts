@@ -1580,10 +1580,13 @@ export const syncConnectorAccounts = pgTable(
 );
 
 /**
- * A synced table's sync: one per table. The source can be in another workspace (the
- * creator's membership there is re-checked every run), so it is named by ids only; a run reads it
- * in the source's own tenant scope. `field_map` lists source field → this table's field; the
- * `source_field_id` field (type syncSource) holds each record's source key.
+ * A synced table's sources: one row per source, at most MAX_SYNC_SOURCES_PER_TABLE per table
+ * (the first is made with the table). The source can be in another workspace (the creator's
+ * membership there is re-checked every run), so it is named by ids only; a run reads it in the
+ * source's own tenant scope. `field_map` lists source field → this table's field; the
+ * `source_field_id` field (type syncSource, shared by the table's sources) holds each record's
+ * source key, and `owner_field_id` (once the table has a second source) the id of the source a
+ * record belongs to.
  */
 export const tableSyncs = pgTable(
   'table_syncs',
@@ -1614,6 +1617,17 @@ export const tableSyncs = pgTable(
     keyFieldId: uuid('key_field_id'),
     fieldMap: jsonb('field_map').notNull().default([]),
     sourceFieldId: uuid('source_field_id').notNull(),
+    /**
+     * The table's "Sync source ID" field (type syncSource): each record's source, by this
+     * table's id. Null while the table has only ever had one source, which owns every record
+     * with a key.
+     */
+    ownerFieldId: uuid('owner_field_id'),
+    /**
+     * The source the table was synced from before it had a second one: it also owns the
+     * records with a key and an empty "Sync source ID" (synced before that field existed).
+     */
+    ownsUnattributed: boolean('owns_unattributed').notNull().default(false),
     /** `manual`, `5m`, `hourly` or `daily` (SYNC_SCHEDULES). */
     schedule: text('schedule').notNull(),
     /** `active` or `paused` (then `pause_reason`, SYNC_PAUSE_REASONS). */
@@ -1627,7 +1641,7 @@ export const tableSyncs = pgTable(
   },
   (t) => [
     unique('table_syncs_workspace_id_id_unique').on(t.workspaceId, t.id),
-    uniqueIndex('table_syncs_table_id_unique').on(t.tableId),
+    index('table_syncs_table_id_idx').on(t.tableId, t.createdAt),
     index('table_syncs_base_id_idx').on(t.baseId),
     index('table_syncs_next_run_at_idx').on(t.nextRunAt),
     foreignKey({

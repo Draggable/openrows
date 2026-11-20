@@ -231,9 +231,14 @@ packages/
                              GET /sandbox/extension; `?embed=1` for `embed:frames`)
     src/syncs/               synced tables: service.ts (create: the source re-read in its
                              workspace's scope, the table with copied fields and its Sync source
-                             field; schedule, pause, remove; queueRun; `syncs.schedule` through
+                             field; addSource: another source of the table (one `table_syncs`
+                             row each, MAX_SYNC_SOURCES_PER_TABLE, fields mapped onto synced
+                             fields of a fitting type or new ones, the "Sync source ID" field
+                             naming each record's source; the first source also owns keyed
+                             records with an empty one); schedule, pause, remove per source or
+                             the whole table; queueRun; `syncs.schedule` through
                              `table_syncs_due`), run.ts (the worker's `syncs.run`: one run per
-                             sync at a time (a session advisory lock on the run's own connection,
+                             source at a time, only its own records (a session advisory lock on the run's own connection,
                              db/index.ts's pinConnection; no transaction held across its steps),
                              access re-checked, pauses, the source read in one snapshot or as it
                              downloads into a temp table before any write, upserts
@@ -534,7 +539,9 @@ packages/
     src/features/syncs/      synced tables: SyncDataDialog (the sidebar's "Sync data"
 : ExternalSource, a CSV URL or Postgres source's preview and
                              column mapping),
-                             SyncBar (the table header's source, status, Sync now, settings),
+                             and "Add a source" (`addTo`: the field mapping), SyncBar (the
+                             table header's source or sources, status, Sync now, settings, the
+                             Sources dialog: each source's schedule, pause, run, removal),
                              model.ts
     src/features/scripts/    the Scripts page (/b/:baseId/scripts, lazy): ScriptsPage (list,
                              samples, Run/Stop, output, inline prompts), ScriptEditor (CodeMirror,

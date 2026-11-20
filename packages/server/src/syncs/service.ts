@@ -1,4 +1,6 @@
 import {
+  type AddSyncSourceInput,
+  addSyncSourceSchema,
   type BrowseConnectorInput,
   browseConnectorSchema,
   type ConnectorItems,
@@ -7,6 +9,7 @@ import {
   type ExternalSyncSource,
   getFieldType,
   MAX_SYNC_FIELDS,
+  MAX_SYNC_SOURCES_PER_TABLE,
   MAX_SYNCS_PER_BASE,
   type PreviewSyncInput,
   previewSyncSchema,
@@ -20,12 +23,16 @@ import {
   type SyncRun,
   type SyncSchedule,
   type SyncSourceKind,
+  syncedTypeOf,
+  syncTargetCompatible,
   type TableSync,
+  type tableSyncSourceSchema,
   type UpdateSyncInput,
   type UserRole,
 } from '@openrows/shared';
-import { and, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
+import type { z } from 'zod';
 import { effectiveRole } from '../authz/policy.js';
 import { resolveResource } from '../authz/resolve.js';
 import { setScope } from '../authz/scope.js';
@@ -90,37 +97,13 @@ export function fieldMapOf(row: SyncRow): FieldMapEntry[] {
   return Array.isArray(row.fieldMap) ? (row.fieldMap as FieldMapEntry[]) : [];
 }
 
-/**
- * Source types copied as they are (same type and options); every other type (links, lookups,
- * formulas, attachments, people, system fields…) is copied as its display text in a long text
- * field, so a synced table never points at records, files or people of the source.
- */
-const COPIED_TYPES: ReadonlySet<string> = new Set([
-  'singleLineText',
-  'longText',
-  'number',
-  'currency',
-  'percent',
-  'checkbox',
-  'date',
-  'dateTime',
-  'duration',
-  'rating',
-  'singleSelect',
-  'multipleSelect',
-  'email',
-  'url',
-  'phone',
-  'barcode',
-]);
-
 /** The synced field's type and options for a source field. */
 export function targetTypeOf(source: FieldRow): {
   type: string;
   options: Record<string, unknown>;
 } {
   const type = fieldType(source);
-  if (COPIED_TYPES.has(type)) {
+  if (syncedTypeOf(type) === type) {
     return { type, options: parseOptions(type, source.config) as Record<string, unknown> };
   }
   return { type: 'longText', options: {} };
@@ -185,6 +168,7 @@ export async function toTableSync(
       fieldId: m.fieldId,
     })),
     sourceFieldId: row.sourceFieldId,
+    ownerFieldId: row.ownerFieldId,
     schedule: row.schedule as SyncSchedule,
     status: row.status === 'paused' ? 'paused' : 'active',
     pauseReason: (row.pauseReason as SyncPauseReason | null) ?? null,
@@ -197,12 +181,56 @@ export async function toTableSync(
   };
 }
 
-/** The table's sync (404 when it isn't synced), optionally locked for the transaction. */
+/**
+ * The table's sources, oldest (the one it was made with) first; none when it isn't synced.
+ * Optionally locked for the transaction.
+ *
+ * Locked, they are read twice: a locking read that waited for another transaction returns only
+ * the rows its snapshot had, so a source added by that transaction (which held these rows while
+ * adding it) would be missed. The second read, once the rows are held, sees and locks it too; no
+ * other source can be added meanwhile, as adding one locks the table's sources first.
+ */
+export async function loadSyncs(tx: Transaction, tableId: string, lock = false) {
+  const query = () =>
+    tx
+      .select()
+      .from(tableSyncs)
+      .where(eq(tableSyncs.tableId, tableId))
+      .orderBy(asc(tableSyncs.createdAt), asc(tableSyncs.id));
+  if (!lock) return query();
+  await query().for('update');
+  return query().for('update');
+}
+
+/** The table's first source (404 when it isn't synced), optionally locked. */
 export async function loadSync(tx: Transaction, tableId: string, lock = false): Promise<SyncRow> {
-  const query = tx.select().from(tableSyncs).where(eq(tableSyncs.tableId, tableId));
-  const [row] = lock ? await query.for('update') : await query;
+  const [row] = await loadSyncs(tx, tableId, lock);
   if (!row) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
   return row;
+}
+
+/** One source of the table (404 when it isn't one), locked for the transaction. */
+async function loadSource(tx: Transaction, tableId: string, syncId: string): Promise<SyncRow> {
+  const [row] = await tx
+    .select()
+    .from(tableSyncs)
+    .where(and(eq(tableSyncs.id, syncId), eq(tableSyncs.tableId, tableId)))
+    .for('update');
+  if (!row) throw new AppError('NOT_FOUND', { detail: 'No such source of this table.' });
+  return row;
+}
+
+/** The table's sources as the API shows them, oldest first. */
+export async function listSources(
+  tx: Transaction,
+  tableId: string,
+  role: UserRole
+): Promise<{ sources: TableSync[] }> {
+  const rows = await loadSyncs(tx, tableId);
+  if (!rows.length) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  const sources: TableSync[] = [];
+  for (const row of rows) sources.push(await toTableSync(tx, row, role));
+  return { sources };
 }
 
 /** What a run needs to read the source, as `userId`: the role there, or why it can't. */
@@ -304,19 +332,24 @@ export interface SyncContext {
   sources?: SyncSources | undefined;
 }
 
+/** A table source, checked: the caller's access, its shape and the fields to copy (primary first). */
+interface CheckedTableSource {
+  access: Extract<SourceAccess, { ok: true }>;
+  shape: SourceShape;
+  /** The fields to copy, the primary first. */
+  ordered: FieldRow[];
+}
+
+type TableSourceInput = z.infer<typeof tableSyncSourceSchema>;
+
 /**
- * Creates a synced table in the base: checks the caller can read the source (in this or
- * another workspace they belong to), makes the table with the source's fields (the primary first,
- * copied types as they are, the rest as text) plus its "Sync source" field, and queues the first
- * run. 422 for a source field that isn't the source's, 404 for a source the caller can't read.
+ * Checks a table source as the caller: they can read it (404 otherwise), it isn't synced
+ * itself, and the fields and key named are its own (422).
  */
-export async function createSync(ctx: SyncContext, input: CreateSyncInput): Promise<TableSync> {
-  const parsed = createSyncSchema.parse(input);
-  const { source } = parsed;
-  if (source.kind === 'csv' || source.kind === 'postgres' || source.kind === 'connector') {
-    return createExternalSync(ctx, { ...parsed, source });
-  }
-  const body = { ...parsed, source };
+async function checkTableSource(
+  ctx: SyncContext,
+  body: { source: TableSourceInput; fieldIds?: string[] | undefined; keyFieldId: string | null }
+): Promise<CheckedTableSource> {
   const access = await sourceAccess(ctx.tx, ctx.userId, body.source);
   if (!access.ok) throw new AppError('NOT_FOUND', { detail: 'No such source table or view.' });
   const shape = await readSourceShape(
@@ -334,9 +367,6 @@ export async function createSync(ctx: SyncContext, input: CreateSyncInput): Prom
   if (shape.table.synced) {
     throw invalid('source.tableId', "A synced table can't be the source of another sync.");
   }
-
-  await assertSyncRoom(ctx);
-
   const byId = new Map(shape.fields.map((f) => [f.id, f]));
   const primary = shape.fields.find((f) => f.isPrimary);
   if (!primary) throw new Error('source table without a primary field');
@@ -350,42 +380,152 @@ export async function createSync(ctx: SyncContext, input: CreateSyncInput): Prom
   if (ordered.length > MAX_SYNC_FIELDS) {
     throw invalid('fieldIds', `A sync copies at most ${MAX_SYNC_FIELDS} fields.`);
   }
+  return { access, shape, ordered };
+}
+
+/** An external source, checked: its columns (with their options) and its stored form. */
+interface CheckedExternalSource {
+  sources: SyncSources;
+  split: SplitSource;
+  /** The columns to sync, in order, their options checked against their types. */
+  columns: (SyncColumn & { options: Record<string, unknown> })[];
+}
+
+/**
+ * Checks an external source (address rules, TLS, the query's shape: 422 with its problem) and
+ * the columns to sync: each once, the key among them. The source isn't read.
+ */
+async function checkExternalSource(
+  ctx: SyncContext,
+  body: { source: ExternalSyncSource; columns?: SyncColumn[] | undefined; keyColumn: string | null }
+): Promise<CheckedExternalSource> {
+  const sources = externalSources(ctx);
+  const columns = body.columns;
+  if (!columns?.length) throw invalid('columns', 'Pick the columns to sync.');
+  const seen = new Set<string>();
+  for (const [i, c] of columns.entries()) {
+    if (seen.has(c.name)) throw invalid(`columns.${i}.name`, 'Each column can be synced once.');
+    seen.add(c.name);
+  }
+  if (body.keyColumn !== null && !seen.has(body.keyColumn)) {
+    throw invalid('keyColumn', 'The key must be one of the synced columns.');
+  }
+  const typed = columns.map((c, i) => ({ ...c, options: columnOptions(c, i) }));
+  let split: SplitSource;
+  try {
+    split = await checkSource(sources, body.source, tokenOf(ctx, sources));
+  } catch (err) {
+    sourceInvalid(err);
+  }
+  return { sources, split, columns: typed };
+}
+
+/** The columns of a new `table_syncs` row that say where its source is. */
+function sourceColumns(
+  checked:
+    | { kind: 'table'; src: CheckedTableSource }
+    | { kind: 'external'; src: CheckedExternalSource }
+): Partial<typeof tableSyncs.$inferInsert> & { sourceLabel: string } {
+  if (checked.kind === 'table') {
+    const { access, shape } = checked.src;
+    return {
+      sourceWorkspaceId: access.workspaceId,
+      sourceBaseId: shape.table.baseId,
+      sourceTableId: shape.table.id,
+      sourceViewId: shape.view?.id ?? null,
+      sourceLabel: shape.label,
+    };
+  }
+  const { split, sources } = checked.src;
+  return {
+    sourceKind: split.kind,
+    sourceConfig: split.config,
+    // A connector source has no secret of its own: the creator's account reads it.
+    sourceSecret: split.secret ? sources.cipher.encrypt(split.secret) : null,
+    sourceLabel: split.label,
+  };
+}
+
+/**
+ * Creates a synced table in the base: checks the caller can read the source (in this or
+ * another workspace they belong to), makes the table with the source's fields (the primary first,
+ * copied types as they are, the rest as text) plus its "Sync source" field, and queues the first
+ * run. 422 for a source field that isn't the source's, 404 for a source the caller can't read.
+ * A CSV URL, Postgres or connector source's fields are the chosen columns (the first is the
+ * primary) with their types; the source is checked (address rules, TLS, the query's shape) but
+ * not read, and its URL or connection string is stored encrypted.
+ */
+export async function createSync(ctx: SyncContext, input: CreateSyncInput): Promise<TableSync> {
+  const parsed = createSyncSchema.parse(input);
+  const { source } = parsed;
+  // Each column or field to copy: its name, type and options, and what it is in the source.
+  let checked:
+    | { kind: 'table'; src: CheckedTableSource }
+    | { kind: 'external'; src: CheckedExternalSource };
+  let copies: {
+    name: string;
+    type: string;
+    options: Record<string, unknown>;
+    description?: string | null;
+    from: Pick<FieldMapEntry, 'sourceFieldId' | 'column'>;
+  }[];
+  let defaultName: string;
+  if (source.kind === 'csv' || source.kind === 'postgres' || source.kind === 'connector') {
+    const src = await checkExternalSource(ctx, { ...parsed, source });
+    checked = { kind: 'external', src };
+    copies = src.columns.map((c) => ({
+      name: c.name,
+      type: c.type,
+      options: c.options,
+      from: { column: c.name },
+    }));
+    defaultName = src.split.tableName;
+  } else {
+    const src = await checkTableSource(ctx, { ...parsed, source });
+    checked = { kind: 'table', src };
+    copies = src.ordered.map((f) => ({
+      name: f.name,
+      ...targetTypeOf(f),
+      description: f.description,
+      from: { sourceFieldId: f.id },
+    }));
+    defaultName = src.shape.table.name;
+  }
+  await assertSyncRoom(ctx);
 
   const [base] = await ctx.tx.select().from(bases).where(eq(bases.id, ctx.baseId));
   if (!base) throw new Error('authorized base not visible under RLS');
   const schema = { tx: ctx.tx, workspaceId: ctx.workspaceId, userId: ctx.userId };
-  const name = body.name ?? freeName(await tableNames(ctx), shape.table.name);
-  const table = await createTable(schema, base, { name, primaryFieldName: primary.name });
+  const [first, ...rest] = copies;
+  if (!first) throw invalid('columns', 'Pick the columns to sync.');
+  const name = parsed.name ?? freeName(await tableNames(ctx), defaultName);
+  const table = await createTable(schema, base, { name, primaryFieldName: first.name });
   const [targetPrimary] = await liveFields(ctx.tx, table.id);
   if (!targetPrimary) throw new Error('synced table without its primary field');
-  const map: FieldMapEntry[] = [];
-  const names = new Set([primary.name.toLowerCase()]);
-  // The primary keeps single line text unless the source's is a copied type of its own.
-  const primaryType = targetTypeOf(primary);
-  if (primaryType.type !== 'longText' && primaryType.type !== 'singleLineText') {
-    await updateField(schema, targetPrimary, {
-      type: primaryType.type as never,
-      options: primaryType.options,
-    });
+  // The primary keeps single line text unless the source's is a typed one of its own (a table
+  // source's long text, or the text of a type that isn't copied, stays single line text).
+  const textPrimary =
+    first.type === 'singleLineText' || (checked.kind === 'table' && first.type === 'longText');
+  if (!textPrimary) {
+    await updateField(schema, targetPrimary, { type: first.type as never, options: first.options });
   }
-  map.push({ sourceFieldId: primary.id, fieldId: targetPrimary.id });
-  const tableRow = await ctx.tx.select().from(tables).where(eq(tables.id, table.id));
-  const target = tableRow[0];
+  const [target] = await ctx.tx.select().from(tables).where(eq(tables.id, table.id));
   if (!target) throw new Error('synced table not visible');
-  for (const f of ordered.slice(1)) {
-    const { type, options } = targetTypeOf(f);
+  const map: FieldMapEntry[] = [{ ...first.from, fieldId: targetPrimary.id }];
+  const names = new Set([first.name.toLowerCase()]);
+  for (const c of rest) {
     const row = await createField(
       schema,
       target,
       {
-        name: freeName(names, f.name),
-        type: type as never,
-        options,
-        ...(f.description ? { description: f.description } : {}),
+        name: freeName(names, c.name),
+        type: c.type as never,
+        options: c.options,
+        ...(c.description ? { description: c.description } : {}),
       },
       { sync: true }
     );
-    map.push({ sourceFieldId: f.id, fieldId: row.id });
+    map.push({ ...c.from, fieldId: row.id });
   }
   const sourceField = await createField(
     schema,
@@ -406,14 +546,194 @@ export async function createSync(ctx: SyncContext, input: CreateSyncInput): Prom
       workspaceId: ctx.workspaceId,
       baseId: ctx.baseId,
       tableId: table.id,
-      sourceWorkspaceId: access.workspaceId,
-      sourceBaseId: shape.table.baseId,
-      sourceTableId: shape.table.id,
-      sourceViewId: shape.view?.id ?? null,
-      sourceLabel: shape.label,
-      keyFieldId: body.keyFieldId,
+      ...sourceColumns(checked),
+      keyFieldId: checked.kind === 'table' ? parsed.keyFieldId : null,
+      keyColumn: checked.kind === 'external' ? parsed.keyColumn : null,
       fieldMap: map,
       sourceFieldId: sourceField.id,
+      schedule: parsed.schedule,
+      createdBy: ctx.userId,
+      nextRunAt: nextRunAt(parsed.schedule, new Date()),
+    })
+    .returning();
+  if (!row) throw new Error('sync insert returned nothing');
+  await queueRun(ctx.tx, ctx.jobs, row, 'create');
+  return toTableSync(ctx.tx, row, ctx.role);
+}
+
+/**
+ * Adds a source to a synced table (creators and up): the source is checked as for a new synced
+ * table, then each of its fields (or columns) fills an existing synced field of the table where
+ * `targets` (or, for the source's primary field or first column, the table's primary field) says
+ * so, and gets a new synced field otherwise. A target must take the source's values as they are
+ * (syncTargetCompatible): any other is a 422. The table's first extra source also adds its
+ * "Sync source ID" field, which names each record's source from then on; the records synced
+ * until then stay the first source's. The new source's first run is queued.
+ */
+export async function addSource(
+  ctx: SyncContext,
+  tableId: string,
+  input: AddSyncSourceInput
+): Promise<TableSync> {
+  if (!(await loadSyncs(ctx.tx, tableId)).length) {
+    throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  }
+  const body = addSyncSourceSchema.parse(input);
+  const { source } = body;
+
+  // What the source copies, each with the type a new field of it would have.
+  let checked:
+    | { kind: 'table'; src: CheckedTableSource }
+    | { kind: 'external'; src: CheckedExternalSource };
+  let copies: {
+    name: string;
+    type: string;
+    options: Record<string, unknown>;
+    description?: string | null;
+    from: Pick<FieldMapEntry, 'sourceFieldId' | 'column'>;
+  }[];
+  if (source.kind === 'csv' || source.kind === 'postgres' || source.kind === 'connector') {
+    const src = await checkExternalSource(ctx, { ...body, source });
+    checked = { kind: 'external', src };
+    copies = src.columns.map((c) => ({
+      name: c.name,
+      type: c.type,
+      options: c.options,
+      from: { column: c.name },
+    }));
+  } else {
+    const src = await checkTableSource(ctx, { ...body, source });
+    checked = { kind: 'table', src };
+    copies = src.ordered.map((f) => ({
+      name: f.name,
+      ...targetTypeOf(f),
+      description: f.description,
+      from: { sourceFieldId: f.id },
+    }));
+  }
+
+  // Locked once the source is checked (which may wait on the network): from here, runs of the
+  // table's sources wait for the add (and then see it), and so do other adds and removals.
+  const existing = await loadSyncs(ctx.tx, tableId, true);
+  const first = existing[0];
+  if (!first) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  const [table] = await ctx.tx
+    .select()
+    .from(tables)
+    .where(and(eq(tables.id, tableId), isNull(tables.deletedAt)));
+  if (!table) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  const tableFields = await liveFields(ctx.tx, tableId);
+  const byId = new Map(tableFields.map((f) => [f.id, f]));
+  const engineFields = new Set([first.sourceFieldId, first.ownerFieldId].filter(Boolean));
+
+  // Where each copied field goes: the targets as given, checked, then the defaults.
+  const chosen = new Map<number, FieldRow | null>();
+  const used = new Set<string>();
+  for (const [i, t] of body.targets.entries()) {
+    const at = copies.findIndex((c) =>
+      checked.kind === 'table'
+        ? t.sourceFieldId !== undefined && c.from.sourceFieldId === t.sourceFieldId
+        : t.column !== undefined && c.from.column === t.column
+    );
+    if (at < 0) {
+      throw invalid(
+        `targets.${i}`,
+        checked.kind === 'table'
+          ? 'Map only the fields the source copies.'
+          : 'Map only the columns the source syncs.'
+      );
+    }
+    if (chosen.has(at)) throw invalid(`targets.${i}`, 'Map each field of the source once.');
+    if (t.fieldId === null) {
+      chosen.set(at, null);
+      continue;
+    }
+    const field = byId.get(t.fieldId);
+    const copy = copies[at];
+    if (!field || !copy || !field.synced || engineFields.has(field.id)) {
+      throw invalid(`targets.${i}.fieldId`, 'Pick a synced field of this table, or a new field.');
+    }
+    if (used.has(field.id)) {
+      throw invalid(`targets.${i}.fieldId`, `"${field.name}" can take one field of the source.`);
+    }
+    const toType = fieldType(field);
+    if (!syncTargetCompatible(copy.type, toType)) {
+      throw invalid(
+        `targets.${i}.fieldId`,
+        `"${copy.name}" (${getFieldType(copy.type as never).label}) can't fill "${field.name}" (${getFieldType(toType).label}): pick a field of the same type, a text field, or a new field.`
+      );
+    }
+    used.add(field.id);
+    chosen.set(at, field);
+  }
+  // The source's primary field (or first column) fills the table's, unless it can't.
+  const primary = tableFields.find((f) => f.isPrimary);
+  const firstCopy = copies[0];
+  if (
+    !chosen.has(0) &&
+    firstCopy &&
+    primary?.synced &&
+    !used.has(primary.id) &&
+    syncTargetCompatible(firstCopy.type, fieldType(primary))
+  ) {
+    chosen.set(0, primary);
+    used.add(primary.id);
+  }
+
+  await assertSyncRoom(ctx, tableId);
+
+  const schema = { tx: ctx.tx, workspaceId: ctx.workspaceId, userId: ctx.userId };
+  const names = new Set(tableFields.map((f) => f.name.toLowerCase()));
+  const map: FieldMapEntry[] = [];
+  for (const [i, c] of copies.entries()) {
+    const target = chosen.get(i);
+    if (target) {
+      map.push({ ...c.from, fieldId: target.id });
+      continue;
+    }
+    const row = await createField(
+      schema,
+      table,
+      {
+        name: freeName(names, c.name),
+        type: c.type as never,
+        options: c.options,
+        ...(c.description ? { description: c.description } : {}),
+      },
+      { sync: true }
+    );
+    map.push({ ...c.from, fieldId: row.id });
+  }
+
+  // The table's second source: from now on each record names its source.
+  let ownerFieldId = first.ownerFieldId;
+  if (!ownerFieldId) {
+    const owner = await createField(
+      schema,
+      table,
+      { name: freeName(names, 'Sync source ID'), type: 'syncSource' },
+      { sync: true }
+    );
+    ownerFieldId = owner.id;
+    await ctx.tx
+      .update(tableSyncs)
+      .set({ ownerFieldId, ownsUnattributed: true, updatedAt: new Date() })
+      .where(eq(tableSyncs.id, first.id));
+  }
+
+  const [row] = await ctx.tx
+    .insert(tableSyncs)
+    .values({
+      id: uuidv7(),
+      workspaceId: ctx.workspaceId,
+      baseId: table.baseId,
+      tableId,
+      ...sourceColumns(checked),
+      keyFieldId: checked.kind === 'table' ? body.keyFieldId : null,
+      keyColumn: checked.kind === 'external' ? body.keyColumn : null,
+      fieldMap: map,
+      sourceFieldId: first.sourceFieldId,
+      ownerFieldId,
       schedule: body.schedule,
       createdBy: ctx.userId,
       nextRunAt: nextRunAt(body.schedule, new Date()),
@@ -424,18 +744,32 @@ export async function createSync(ctx: SyncContext, input: CreateSyncInput): Prom
   return toTableSync(ctx.tx, row, ctx.role);
 }
 
-/** One sync per base at a time past this point, so the cap holds under concurrent creates. */
-async function assertSyncRoom(ctx: SyncContext) {
+/**
+ * One source more in the base (and on `tableId`, when adding to a table), one at a time per base
+ * past this point, so the caps hold under concurrent creates: MAX_SYNCS_PER_BASE sources per
+ * base, MAX_SYNC_SOURCES_PER_TABLE per table (409 past them).
+ */
+async function assertSyncRoom(ctx: SyncContext, tableId?: string) {
   await ctx.tx.execute(
     sql`SELECT pg_advisory_xact_lock(hashtextextended(${`syncs:${ctx.baseId}`}, 0))`
   );
   const [stats] = await ctx.tx
-    .select({ count: sql<number>`count(*)::int` })
+    .select({
+      count: sql<number>`count(*)::int`,
+      onTable: tableId
+        ? sql<number>`(count(*) FILTER (WHERE ${tableSyncs.tableId} = ${tableId}))::int`
+        : sql<number>`0`,
+    })
     .from(tableSyncs)
     .where(eq(tableSyncs.baseId, ctx.baseId));
   if ((stats?.count ?? 0) >= MAX_SYNCS_PER_BASE) {
     throw new AppError('CONFLICT', {
-      detail: `A base can have at most ${MAX_SYNCS_PER_BASE} synced tables.`,
+      detail: `A base can have at most ${MAX_SYNCS_PER_BASE} sync sources.`,
+    });
+  }
+  if ((stats?.onTable ?? 0) >= MAX_SYNC_SOURCES_PER_TABLE) {
+    throw new AppError('CONFLICT', {
+      detail: `A table can sync from at most ${MAX_SYNC_SOURCES_PER_TABLE} sources.`,
     });
   }
 }
@@ -509,98 +843,6 @@ export async function browseSync(
   }
 }
 
-/**
- * Creates a table synced from a CSV URL or a Postgres source: its fields are the chosen
- * columns (the first is the primary) with their types, plus the "Sync source" field. The source
- * is checked (address rules, TLS, the query's shape) but not read: the first run, queued now,
- * reads it. The URL or connection string is stored encrypted.
- */
-async function createExternalSync(
-  ctx: SyncContext,
-  body: ReturnType<typeof createSyncSchema.parse> & { source: ExternalSyncSource }
-): Promise<TableSync> {
-  const sources = externalSources(ctx);
-  const columns = body.columns;
-  if (!columns?.length) throw invalid('columns', 'Pick the columns to sync.');
-  const seen = new Set<string>();
-  for (const [i, c] of columns.entries()) {
-    if (seen.has(c.name)) throw invalid(`columns.${i}.name`, 'Each column can be synced once.');
-    seen.add(c.name);
-  }
-  if (body.keyColumn !== null && !seen.has(body.keyColumn)) {
-    throw invalid('keyColumn', 'The key must be one of the synced columns.');
-  }
-  const typed = columns.map((c, i) => ({ ...c, options: columnOptions(c, i) }));
-  let split: SplitSource;
-  try {
-    split = await checkSource(sources, body.source, tokenOf(ctx, sources));
-  } catch (err) {
-    sourceInvalid(err);
-  }
-  await assertSyncRoom(ctx);
-
-  const [base] = await ctx.tx.select().from(bases).where(eq(bases.id, ctx.baseId));
-  if (!base) throw new Error('authorized base not visible under RLS');
-  const schema = { tx: ctx.tx, workspaceId: ctx.workspaceId, userId: ctx.userId };
-  const [first, ...rest] = typed;
-  if (!first) throw invalid('columns', 'Pick the columns to sync.');
-  const name = body.name ?? freeName(await tableNames(ctx), split.tableName);
-  const table = await createTable(schema, base, { name, primaryFieldName: first.name });
-  const [targetPrimary] = await liveFields(ctx.tx, table.id);
-  if (!targetPrimary) throw new Error('synced table without its primary field');
-  if (first.type !== 'singleLineText') {
-    await updateField(schema, targetPrimary, { type: first.type as never, options: first.options });
-  }
-  const [target] = await ctx.tx.select().from(tables).where(eq(tables.id, table.id));
-  if (!target) throw new Error('synced table not visible');
-  const map: FieldMapEntry[] = [{ column: first.name, fieldId: targetPrimary.id }];
-  const names = new Set([first.name.toLowerCase()]);
-  for (const c of rest) {
-    const row = await createField(
-      schema,
-      target,
-      { name: freeName(names, c.name), type: c.type as never, options: c.options },
-      { sync: true }
-    );
-    map.push({ column: c.name, fieldId: row.id });
-  }
-  const sourceField = await createField(
-    schema,
-    target,
-    { name: freeName(names, 'Sync source'), type: 'syncSource' },
-    { sync: true }
-  );
-  await ctx.tx
-    .update(fields)
-    .set({ synced: true })
-    .where(inArray(fields.id, [...map.map((m) => m.fieldId), sourceField.id]));
-  await ctx.tx.update(tables).set({ synced: true }).where(eq(tables.id, table.id));
-
-  const [row] = await ctx.tx
-    .insert(tableSyncs)
-    .values({
-      id: uuidv7(),
-      workspaceId: ctx.workspaceId,
-      baseId: ctx.baseId,
-      tableId: table.id,
-      sourceKind: split.kind,
-      sourceConfig: split.config,
-      // A connector source has no secret of its own: the creator's account reads it.
-      sourceSecret: split.secret ? sources.cipher.encrypt(split.secret) : null,
-      sourceLabel: split.label,
-      keyColumn: body.keyColumn,
-      fieldMap: map,
-      sourceFieldId: sourceField.id,
-      schedule: body.schedule,
-      createdBy: ctx.userId,
-      nextRunAt: nextRunAt(body.schedule, new Date()),
-    })
-    .returning();
-  if (!row) throw new Error('sync insert returned nothing');
-  await queueRun(ctx.tx, ctx.jobs, row, 'create');
-  return toTableSync(ctx.tx, row, ctx.role);
-}
-
 /** A column's options, checked against its type's schema (422 otherwise). */
 function columnOptions(column: SyncColumn, index: number): Record<string, unknown> {
   const parsed = getFieldType(column.type).optionsSchema.safeParse(column.options ?? {});
@@ -669,13 +911,8 @@ export async function pruneRuns(tx: Transaction, syncId: string) {
   );
 }
 
-/** Changes the schedule, pauses or resumes (a resume runs it now). */
-export async function updateSync(
-  ctx: SyncContext,
-  tableId: string,
-  input: UpdateSyncInput
-): Promise<TableSync> {
-  const row = await loadSync(ctx.tx, tableId, true);
+/** Changes one source's schedule, pauses or resumes it (a resume runs it now). */
+async function updateOne(ctx: SyncContext, row: SyncRow, input: UpdateSyncInput): Promise<SyncRow> {
   const schedule = input.schedule ?? (row.schedule as SyncSchedule);
   const set: Partial<typeof tableSyncs.$inferInsert> = {
     schedule,
@@ -685,7 +922,7 @@ export async function updateSync(
   const resume = input.paused === false && row.status === 'paused';
   if (input.paused === true) Object.assign(set, { status: 'paused', pauseReason: 'paused' });
   if (resume) Object.assign(set, { status: 'active', pauseReason: null });
-  // A resume runs as whoever resumed it: they become the sync's reader of the source.
+  // A resume runs as whoever resumed it: they become the source's reader.
   if (resume) set.createdBy = ctx.userId;
   const [updated] = await ctx.tx
     .update(tableSyncs)
@@ -694,28 +931,105 @@ export async function updateSync(
     .returning();
   if (!updated) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
   if (resume) await queueRun(ctx.tx, ctx.jobs, updated, 'manual');
-  return toTableSync(ctx.tx, updated, ctx.role);
+  return updated;
 }
 
-/** "Sync now": queues a run of an active sync (409 when it's paused). */
+/**
+ * The table-wide change: every source of the table gets the schedule, pauses or resumes (a
+ * table with one source: that source). Answers the first source.
+ */
+export async function updateSync(
+  ctx: SyncContext,
+  tableId: string,
+  input: UpdateSyncInput
+): Promise<TableSync> {
+  const rows = await loadSyncs(ctx.tx, tableId, true);
+  if (!rows.length) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  const updated: SyncRow[] = [];
+  for (const row of rows) updated.push(await updateOne(ctx, row, input));
+  const [first] = updated;
+  if (!first) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  return toTableSync(ctx.tx, first, ctx.role);
+}
+
+/** Changes one source of the table: its schedule, or pauses or resumes it. */
+export async function updateSource(
+  ctx: SyncContext,
+  tableId: string,
+  syncId: string,
+  input: UpdateSyncInput
+): Promise<TableSync> {
+  const row = await loadSource(ctx.tx, tableId, syncId);
+  return toTableSync(ctx.tx, await updateOne(ctx, row, input), ctx.role);
+}
+
+/** "Sync now" on the whole table: a run of each active source (409 when every one is paused). */
 export async function requestRun(ctx: SyncContext, tableId: string): Promise<TableSync> {
-  const row = await loadSync(ctx.tx, tableId, true);
-  if (row.status === 'paused') {
+  const rows = await loadSyncs(ctx.tx, tableId, true);
+  const [first] = rows;
+  if (!first) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  const active = rows.filter((r) => r.status !== 'paused');
+  if (!active.length) {
     throw new AppError('CONFLICT', { detail: 'The sync is paused: resume it to run it.' });
+  }
+  for (const row of active) await queueRun(ctx.tx, ctx.jobs, row, 'manual');
+  return toTableSync(ctx.tx, first, ctx.role);
+}
+
+/** "Sync now" on one source (409 when it's paused). */
+export async function requestSourceRun(
+  ctx: SyncContext,
+  tableId: string,
+  syncId: string
+): Promise<TableSync> {
+  const row = await loadSource(ctx.tx, tableId, syncId);
+  if (row.status === 'paused') {
+    throw new AppError('CONFLICT', { detail: 'This source is paused: resume it to run it.' });
   }
   await queueRun(ctx.tx, ctx.jobs, row, 'manual');
   return toTableSync(ctx.tx, row, ctx.role);
 }
 
 /**
- * Stops syncing: the table keeps its records and fields as a normal, editable table (the "Sync
- * source" field stays as read-only text).
+ * Stops syncing: every source goes, and the table keeps its records and fields as a normal,
+ * editable table (the "Sync source" and "Sync source ID" fields stay as read-only text).
  */
 export async function removeSync(ctx: SyncContext, tableId: string): Promise<void> {
-  const row = await loadSync(ctx.tx, tableId, true);
-  await ctx.tx.update(fields).set({ synced: false }).where(eq(fields.tableId, row.tableId));
-  await ctx.tx.update(tables).set({ synced: false }).where(eq(tables.id, row.tableId));
+  const rows = await loadSyncs(ctx.tx, tableId, true);
+  if (!rows.length) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  await ctx.tx.update(fields).set({ synced: false }).where(eq(fields.tableId, tableId));
+  await ctx.tx.update(tables).set({ synced: false }).where(eq(tables.id, tableId));
+  await ctx.tx.delete(tableSyncs).where(eq(tableSyncs.tableId, tableId));
+}
+
+/**
+ * Removes one source of the table. Its records stay, owned by no source: no run updates or
+ * deletes them, and like every record of a synced table they are read-only until the table
+ * stops syncing. Fields no remaining source fills become ordinary, editable fields; the other
+ * sources keep running. The last source's removal is "Stop syncing" (removeSync).
+ */
+export async function removeSource(
+  ctx: SyncContext,
+  tableId: string,
+  syncId: string
+): Promise<void> {
+  const rows = await loadSyncs(ctx.tx, tableId, true);
+  const row = rows.find((r) => r.id === syncId);
+  if (!row) throw new AppError('NOT_FOUND', { detail: 'No such source of this table.' });
+  const rest = rows.filter((r) => r.id !== syncId);
+  if (!rest.length) return removeSync(ctx, tableId);
   await ctx.tx.delete(tableSyncs).where(eq(tableSyncs.id, row.id));
+  const filled = new Set(rest.flatMap((r) => fieldMapOf(r).map((m) => m.fieldId)));
+  const kept = [row.sourceFieldId, row.ownerFieldId].filter((id): id is string => !!id);
+  const freed = fieldMapOf(row)
+    .map((m) => m.fieldId)
+    .filter((id) => !filled.has(id) && !kept.includes(id));
+  if (freed.length) {
+    await ctx.tx
+      .update(fields)
+      .set({ synced: false })
+      .where(and(eq(fields.tableId, tableId), inArray(fields.id, freed)));
+  }
 }
 
 /** Due syncs per scheduler run; the rest wait for the next minute. */

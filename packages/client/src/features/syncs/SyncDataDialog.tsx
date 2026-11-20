@@ -4,16 +4,19 @@ import {
   SYNC_SOURCE_KINDS,
   type SyncSchedule,
   type SyncSourceKind,
+  syncedTypeOf,
+  type TableMeta,
 } from '@openrows/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { ApiError } from '../../api/client';
 import {
   baseQueries,
   tableQueries,
   useCreateSync,
   useSyncConnectors,
+  useSyncMutations,
   useWorkspaces,
   viewQueries,
 } from '../../api/queries';
@@ -29,7 +32,13 @@ import {
   toast,
 } from '../../components/ui';
 import { type ExternalDraft, ExternalSource } from './ExternalSource';
-import { SCHEDULE_LABELS, SOURCE_KIND_LABELS } from './model';
+import {
+  defaultTargets,
+  SCHEDULE_LABELS,
+  SOURCE_KIND_LABELS,
+  type SourceCopy,
+  targetChoices,
+} from './model';
 
 const selectClass =
   'h-8 w-full rounded-sm border border-border bg-surface px-2 text-body text-text hover:border-border-strong';
@@ -38,13 +47,20 @@ const selectClass =
  * "Sync data" under the base sidebar's tables (creators and up): pick a table, and
  * optionally one of its views, from any base you can read (in any of your workspaces), and how
  * often it syncs. The new table is synced one way: its records follow the source.
+ *
+ * With `addTo`, "Add a source" of that synced table (creators and up): the same source picker,
+ * then where each of the source's fields (or columns) goes: an existing synced field of a fitting
+ * type, or a new field. The source's records stay its own.
  */
 export function SyncDataDialog({
   base,
+  addTo,
   open,
   onOpenChange,
 }: {
   base: Base;
+  /** The synced table a source is added to; none: a new synced table. */
+  addTo?: TableMeta | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -69,6 +85,9 @@ export function SyncDataDialog({
   const [draft, setDraft] = useState<ExternalDraft | null>(null);
   const onDraft = useCallback((d: ExternalDraft | null) => setDraft(d), []);
   const create = useCreateSync(base.id);
+  const { addSource } = useSyncMutations(addTo?.id ?? '');
+  const [keyFieldId, setKeyFieldId] = useState('');
+  const [targets, setTargets] = useState<Record<string, string | null>>({});
   const ids = {
     kind: useId(),
     workspace: useId(),
@@ -77,6 +96,7 @@ export function SyncDataDialog({
     view: useId(),
     schedule: useId(),
     name: useId(),
+    key: useId(),
   };
 
   const bases = useQuery({ ...baseQueries.list(workspaceId), enabled: open });
@@ -95,6 +115,29 @@ export function SyncDataDialog({
   });
   const viewList = (views.data?.views ?? []).filter((v) => v.type !== 'form');
   const sourceName = tableList.find((t) => t.id === chosenTable)?.name ?? '';
+  // Adding a source: the source table's fields, for the key and the mapping.
+  const sourceTable = useQuery({
+    ...tableQueries.detail(chosenTable ?? ''),
+    enabled: open && !!addTo && kind === 'table' && !!chosenTable,
+  });
+  const sourceFields = (kind === 'table' && sourceTable.data?.fields) || [];
+  const copies = useMemo<SourceCopy[]>(() => {
+    if (!addTo) return [];
+    if (kind === 'table') {
+      const all = sourceTable.data?.fields ?? [];
+      return [...all.filter((f) => f.isPrimary), ...all.filter((f) => !f.isPrimary)].map((f) => ({
+        ref: f.id,
+        name: f.name,
+        type: syncedTypeOf(f.type),
+      }));
+    }
+    return (draft?.columns ?? []).map((c) => ({ ref: c.name, name: c.name, type: c.type }));
+  }, [addTo, kind, sourceTable.data, draft]);
+  // New copies (another source, a column's type changed): the default mapping again.
+  const copiesKey = JSON.stringify(copies);
+  useEffect(() => {
+    if (addTo) setTargets(defaultTargets(JSON.parse(copiesKey) as SourceCopy[], addTo.fields));
+  }, [copiesKey, addTo]);
 
   useEffect(() => {
     if (!open) return;
@@ -105,6 +148,7 @@ export function SyncDataDialog({
     setSchedule('hourly');
     setName('');
     setDraft(null);
+    setKeyFieldId('');
     // Back from a connector's consent page: that connector, and the outcome.
     const params = new URLSearchParams(window.location.search);
     const back = params.get('syncConnector');
@@ -122,8 +166,42 @@ export function SyncDataDialog({
     }
   }, [open, base.workspaceId]);
 
-  const ready = kind === 'table' ? !!chosenTable : draft !== null;
+  const ready =
+    (kind === 'table' ? !!chosenTable : draft !== null) && (!addTo || copies.length > 0);
+  const submitAdd = () => {
+    if (!addTo) return;
+    const mapped = copies.map((c) =>
+      kind === 'table'
+        ? { sourceFieldId: c.ref, fieldId: targets[c.ref] ?? null }
+        : { column: c.ref, fieldId: targets[c.ref] ?? null }
+    );
+    let body: Parameters<typeof addSource.mutate>[0];
+    if (kind === 'table') {
+      if (!chosenBase || !chosenTable) return;
+      body = {
+        source: { baseId: chosenBase, tableId: chosenTable, viewId: viewId || null },
+        keyFieldId: keyFieldId || null,
+        schedule,
+        targets: mapped,
+      };
+    } else {
+      if (!draft) return;
+      body = { ...draft, schedule, targets: mapped };
+    }
+    addSource.mutate(body, {
+      onSuccess: () => {
+        toast.success('Source added');
+        onOpenChange(false);
+      },
+      onError: (err) =>
+        toast.error(err instanceof ApiError ? err.message : "Couldn't add the source"),
+    });
+  };
   const submit = () => {
+    if (addTo) {
+      submitAdd();
+      return;
+    }
     const named = name.trim() ? { name: name.trim() } : {};
     let body: Parameters<typeof create.mutate>[0];
     if (kind === 'table') {
@@ -162,11 +240,11 @@ export function SyncDataDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Sync data</DialogTitle>
+            <DialogTitle>{addTo ? 'Add a source' : 'Sync data'}</DialogTitle>
             <DialogDescription>
-              Adds a table to {base.name} whose records follow a table or view you can read, a CSV
-              file, a database or a connected app. Synced fields are read-only here; fields you add
-              stay editable.
+              {addTo
+                ? `Adds a source to ${addTo.name}. Its records sync beside the ones already there and stay its own: the same key from two sources makes two records.`
+                : `Adds a table to ${base.name} whose records follow a table or view you can read, a CSV file, a database or a connected app. Synced fields are read-only here; fields you add stay editable.`}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
@@ -296,6 +374,34 @@ export function SyncDataDialog({
               </div>
             </>
           )}
+          {addTo && kind === 'table' && sourceFields.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={ids.key} className="text-small text-text-2">
+                Match records by
+              </label>
+              <select
+                id={ids.key}
+                className={selectClass}
+                value={keyFieldId}
+                onChange={(e) => setKeyFieldId(e.target.value)}
+              >
+                <option value="">The source record</option>
+                {sourceFields.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {addTo && copies.length > 0 && (
+            <FieldMapping
+              copies={copies}
+              fields={addTo.fields}
+              targets={targets}
+              onChange={(ref, fieldId) => setTargets((t) => ({ ...t, [ref]: fieldId }))}
+            />
+          )}
           <div className="flex flex-col gap-1.5">
             <label htmlFor={ids.schedule} className="text-small text-text-2">
               Sync
@@ -313,18 +419,20 @@ export function SyncDataDialog({
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor={ids.name} className="text-small text-text-2">
-              Table name
-            </label>
-            <Input
-              id={ids.name}
-              value={name}
-              placeholder={(kind === 'table' && sourceName) || 'Same as the source'}
-              maxLength={255}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
+          {!addTo && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={ids.name} className="text-small text-text-2">
+                Table name
+              </label>
+              <Input
+                id={ids.name}
+                value={name}
+                placeholder={(kind === 'table' && sourceName) || 'Same as the source'}
+                maxLength={255}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+          )}
           {kind === 'table' && bases.isSuccess && !tableList.length && !tables.isPending && (
             <p className="text-small text-text-2">No table you can sync in this base.</p>
           )}
@@ -332,12 +440,83 @@ export function SyncDataDialog({
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending || !ready}>
-              {create.isPending ? 'Adding…' : 'Sync table'}
-            </Button>
+            {addTo ? (
+              <Button type="submit" disabled={addSource.isPending || !ready}>
+                {addSource.isPending ? 'Adding…' : 'Add source'}
+              </Button>
+            ) : (
+              <Button type="submit" disabled={create.isPending || !ready}>
+                {create.isPending ? 'Adding…' : 'Sync table'}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Where a new source's fields (or columns) go on the synced table: an existing synced field
+ * that takes their values as they are (the same type, or text), or a new field.
+ */
+function FieldMapping({
+  copies,
+  fields,
+  targets,
+  onChange,
+}: {
+  copies: readonly SourceCopy[];
+  fields: TableMeta['fields'];
+  targets: Record<string, string | null>;
+  onChange: (ref: string, fieldId: string | null) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="max-h-56 overflow-auto rounded-sm border border-border">
+        <table className="w-full text-small">
+          <caption className="sr-only">Where the source's fields go</caption>
+          <thead className="sticky top-0 bg-header text-left text-text-2">
+            <tr>
+              <th className="px-2 py-1 font-medium">Source</th>
+              <th className="px-2 py-1 font-medium">Into</th>
+            </tr>
+          </thead>
+          <tbody>
+            {copies.map((copy) => {
+              const taken = new Set(
+                Object.entries(targets)
+                  .filter(([ref, id]) => ref !== copy.ref && id)
+                  .map(([, id]) => id)
+              );
+              const choices = targetChoices(copy, fields).filter((f) => !taken.has(f.id));
+              return (
+                <tr key={copy.ref} className="border-t border-border">
+                  <td className="max-w-[180px] truncate px-2 py-1">{copy.name}</td>
+                  <td className="px-2 py-1">
+                    <select
+                      aria-label={`${copy.name} goes into`}
+                      className="h-7 w-full rounded-sm border border-border bg-surface px-1 text-small"
+                      value={targets[copy.ref] ?? ''}
+                      onChange={(e) => onChange(copy.ref, e.target.value || null)}
+                    >
+                      <option value="">A new field</option>
+                      {choices.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-small text-text-2">
+        A source field goes into a field of the same type, a text field, or a new field.
+      </p>
+    </div>
   );
 }

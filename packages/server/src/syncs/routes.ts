@@ -4,23 +4,29 @@ import type { Transaction } from '../db/index.js';
 import type { Edition } from '../edition/index.js';
 import type { Jobs } from '../jobs/send.js';
 import {
+  addSource,
   browseSync,
   createSync,
+  listSources,
   loadSync,
   previewSync,
+  removeSource,
   removeSync,
   requestRun,
+  requestSourceRun,
   type SyncContext,
   toTableSync,
+  updateSource,
   updateSync,
 } from './service.js';
 import type { SyncSources } from './sources/index.js';
 
 /**
- * Synced tables (CSV URL and Postgres sources). Creating one is on the base (creators: `table:create_sync`), reading the
+ * Synced tables. Creating one is on the base (creators: `table:create_sync`), reading the
  * source again on every run as the creator; the sync itself is on the synced table: anyone who
- * reads it sees its status, editors "Sync now", creators change, pause or remove it. Sessions
- * only, except reading the status. Resource routes, so other tenants' ids are 404s.
+ * reads it sees its sources and their status, editors "Sync now", creators add sources and
+ * change, pause or remove them. Sessions only, except reading the status. Resource routes, so
+ * other tenants' ids are 404s; a source of another table is a 404 too.
  */
 export function syncRoutes(
   routes: RouteRegistry,
@@ -99,6 +105,50 @@ export function syncRoutes(
     async (c) => {
       await removeSync(await context(c), c.var.resource.id);
       c.var.logger.info({ tableId: c.var.resource.id }, 'sync removed');
+      return null;
+    }
+  );
+
+  routes.endpoint(s.sources, { resource: 'table', action: 'table:read_sync' }, async (c) =>
+    listSources(c.var.tx, c.var.resource.id, c.var.resource.role)
+  );
+
+  routes.endpoint(
+    s.addSource,
+    { resource: 'table', action: 'table:manage_sync', token: null },
+    async (c, { body }) => {
+      const added = await addSource(await context(c), c.var.resource.id, body);
+      // The kind only: never a URL or a connection string.
+      c.var.logger.info(
+        { syncId: added.id, tableId: added.tableId, kind: added.source.kind },
+        'sync source added'
+      );
+      return added;
+    }
+  );
+
+  routes.endpoint(
+    s.updateSource,
+    { resource: 'table', action: 'table:manage_sync', token: null },
+    async (c, { params, body }) =>
+      updateSource(await context(c), c.var.resource.id, params.syncId, body)
+  );
+
+  routes.endpoint(
+    s.runSource,
+    { resource: 'table', action: 'table:run_sync', token: null },
+    async (c, { params }) => requestSourceRun(await context(c), c.var.resource.id, params.syncId)
+  );
+
+  routes.endpoint(
+    s.removeSource,
+    { resource: 'table', action: 'table:manage_sync', token: null },
+    async (c, { params }) => {
+      await removeSource(await context(c), c.var.resource.id, params.syncId);
+      c.var.logger.info(
+        { tableId: c.var.resource.id, syncId: params.syncId },
+        'sync source removed'
+      );
       return null;
     }
   );

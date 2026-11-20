@@ -8,7 +8,8 @@ import { expect, test } from './helpers/test.js';
 // where it comes from, "Sync now" and the run's progress; synced cells and records can't be
 // edited (a local field can); a paused sync says why and offers Resume.: a CSV URL or a
 // Postgres source is previewed, its columns mapped (included, field type, key) and synced.:
-// a sync connector (Google Sheets) is connected, browsed and synced the same way.
+// a sync connector (Google Sheets) is connected, browsed and synced the same way. A table with
+// several sources lists them, removes one, and adds another with its fields mapped.
 
 const GRID_URL = `/b/${IDS.base}/${IDS.table}/${IDS.view}`;
 const grid = (page: Page) => page.getByRole('grid');
@@ -30,10 +31,18 @@ async function expectNoSeriousA11yIssues(page: Page, selector: string) {
 
 type Run = { status: string; created?: number; updated?: number; deleted?: number };
 
-function syncOf(over: { status?: string; pauseReason?: string | null; runs?: Run[] } = {}) {
+function syncOf(
+  over: {
+    id?: string;
+    label?: string;
+    status?: string;
+    pauseReason?: string | null;
+    runs?: Run[];
+  } = {}
+) {
   const at = '2026-10-29T10:00:00.000Z';
   return {
-    id: SYNC_ID,
+    id: over.id ?? SYNC_ID,
     baseId: IDS.base,
     tableId: IDS.table,
     source: {
@@ -42,13 +51,14 @@ function syncOf(over: { status?: string; pauseReason?: string | null; runs?: Run
       baseId: IDS.base,
       tableId: IDS.table,
       viewId: null,
-      label: 'CRM / Tasks',
+      label: over.label ?? 'CRM / Tasks',
       connector: null,
     },
     keyFieldId: null,
     keyColumn: null,
     fields: [],
     sourceFieldId: IDS.notes,
+    ownerFieldId: null,
     schedule: 'hourly',
     status: over.status ?? 'active',
     pauseReason: over.pauseReason ?? null,
@@ -84,6 +94,7 @@ async function mockSync(page: Page, initial: ReturnType<typeof syncOf>) {
     calls.push(`${req.method()} ${path}`);
     const reply = (data: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+    if (path.endsWith('/syncs') && req.method() === 'GET') return reply({ sources: [current] });
     if (path.endsWith('/sync/run') && req.method() === 'POST') {
       current = syncOf({ runs: [{ status: 'queued' }, ...current.runs] });
       return reply(current);
@@ -409,4 +420,98 @@ test('"Sync data" connects Google Sheets, picks a sheet and syncs it', async ({ 
       schedule: 'hourly',
     },
   ]);
+});
+
+test('a table with several sources lists them, removes one and adds another', async ({ page }) => {
+  await mockApi(page, { rows: 3, synced: true });
+  const SECOND = '0b000000-0000-4000-8000-000000000002';
+  let sources = [
+    syncOf(),
+    syncOf({ id: SECOND, label: 'Sales / Leads', status: 'paused', pauseReason: 'paused' }),
+  ];
+  const calls: string[] = [];
+  const added: unknown[] = [];
+  await page.route(`**/api/bases/${IDS.base}/syncs/preview`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        label: 'data.example.com/people.csv',
+        columns: [
+          { name: 'Name', type: 'singleLineText', options: {} },
+          { name: 'id', type: 'number', options: { precision: 0 } },
+        ],
+        rows: [['Ada', '1']],
+      }),
+    })
+  );
+  await page.route(`**/api/tables/${IDS.table}/sync**`, async (route) => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    calls.push(`${req.method()} ${path}`);
+    const reply = (data: unknown, status = 200) =>
+      route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+    if (req.method() === 'DELETE') {
+      sources = sources.filter((x) => !path.endsWith(x.id));
+      return route.fulfill({ status: 204 });
+    }
+    if (path.endsWith('/syncs') && req.method() === 'POST') {
+      added.push(JSON.parse(req.postData() ?? '{}'));
+      const third = syncOf({
+        id: '0b000000-0000-4000-8000-000000000003',
+        label: 'data.example.com/people.csv',
+        runs: [{ status: 'queued' }],
+      });
+      sources = [...sources, third];
+      return reply(third, 201);
+    }
+    return reply({ sources });
+  });
+  await page.goto(GRID_URL);
+  const bar = page.getByTestId('sync-bar');
+  await expect(bar).toContainText('Synced from 2 sources');
+  await expect(bar).toContainText('1 paused');
+  await expectNoSeriousA11yIssues(page, '[data-testid="sync-bar"]');
+
+  await bar.getByRole('button', { name: 'Sources' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Sources of' });
+  await expect(dialog.getByTestId('sync-source')).toHaveCount(2);
+  await expect(dialog.getByTestId('sync-source').nth(1)).toContainText('Sales / Leads');
+  await expect(dialog.getByTestId('sync-source').nth(1)).toContainText('The sync is paused.');
+  await expectNoSeriousA11yIssues(page, '[role="dialog"]');
+  page.once('dialog', (d) => d.accept());
+  await dialog.getByTestId('sync-source').nth(1).getByRole('button', { name: 'Remove' }).click();
+  await expect.poll(() => calls).toContain(`DELETE /api/tables/${IDS.table}/syncs/${SECOND}`);
+  await page.keyboard.press('Escape');
+  await expect(bar).toContainText('Synced from CRM / Tasks');
+
+  // Add a source: a CSV file, its Name column into the table's Name field, id into a new field.
+  await bar.getByRole('button', { name: 'Sync settings' }).click();
+  await page.getByRole('menuitem', { name: 'Add a source…' }).click();
+  const add = page.getByRole('dialog', { name: 'Add a source' });
+  await expect(add.getByLabel('Table name')).toHaveCount(0);
+  await add.getByLabel('Source').selectOption({ label: 'A CSV file at a URL' });
+  await add.getByLabel('CSV URL').fill('https://data.example.com/people.csv');
+  await add.getByRole('button', { name: 'Preview' }).click();
+  await expect(add.getByLabel('Name goes into')).toHaveValue(IDS.name);
+  await expect(add.getByLabel('id goes into')).toHaveValue('');
+  await expectNoSeriousA11yIssues(page, '[role="dialog"]');
+  await add.getByRole('button', { name: 'Add source' }).click();
+  await expect(add).toBeHidden();
+  expect(added).toEqual([
+    {
+      source: { kind: 'csv', url: 'https://data.example.com/people.csv' },
+      columns: [
+        { name: 'Name', type: 'singleLineText', options: {} },
+        { name: 'id', type: 'number', options: { precision: 0 } },
+      ],
+      keyColumn: 'id',
+      schedule: 'hourly',
+      targets: [
+        { column: 'Name', fieldId: IDS.name },
+        { column: 'id', fieldId: null },
+      ],
+    },
+  ]);
+  await expect(bar).toContainText('Synced from 2 sources');
 });

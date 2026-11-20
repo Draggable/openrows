@@ -83,6 +83,14 @@ import {
  * re-running is idempotent. Records whose key left the source are deleted last, all in one
  * transaction with the run's end, once the whole source was read: a run that fails midway
  * deletes nothing, and the next one converges.
+ *
+ * A table with more than one source: each source's run works on its own records only, those
+ * whose "Sync source ID" cell holds its id (and, for the table's first source, the records with
+ * a key synced before that field existed, whose cell is empty). It reads, matches, updates and
+ * deletes only those, and the records it creates get its id, so the same key from two sources
+ * is two records and one source never touches another's (or records no source owns). A run
+ * that finds the table's sources changed under it (a source added meanwhile) fails before
+ * writing, and the next one starts afresh.
  */
 
 export const syncJobData = z.object({
@@ -200,6 +208,11 @@ interface Setup {
   userId: string;
   targetFields: Map<string, FieldRow>;
   keyField: FieldRow;
+  /**
+   * The "Sync source ID" field of a table with more than one source, and whether this source
+   * also owns the records with a key and an empty cell there; null: it owns every keyed record.
+   */
+  owner: { field: FieldRow; unattributed: boolean } | null;
   /** The synced fields, compared between the source and the table. */
   compared: TypedField[];
 }
@@ -292,6 +305,8 @@ async function runHeld(
 }
 
 const GONE_MESSAGE = 'The synced table is gone.';
+const SOURCES_CHANGED =
+  "The table's sources changed during the run: nothing was deleted, and the next run catches up.";
 
 export const PAUSE_MESSAGES: Record<SyncPauseReason, string> = {
   paused: 'The sync was paused.',
@@ -407,12 +422,26 @@ async function setUpRun(
   const targetFields = new Map((await liveFields(tx, table.id)).map((f) => [f.id, f]));
   const keyField = targetFields.get(sync.sourceFieldId);
   if (!keyField) return { error: 'The "Sync source" field is gone.' };
+  let owner: Setup['owner'] = null;
+  if (sync.ownerFieldId) {
+    const field = targetFields.get(sync.ownerFieldId);
+    if (!field) return { error: 'The "Sync source ID" field is gone.' };
+    owner = { field, unattributed: sync.ownsUnattributed };
+  }
   const compared = new Map<string, TypedField>();
   for (const m of fieldMapOf(sync)) {
     const field = targetFields.get(m.fieldId);
     if (field && !compared.has(field.id)) compared.set(field.id, typed(field));
   }
-  return { sync, table, userId, targetFields, keyField, compared: [...compared.values()] };
+  return {
+    sync,
+    table,
+    userId,
+    targetFields,
+    keyField,
+    owner,
+    compared: [...compared.values()],
+  };
 }
 
 /** The creator's live role on the synced table, when it lets them write records (editor+). */
@@ -440,6 +469,13 @@ async function writeContext(
     .for('no key update');
   if (!sync) throw new Gone();
   if (sync.status === 'paused') throw new Paused((sync.pauseReason as SyncPauseReason) ?? 'paused');
+  // Which records are this source's changed (a source was added): what was read may be wrong.
+  if (
+    sync.ownerFieldId !== setup.sync.ownerFieldId ||
+    sync.ownsUnattributed !== setup.sync.ownsUnattributed
+  ) {
+    throw new AppError('CONFLICT', { detail: SOURCES_CHANGED });
+  }
   const [table] = await tx.select().from(tables).where(eq(tables.id, setup.table.id));
   if (!table || table.deletedAt) throw new Gone();
   const role = await targetRole(tx, table.id, setup.userId);
@@ -520,7 +556,33 @@ function keyDigest(key: string): string {
   return createHash('sha1').update(key).digest('base64');
 }
 
-/** The table's synced records by key digest, read a page at a time (ids and fingerprints only). */
+/**
+ * The filter matching this source's records on a table with more than one source: its id in
+ * the "Sync source ID" field, or (the table's first source) a key and an empty cell there.
+ */
+function ownedFilter(setup: Setup) {
+  const { owner, keyField, sync } = setup;
+  if (!owner) return undefined;
+  return {
+    conjunction: 'or' as const,
+    conditions: [
+      { fieldId: owner.field.id, operator: 'is' as const, value: sync.id },
+      ...(owner.unattributed
+        ? [
+            {
+              conjunction: 'and' as const,
+              conditions: [
+                { fieldId: owner.field.id, operator: 'isEmpty' as const },
+                { fieldId: keyField.id, operator: 'isNotEmpty' as const },
+              ],
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
+/** The source's own synced records by key digest, a page at a time (ids and fingerprints only). */
 async function syncedRecords(db: Database, setup: Setup): Promise<Held> {
   return withTenant(db, setup.sync.workspaceId, async (tx) => {
     const read = {
@@ -529,12 +591,23 @@ async function syncedRecords(db: Database, setup: Setup): Promise<Held> {
       userId: setup.userId,
       table: setup.table,
     };
+    const filter = ownedFilter(setup);
     const held: Held = new Map();
     for (let cursor: string | undefined; ; ) {
-      const page = await listRecords(read, {
-        limit: QUERY_PAGE_MAX,
-        ...(cursor ? { cursor } : {}),
-      });
+      const page = filter
+        ? await queryRecords(
+            read,
+            queryRecordsSchema.parse({
+              query: { filter },
+              limit: QUERY_PAGE_MAX,
+              count: false,
+              ...(cursor ? { cursor } : {}),
+            })
+          )
+        : await listRecords(read, {
+            limit: QUERY_PAGE_MAX,
+            ...(cursor ? { cursor } : {}),
+          });
       for (const r of page.records) {
         const key = r.fields[setup.keyField.id];
         if (typeof key === 'string') {
@@ -548,12 +621,13 @@ async function syncedRecords(db: Database, setup: Setup): Promise<Held> {
   });
 }
 
-/** The table's live records (an unchanged source's "unchanged" count). */
+/** The source's own live records (an unchanged source's "unchanged" count). */
 async function countRecords(db: Database, setup: Setup): Promise<number> {
   return withTenant(db, setup.sync.workspaceId, async (tx) => {
+    const filter = ownedFilter(setup);
     const page = await queryRecords(
       { tx, workspaceId: setup.sync.workspaceId, userId: setup.userId, table: setup.table },
-      queryRecordsSchema.parse({ limit: 1, count: true })
+      queryRecordsSchema.parse({ limit: 1, count: true, ...(filter ? { query: { filter } } : {}) })
     );
     return page.total ?? 0;
   });
@@ -572,6 +646,8 @@ async function writeBatch(
   writes: { stateCleared: boolean }
 ): Promise<void> {
   const keyFieldId = setup.keyField.id;
+  // A new record names its source, on a table with more than one.
+  const owned = setup.owner ? { [setup.owner.field.id]: setup.sync.id } : {};
   await withTenant(deps.db, setup.sync.workspaceId, async (tx) => {
     const { ctx } = await writeContext(deps, tx, setup);
     const creates: Record<string, unknown>[] = [];
@@ -580,7 +656,7 @@ async function writeBatch(
     for (const { key, cells } of batch) {
       const held = existing.get(keyDigest(key));
       if (!held) {
-        creates.push({ ...cells, [keyFieldId]: key });
+        creates.push({ ...cells, [keyFieldId]: key, ...owned });
         continue;
       }
       const wanted = wantedPrint(setup.compared, cells);
@@ -598,7 +674,7 @@ async function writeBatch(
       for (const d of differing) {
         const record = current.get(d.id);
         if (!record) {
-          creates.push({ ...d.cells, [keyFieldId]: d.key });
+          creates.push({ ...d.cells, [keyFieldId]: d.key, ...owned });
           continue;
         }
         const changed = changedCells(byField, d.cells, record.fields);

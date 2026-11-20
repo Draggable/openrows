@@ -1,13 +1,16 @@
-import type { SyncRun, TableSync } from '@openrows/shared';
+import type { FieldMeta, SyncRun, TableSync } from '@openrows/shared';
 import { describe, expect, it } from 'vitest';
 import {
   columnChoices,
   columnsBody,
+  defaultTargets,
   isBusy,
   relativeTime,
   runSummary,
+  sourcesStatusLine,
   statusLine,
   suggestedKey,
+  targetChoices,
 } from './model';
 
 const run = (over: Partial<SyncRun> = {}): SyncRun => ({
@@ -43,6 +46,7 @@ const sync = (over: Partial<TableSync> = {}): TableSync => ({
   keyColumn: null,
   fields: [],
   sourceFieldId: '01900000-0000-7000-8000-000000000008',
+  ownerFieldId: null,
   schedule: 'hourly',
   status: 'active',
   pauseReason: null,
@@ -115,5 +119,62 @@ describe('external sources (#155)', () => {
     const without = choices.map((c) => (c.name === 'ID' ? { ...c, include: false } : c));
     expect(columnsBody(without, 'ID')).toMatchObject({ keyColumn: null });
     expect(columnsBody(without, 'ID').columns.map((c) => c.name)).toEqual(['Name', 'Email']);
+  });
+});
+
+describe('tables with several sources', () => {
+  it('sums the sources up in one line', () => {
+    const two = [sync(), sync({ lastSyncedAt: '2026-10-29T10:03:00.000Z' })];
+    expect(sourcesStatusLine(two, now)).toBe('Last synced 2 min ago');
+    expect(
+      sourcesStatusLine([sync(), sync({ status: 'paused', pauseReason: 'too_many_records' })], now)
+    ).toBe('1 paused · Last synced 5 min ago');
+    expect(
+      sourcesStatusLine([sync(), sync({ runs: [run({ status: 'failed', error: 'x' })] })], now)
+    ).toBe('1 failed · Last synced 5 min ago');
+    expect(sourcesStatusLine([sync(), sync({ runs: [run({ status: 'queued' })] })], now)).toBe(
+      'Syncing…'
+    );
+    expect(sourcesStatusLine([sync({ lastSyncedAt: null })], now)).toBe('Not synced yet');
+  });
+
+  const fields: Pick<FieldMeta, 'id' | 'name' | 'type' | 'synced' | 'isPrimary'>[] = [
+    { id: 'name', name: 'Name', type: 'singleLineText', synced: true, isPrimary: true },
+    { id: 'points', name: 'Points', type: 'number', synced: true, isPrimary: false },
+    { id: 'status', name: 'Status', type: 'singleSelect', synced: true, isPrimary: false },
+    { id: 'mine', name: 'Remark', type: 'singleLineText', isPrimary: false },
+    { id: 'key', name: 'Sync source', type: 'syncSource', synced: true, isPrimary: false },
+  ];
+
+  it('offers only synced fields of a fitting type', () => {
+    expect(targetChoices({ type: 'number' }, fields).map((f) => f.id)).toEqual(['name', 'points']);
+    expect(targetChoices({ type: 'singleSelect' }, fields).map((f) => f.id)).toEqual([
+      'name',
+      'status',
+    ]);
+  });
+
+  it('maps the first into the primary and the others by name, else into new fields', () => {
+    expect(
+      defaultTargets(
+        [
+          { ref: 'a', name: 'Title', type: 'singleLineText' },
+          { ref: 'b', name: 'points', type: 'number' },
+          { ref: 'c', name: 'Status', type: 'date' },
+          { ref: 'd', name: 'Name', type: 'singleLineText' },
+        ],
+        fields
+      )
+    ).toEqual({ a: 'name', b: 'points', c: null, d: null });
+    // Any value fills a text primary (as its text); one that can't fill it gets a new field.
+    expect(defaultTargets([{ ref: 'a', name: 'When', type: 'date' }], fields)).toEqual({
+      a: 'name',
+    });
+    expect(
+      defaultTargets(
+        [{ ref: 'a', name: 'When', type: 'date' }],
+        [{ id: 'n', name: 'N', type: 'number', synced: true, isPrimary: true }]
+      )
+    ).toEqual({ a: null });
   });
 });

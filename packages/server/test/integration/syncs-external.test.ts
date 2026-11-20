@@ -49,6 +49,7 @@ describe('synced tables from CSV URLs and Postgres', () => {
   let csv = 'id,Name,Active\n1,Ada,true\n2,Bob,false\n3,Cy,true\n';
   let etag = '"v1"';
   let cutShort = false;
+  let team = 'id,Name,Active\n1,Ada,true\n2,Bob,false\n';
   const requests: { path: string; ifNoneMatch: string | undefined }[] = [];
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     requests.push({ path: req.url ?? '', ifNoneMatch: req.headers['if-none-match'] });
@@ -60,6 +61,11 @@ describe('synced tables from CSV URLs and Postgres', () => {
       }
       res.writeHead(200, { 'content-type': 'text/csv', etag });
       res.end(csv);
+      return;
+    }
+    if (req.url === '/team.csv') {
+      res.writeHead(200, { 'content-type': 'text/csv' });
+      res.end(team);
       return;
     }
     if (req.url === '/big.csv') {
@@ -301,6 +307,106 @@ describe('synced tables from CSV URLs and Postgres', () => {
       records: [{ fields: {} }],
     });
     expect(res.status).toBe(403);
+  });
+
+  it('adds a table source to a CSV-synced table, keeping each source to its own records', async () => {
+    const sync = await ok<TableSync>(
+      json('POST', `/api/bases/${base.id}/syncs`, {
+        name: 'Team',
+        source: { kind: 'csv', url: `${httpBase}/team.csv` },
+        columns: [
+          { name: 'Name', type: 'singleLineText' },
+          { name: 'id', type: 'number', options: { precision: 0 } },
+          { name: 'Active', type: 'checkbox' },
+        ],
+        keyColumn: 'id',
+        schedule: 'manual',
+      }),
+      201
+    );
+    expect(await syncNow(sync)).toMatchObject({ status: 'succeeded', created: 2 });
+    let table = await ok<TableMeta>(json('GET', `/api/tables/${sync.tableId}`));
+    const field = (name: string) => {
+      const f = table.fields.find((x) => x.name === name);
+      if (!f) throw new Error(`no field ${name}`);
+      return f.id;
+    };
+
+    // An OpenRows table whose key text "1" is also a CSV key.
+    const staff = await ok<TableMeta>(
+      json('POST', `/api/bases/${base.id}/tables`, { name: 'Staff' }),
+      201
+    );
+    const staffName = staff.fields.find((f) => f.isPrimary)?.id;
+    if (!staffName) throw new Error('no primary');
+    const code = await ok<{ id: string }>(
+      json('POST', `/api/tables/${staff.id}/fields`, { name: 'Code', type: 'singleLineText' }),
+      201
+    );
+    await ok(
+      json('POST', `/api/tables/${staff.id}/records`, {
+        records: [
+          { fields: { [staffName]: 'Uma', [code.id]: '1' } },
+          { fields: { [staffName]: 'Vic', [code.id]: '9' } },
+        ],
+      }),
+      201
+    );
+    // A text code can't fill the checkbox; a CSV column can't be named for a table source.
+    const refused = await problem(
+      json('POST', `/api/tables/${sync.tableId}/syncs`, {
+        source: { baseId: base.id, tableId: staff.id },
+        fieldIds: [code.id],
+        keyFieldId: code.id,
+        targets: [{ sourceFieldId: code.id, fieldId: field('Active') }],
+      })
+    );
+    expect(refused.detail).toMatch(/can't fill "Active" \(Checkbox\)/);
+    await problem(
+      json('POST', `/api/tables/${sync.tableId}/syncs`, {
+        source: { baseId: base.id, tableId: staff.id },
+        targets: [{ column: 'Name', fieldId: null }],
+      })
+    );
+    const added = await ok<TableSync>(
+      json('POST', `/api/tables/${sync.tableId}/syncs`, {
+        source: { baseId: base.id, tableId: staff.id },
+        fieldIds: [code.id],
+        keyFieldId: code.id,
+        schedule: 'manual',
+      }),
+      201
+    );
+    expect(added.source).toMatchObject({ kind: 'table', label: 'Imports / Staff' });
+    const queued = added.runs[0];
+    if (!queued) throw new Error('no run');
+    expect(
+      await runSyncJob(
+        { db: t.appDb, sources },
+        { workspaceId, syncId: added.id, runId: queued.id }
+      )
+    ).toMatchObject({ status: 'succeeded', created: 2 });
+    table = await ok<TableMeta>(json('GET', `/api/tables/${sync.tableId}`));
+    const keyed = async () =>
+      (await rows(sync.tableId))
+        .map((r) => [r['Sync source ID'] ?? '', r['Sync source'], r['Name']])
+        .sort((a, b) => `${a[0]}|${a[1]}`.localeCompare(`${b[0]}|${b[1]}`));
+    expect(await keyed()).toEqual([
+      ['', '1', 'Ada'],
+      ['', '2', 'Bob'],
+      [added.id, '1', 'Uma'],
+      [added.id, '9', 'Vic'],
+    ]);
+
+    // The CSV drops row 1, which the table source still has: only the CSV's record goes.
+    team = 'id,Name,Active\n2,Bob,false\n3,Cy,true\n';
+    expect(await syncNow(sync)).toMatchObject({ created: 1, deleted: 1, unchanged: 1 });
+    expect(await keyed()).toEqual([
+      ['', '2', 'Bob'],
+      [sync.id, '3', 'Cy'],
+      [added.id, '1', 'Uma'],
+      [added.id, '9', 'Vic'],
+    ]);
   });
 
   it('fails a run, keeping the records, when the URL answers a page or loses its columns', async () => {
