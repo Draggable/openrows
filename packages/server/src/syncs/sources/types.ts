@@ -16,6 +16,24 @@ export interface ExternalRows {
 /** A read, or "not modified since the state's run" (a CSV's 304). */
 export type ExternalRead = ({ notModified: false } & ExternalRows) | { notModified: true };
 
+/** Rows of a read, a page at a time as it goes (a run stages them); a promise is awaited. */
+export type RowSink = (rows: (string | null)[][]) => void | Promise<void>;
+
+/**
+ * A streamed read: its rows went to the sink (`rows` of them) and these are its columns; or
+ * "not modified since the state's run" (a CSV's 304).
+ */
+export type StreamedRead =
+  | {
+      notModified: false;
+      columns: string[];
+      rows: number;
+      state: Record<string, string>;
+      /** The source's label now (a connector's names). */
+      label?: string;
+    }
+  | { notModified: true };
+
 /** A source problem whose message is safe to show (no addresses, URLs or credentials). */
 export class SourceError extends Error {
   constructor(message: string, options?: ErrorOptions) {

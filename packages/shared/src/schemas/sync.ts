@@ -20,8 +20,11 @@ export const SYNC_SCHEDULE_MINUTES: Record<Exclude<SyncSchedule, 'manual'>, numb
   daily: 24 * 60,
 };
 
-/** Source records one sync copies; a bigger source pauses the sync (`too_many_records`). */
-export const MAX_SYNC_RECORDS = 10_000;
+/**
+ * Source records one sync copies; a bigger source pauses the sync (`too_many_records`) before
+ * anything is written. Runs read the source a page at a time and write in batches.
+ */
+export const MAX_SYNC_RECORDS = 100_000;
 /** Source fields one sync copies. */
 export const MAX_SYNC_FIELDS = 100;
 /** Synced tables per base. */
@@ -52,10 +55,13 @@ export type SyncPauseReason = (typeof SYNC_PAUSE_REASONS)[number];
 export const SYNC_SOURCE_KINDS = ['table', 'csv', 'postgres', 'connector'] as const;
 export type SyncSourceKind = (typeof SYNC_SOURCE_KINDS)[number];
 
-/** The biggest CSV file a sync reads (bytes, as sent: no compression). */
-export const MAX_SYNC_CSV_BYTES = 20 * 1024 * 1024;
-/** The most a Postgres source's rows may weigh, as text (bytes). */
-export const MAX_SYNC_POSTGRES_BYTES = 50 * 1024 * 1024;
+/**
+ * The biggest CSV file a sync reads (bytes, as sent: no compression): 2 KiB a row on average at
+ * MAX_SYNC_RECORDS. Parsed as it downloads, never held whole.
+ */
+export const MAX_SYNC_CSV_BYTES = 200 * 1024 * 1024;
+/** The most a Postgres source's rows may weigh, as text (bytes): the same as a CSV file's. */
+export const MAX_SYNC_POSTGRES_BYTES = 200 * 1024 * 1024;
 /** A Postgres source's SQL query, in characters. */
 export const MAX_SYNC_QUERY_CHARS = 10_000;
 /** Each statement of a Postgres source's read (Postgres' `statement_timeout`). */

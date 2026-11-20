@@ -16,6 +16,8 @@ for AI agents.
 - [Views](guide/views.md): grid, kanban, calendar, gallery, timeline, list and form
 - [Sharing and permissions](guide/sharing.md): roles, base collaborators, share links and embeds
 - [Forms](guide/forms.md): public forms and their submissions
+- [Synced tables](guide/synced-tables.md): tables kept up to date from another table, a CSV URL
+  or a Postgres database
 - [Automations](guide/automations.md): triggers, actions, test runs and run history
 - [Scripts](guide/scripts.md): JavaScript against a base, in a browser sandbox
 - [Extensions](guide/extensions.md): the extension panel and building your own

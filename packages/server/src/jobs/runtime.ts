@@ -49,7 +49,7 @@ import {
 import { pruneRevisions } from '../revisions/repo.js';
 import { pruneSnapshots, runAutoSnapshots } from '../snapshots/jobs.js';
 import { runRestoreJob } from '../snapshots/restore-job.js';
-import { runSyncJob } from '../syncs/run.js';
+import { runSyncJob, SYNC_BUSY_RETRY_SECONDS, syncJobData } from '../syncs/run.js';
 import { scheduleDueSyncs } from '../syncs/service.js';
 import type { SyncSources } from '../syncs/sources/index.js';
 import { reconcileRecordCounts } from '../usage/counters.js';
@@ -259,7 +259,17 @@ export function builtinQueues(deps: WorkerDeps): Record<string, QueueDefinition>
     },
     'syncs.run': {
       spec: JOB_QUEUES['syncs.run'],
-      handler: (data) => runSyncJob({ db, logger, entitlements, sources: deps.syncSources }, data),
+      handler: async (data, { job, boss }) => {
+        const outcome = await runSyncJob(
+          { db, logger, entitlements, sources: deps.syncSources },
+          data
+        );
+        // Another attempt of this run still holds the sync: this one waits its turn.
+        if (outcome.status === 'busy') {
+          return deferJob(boss, 'syncs.run', job, syncJobData.parse(data), SYNC_BUSY_RETRY_SECONDS);
+        }
+        return outcome;
+      },
     },
     'syncs.schedule': {
       spec: JOB_QUEUES['syncs.schedule'],

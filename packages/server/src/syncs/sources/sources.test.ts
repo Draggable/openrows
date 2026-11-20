@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHostCheck, outboundPolicy, type SafeFetch } from '../../lib/safe-fetch/index.js';
-import { csvLabel, csvTableName, readCsv } from './csv.js';
+import { csvLabel, csvTableName, readCsv, streamCsv } from './csv.js';
 import {
   checkedQuery,
   parseConnectionString,
@@ -30,6 +30,92 @@ function fakeHttp(
     };
   };
 }
+
+/**
+ * A SafeFetch that streams like the real one: the head goes to `stream`, then the body in
+ * `chunk`-byte pieces to its sink (awaited). Records how many pieces were sent.
+ */
+function streamingHttp(
+  answer: { status?: number; body: string; headers?: Record<string, string> },
+  chunk = 7
+) {
+  const sent = { pieces: 0 };
+  const http: SafeFetch = async (url, init = {}) => {
+    const status = answer.status ?? 200;
+    const headers = new Headers(answer.headers ?? { 'content-type': 'text/csv' });
+    const sink = init.stream?.({ status, headers });
+    const body = Buffer.from(answer.body);
+    if (sink) {
+      for (let i = 0; i < body.length; i += chunk) {
+        sent.pieces++;
+        await sink(body.subarray(i, i + chunk));
+      }
+    }
+    const kept = sink ? Buffer.alloc(0) : body;
+    return {
+      status,
+      statusText: '',
+      headers,
+      url: String(url),
+      redirected: false,
+      body: kept,
+      text: () => kept.toString('utf8'),
+    };
+  };
+  return { http, sent };
+}
+
+describe('CSV sources, streamed', () => {
+  const csv = `id,Name\n${Array.from({ length: 1201 }, (_, i) => `${i + 1},"Name\n${i + 1}"`).join('\n')}\n`;
+
+  it('parses the file as it downloads and hands the rows on in pages', async () => {
+    const { http } = streamingHttp({
+      body: csv,
+      headers: { 'content-type': 'text/csv', etag: '"e"' },
+    });
+    const pages: (string | null)[][][] = [];
+    const read = await streamCsv(http, 'https://x/a.csv', {
+      maxRows: 1201,
+      onRows: async (rows) => {
+        pages.push(rows);
+      },
+    });
+    expect(read).toEqual({
+      notModified: false,
+      columns: ['id', 'Name'],
+      rows: 1201,
+      state: { etag: '"e"' },
+    });
+    expect(pages.map((p) => p.length)).toEqual([500, 500, 201]);
+    expect(pages[0]?.[0]).toEqual(['1', 'Name\n1']);
+    expect(pages[2]?.at(-1)).toEqual(['1201', 'Name\n1201']);
+  });
+
+  it('stops past maxRows, and a preview after its first rows without reading on', async () => {
+    await expect(
+      streamCsv(streamingHttp({ body: csv }).http, 'https://x/a.csv', {
+        maxRows: 1200,
+        onRows: () => {},
+      })
+    ).rejects.toThrow(TooManyRows);
+    const { http, sent } = streamingHttp({ body: csv }, 64);
+    const read = await readCsv(http, 'https://x/a.csv', { maxRows: 10, limit: 3 });
+    expect(read.notModified === false && read.rows).toEqual([
+      ['1', 'Name\n1'],
+      ['2', 'Name\n2'],
+      ['3', 'Name\n3'],
+    ]);
+    expect(sent.pieces).toBeLessThan(5);
+  });
+
+  it('checks the status and type before reading the body', async () => {
+    const { http, sent } = streamingHttp({ status: 500, body: csv });
+    await expect(readCsv(http, 'https://x/a', { maxRows: 10 })).rejects.toThrow(/answered 500/);
+    const page = streamingHttp({ body: '<html>', headers: { 'content-type': 'text/html' } });
+    await expect(readCsv(page.http, 'https://x/a', { maxRows: 10 })).rejects.toThrow(/web page/);
+    expect(sent.pieces + page.sent.pieces).toBe(0);
+  });
+});
 
 describe('CSV sources (#155)', () => {
   it('reads the header and rows, empty cells as null, names made unique', async () => {

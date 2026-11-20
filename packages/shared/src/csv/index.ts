@@ -263,3 +263,5 @@ export function optionsForColumn(
   };
   return getFieldType(type).optionsSchema.safeParse(withChoices).success ? withChoices : {};
 }
+
+export { CsvRowStream } from './stream.js';

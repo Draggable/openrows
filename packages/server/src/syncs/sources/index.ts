@@ -27,9 +27,17 @@ import {
   NotConnected,
   type SyncConnector,
 } from './connectors.js';
-import { type CsvState, csvLabel, csvTableName, readCsv } from './csv.js';
+import {
+  CSV_RUN_TIMEOUT_MS,
+  type CsvState,
+  csvLabel,
+  csvTableName,
+  readCsv,
+  streamCsv,
+} from './csv.js';
 import {
   checkedQuery,
+  POSTGRES_RUN_DEADLINE_MS,
   type PostgresSourceConfig,
   type PostgresSourceDeps,
   parseConnectionString,
@@ -39,7 +47,7 @@ import {
   readPostgres,
   suggestedType,
 } from './postgres.js';
-import { type ExternalRead, SourceError, TooManyRows } from './types.js';
+import { type RowSink, SourceError, type StreamedRead, TooManyRows } from './types.js';
 
 export {
   accessToken,
@@ -52,7 +60,7 @@ export {
   type SyncConnector,
   saveAccount,
 } from './connectors.js';
-export { SourceError, TooManyRows } from './types.js';
+export { type RowSink, SourceError, type StreamedRead, TooManyRows } from './types.js';
 
 /** A live access token of the acting person's account at a connector. */
 export type ConnectorToken = (connector: SyncConnector) => Promise<string>;
@@ -207,48 +215,67 @@ export function connectorConfig(config: unknown): ConnectorConfig | null {
   };
 }
 
-/** Reads a connector source's rows for a run, with the creator's account. */
+/** Rows a run's reads hand on at a time. */
+const RUN_PAGE = 500;
+
+/**
+ * Reads a connector source's rows for a run, with the creator's account, handing them to
+ * `onRows` a page at a time. TooManyRows past `maxRows`.
+ */
 export async function readConnector(
   sources: SyncSources,
   config: unknown,
-  token: ConnectorToken
-): Promise<ExternalRead & { label?: string }> {
+  token: ConnectorToken,
+  opts: { maxRows: number; onRows: RowSink }
+): Promise<StreamedRead> {
   const c = connectorConfig(config);
   if (!c) throw new SourceError('This source is not available on this server.');
   const connector = connectorOf(sources.connectors, c.connector);
   const read = await connectorCall(connector, async () =>
     connector.read({ http: sources.connectors.http }, await token(connector), c, {
-      maxRows: MAX_SYNC_RECORDS,
+      maxRows: opts.maxRows,
     })
   );
+  if (read.rows.length > opts.maxRows) throw new TooManyRows();
+  for (let i = 0; i < read.rows.length; i += RUN_PAGE) {
+    await opts.onRows(read.rows.slice(i, i + RUN_PAGE));
+  }
   return {
     notModified: false,
     columns: read.columns,
-    rows: read.rows,
+    rows: read.rows.length,
     state: {},
     label: read.label,
   };
 }
 
-/** Reads an external source's rows for a run (a CSV's conditional GET with `state`). */
+/**
+ * Reads an external source's rows for a run (a CSV's conditional GET with `state`), handing
+ * them to `onRows` a page at a time as they come. TooManyRows past `maxRows`.
+ */
 export async function readSource(
   sources: SyncSources,
   kind: string,
   secret: string,
   config: unknown,
-  state: unknown
-): Promise<ExternalRead> {
+  state: unknown,
+  opts: { maxRows: number; onRows: RowSink }
+): Promise<StreamedRead> {
   if (kind === 'csv') {
-    return readCsv(sources.http, secret, {
+    return streamCsv(sources.http, secret, {
       state: csvState(state),
-      maxRows: MAX_SYNC_RECORDS,
+      maxRows: opts.maxRows,
+      timeoutMs: CSV_RUN_TIMEOUT_MS,
+      onRows: opts.onRows,
     });
   }
   if (kind === 'postgres') {
     const read = await readPostgres(sources.postgres, secret, postgresConfig(config), {
-      maxRows: MAX_SYNC_RECORDS,
+      maxRows: opts.maxRows,
+      deadlineMs: POSTGRES_RUN_DEADLINE_MS,
+      onRows: opts.onRows,
     });
-    return { notModified: false, ...read };
+    return { notModified: false, columns: read.columns, rows: read.count, state: {} };
   }
   throw new SourceError('This kind of source is not supported.');
 }
@@ -282,12 +309,15 @@ function postgresConfig(config: unknown): PostgresSourceConfig {
 
 /** Rows a Postgres preview reads for its type guesses (it shows SYNC_PREVIEW_ROWS). */
 const PREVIEW_SAMPLE = 200;
+/** Rows a CSV preview reads for its type guesses: the rest of the file isn't downloaded. */
+const CSV_PREVIEW_SAMPLE = 1000;
 const PREVIEW_CELL = 200;
 
 /**
- * "Preview": reads the source (a CSV whole, a Postgres source's first 200 rows) and suggests
- * each column's type (a CSV's from its cells, like the CSV import; a database column's from its
- * type). At most MAX_SYNC_FIELDS columns.
+ * "Preview": reads the start of the source (a CSV's first 1,000 rows, a Postgres source's first
+ * 200) and suggests each column's type (a CSV's from its cells, like the CSV import; a database
+ * column's from its type). At most MAX_SYNC_FIELDS columns. A CSV or database source past
+ * MAX_SYNC_RECORDS still previews: its first run pauses.
  */
 export async function previewSource(
   sources: SyncSources,
@@ -311,7 +341,10 @@ export async function previewSource(
         )
       );
     } else if (split.kind === 'csv') {
-      const csv = await readCsv(sources.http, split.secret, { maxRows: MAX_SYNC_RECORDS });
+      const csv = await readCsv(sources.http, split.secret, {
+        maxRows: Number.MAX_SAFE_INTEGER,
+        limit: CSV_PREVIEW_SAMPLE,
+      });
       if (csv.notModified) throw new SourceError('The file could not be read.');
       read = csv;
     } else {
