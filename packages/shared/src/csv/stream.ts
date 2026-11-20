@@ -12,6 +12,8 @@ type State = 'start' | 'plain' | 'quoted' | 'quote' | 'cr';
  * last one (and throws for a quote that never closes). An error `onRow` throws comes out of
  * `push` or `end`. Without a `delimiter`, the text is held until its first line break (at
  * most 1 MiB, then the delimiter is picked from what is held) and the delimiter detected there.
+ * With `maxRowChars`, a row longer than that (its cells' characters and one per cell) is an
+ * error as soon as it gets there, so a file without line breaks is never held whole.
  */
 export class CsvRowStream {
   private delimiter: string | undefined;
@@ -22,11 +24,15 @@ export class CsvRowStream {
   private cell = '';
   private line = 1;
   private quoteLine = 1;
+  private rowChars = 0;
+  private rowLine = 1;
+  private readonly maxRowChars: number;
 
   constructor(
     private readonly onRow: (cells: string[]) => void,
-    opts: { delimiter?: string } = {}
+    opts: { delimiter?: string; maxRowChars?: number } = {}
   ) {
+    this.maxRowChars = opts.maxRowChars ?? Number.POSITIVE_INFINITY;
     const d = opts.delimiter;
     if (d !== undefined && (d.length !== 1 || d === '"' || d === '\n' || d === '\r')) {
       throw new Error(`CsvRowStream: invalid delimiter ${JSON.stringify(d)}`);
@@ -62,14 +68,14 @@ export class CsvRowStream {
       case 'start':
         // Right after a delimiter: the row ends with an empty cell.
         if (this.row.length > 0) {
-          this.row.push('');
+          this.cell = '';
+          this.endCell();
           this.endRow();
         }
         break;
       case 'plain':
       case 'quote':
-        this.row.push(this.cell);
-        this.cell = '';
+        this.endCell();
         this.endRow();
         break;
       case 'quoted':
@@ -80,9 +86,29 @@ export class CsvRowStream {
     this.state = 'start';
   }
 
+  /** `n` more characters in the row being read. */
+  private grow(n: number) {
+    this.rowChars += n;
+    if (this.rowChars > this.maxRowChars) {
+      throw new CsvParseError(
+        `A row is longer than ${this.maxRowChars.toLocaleString('en')} characters`,
+        this.rowLine
+      );
+    }
+  }
+
+  /** The cell read so far ends: it joins the row. */
+  private endCell() {
+    this.grow(1);
+    this.row.push(this.cell);
+    this.cell = '';
+  }
+
   private endRow() {
     const row = this.row;
     this.row = [];
+    this.rowChars = 0;
+    this.rowLine = this.line;
     // A blank line is one empty cell: skip it.
     if (!(row.length === 1 && row[0] === '')) this.onRow(row);
   }
@@ -126,11 +152,11 @@ export class CsvRowStream {
             if (c === d || c === 10 || c === 13) break;
             j++;
           }
+          this.grow(j - i);
           this.cell += text.slice(i, j);
           i = j;
           if (j < n) {
-            this.row.push(this.cell);
-            this.cell = '';
+            this.endCell();
             this.separator(text.charCodeAt(j));
             i++;
           }
@@ -140,6 +166,7 @@ export class CsvRowStream {
           const q = text.indexOf('"', i);
           const chunk = q === -1 ? text.slice(i) : text.slice(i, q);
           for (let k = chunk.indexOf('\n'); k !== -1; k = chunk.indexOf('\n', k + 1)) this.line++;
+          this.grow(chunk.length);
           this.cell += chunk;
           if (q === -1) {
             i = n;
@@ -153,12 +180,12 @@ export class CsvRowStream {
           const c = text.charCodeAt(i);
           if (c === 34) {
             // A doubled quote.
+            this.grow(1);
             this.cell += '"';
             this.state = 'quoted';
             i++;
           } else if (c === d || c === 10 || c === 13) {
-            this.row.push(this.cell);
-            this.cell = '';
+            this.endCell();
             this.separator(c);
             i++;
           } else {

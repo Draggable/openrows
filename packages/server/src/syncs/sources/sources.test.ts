@@ -115,6 +115,17 @@ describe('CSV sources, streamed', () => {
     await expect(readCsv(page.http, 'https://x/a', { maxRows: 10 })).rejects.toThrow(/web page/);
     expect(sent.pieces + page.sent.pieces).toBe(0);
   });
+
+  it('fails a row past maxRowChars while it downloads, not once it is held', async () => {
+    const body = `id,Name\n1,"${'x'.repeat(10_000)}"\n`;
+    const { http, sent } = streamingHttp({ body }, 100);
+    await expect(
+      streamCsv(http, 'https://x/a.csv', { maxRows: 10, maxRowChars: 1000, onRows: () => {} })
+    ).rejects.toThrow(
+      new SourceError("The file isn't valid CSV: A row is longer than 1,000 characters (line 2)")
+    );
+    expect(sent.pieces).toBeLessThan(15);
+  });
 });
 
 describe('CSV sources (#155)', () => {

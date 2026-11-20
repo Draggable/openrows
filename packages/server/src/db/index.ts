@@ -63,6 +63,44 @@ export function createDb(connectionString: string) {
   return { db, pool, close: () => endPool(pool) };
 }
 
+/** How long `close()` of a pinned connection waits for its advisory locks to be let go. */
+const UNLOCK_WAIT_MS = 5_000;
+
+/**
+ * One connection of `db`'s pool, as a Database of its own, for work that spans several
+ * transactions on one session (a session-level advisory lock, a temporary table): its
+ * transactions run on that connection, one after another. `close()` lets go of the session's
+ * advisory locks, then ends the connection instead of returning it to the pool, so nothing of the
+ * session reaches the pool's next user; a process that dies with it open leaves Postgres to drop
+ * it all.
+ */
+export async function pinConnection(
+  db: Database
+): Promise<{ db: Database; close: () => Promise<void> }> {
+  const pool = (db as Database & { $client?: unknown }).$client;
+  if (!(pool instanceof Pool)) throw new Error('pinConnection needs a pooled database');
+  const client = await pool.connect();
+  // Lost while idle (between statements), the connection's next query fails instead: the pool's
+  // own listener isn't on a checked-out client, and an unheard 'error' would end the process.
+  client.on('error', () => {});
+  return {
+    db: drizzle(client, { schema }) as unknown as Database,
+    close: async () => {
+      // Ending the connection isn't awaited: its locks are let go first, so whoever waits for
+      // them (a retry) needn't wait for the connection to close. A lost connection has none.
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        client.query('SELECT pg_advisory_unlock_all()').catch(() => {}),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, UNLOCK_WAIT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+      client.release(true);
+    },
+  };
+}
+
 /**
  * `pool.end()`, resolving only once every client's connection has closed: pg-pool resolves as
  * soon as it has asked them to end, so a backend terminated right after (DROP DATABASE WITH

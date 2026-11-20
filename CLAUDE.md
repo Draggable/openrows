@@ -233,8 +233,10 @@ packages/
                              workspace's scope, the table with copied fields and its Sync source
                              field; schedule, pause, remove; queueRun; `syncs.schedule` through
                              `table_syncs_due`), run.ts (the worker's `syncs.run`: one run per
-                             sync at a time (an advisory lock), access re-checked, pauses, the
-                             source counted or staged in a temp table before any write, upserts
+                             sync at a time (a session advisory lock on the run's own connection,
+                             db/index.ts's pinConnection; no transaction held across its steps),
+                             access re-checked, pauses, the source read in one snapshot or as it
+                             downloads into a temp table before any write, upserts
                              in batches and deletes at the end by key through the RecordService
                              with `ctx.sync`, idempotent; MAX_SYNC_RECORDS), routes.ts; sources/
                              (csv.ts, a CSV URL through safe-fetch with conditional GETs, parsed

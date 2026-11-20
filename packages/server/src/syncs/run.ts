@@ -15,7 +15,14 @@ import { z } from 'zod';
 import { effectiveRole } from '../authz/policy.js';
 import { resolveResource } from '../authz/resolve.js';
 import { inScope, setScope } from '../authz/scope.js';
-import { type Database, type Transaction, tableSyncRuns, tableSyncs, tables } from '../db/index.js';
+import {
+  type Database,
+  pinConnection,
+  type Transaction,
+  tableSyncRuns,
+  tableSyncs,
+  tables,
+} from '../db/index.js';
 import { ossEntitlements } from '../edition/oss.js';
 import type { EntitlementsProvider } from '../edition/types.js';
 import { type FieldRow, liveFields, type TableRow } from '../fields/service.js';
@@ -56,22 +63,26 @@ import {
 /**
  * The sync engine: one run of a synced table, the worker's `syncs.run` job.
  *
- * A run holds one transaction for its whole length (REPEATABLE READ: the source is read from one
- * snapshot) with an advisory lock on the sync, so two runs of a sync never overlap. It re-checks
- * the creator's access to the source and to this table (lost access or a deleted source pauses
- * the sync and writes nothing), then reads the source as the creator: a table or view in its
- * workspace's scope, counted first and then a page at a time; an external source into a
- * temporary table of that transaction as it downloads. A source past the cap pauses the sync
- * before anything is written.
+ * A run works on one connection of its own, taken from the pool for the run and closed (not
+ * returned) at its end. That connection holds a session-level advisory lock on the sync, so two
+ * runs of a sync never overlap, and the run's staging table; no transaction stays open between
+ * its steps, so a long run pins no snapshot and holds no second connection. A worker that dies
+ * mid-run loses the connection, and Postgres drops the lock and the staging table with it.
  *
- * Writes go through the RecordService as the creator, one transaction per batch of source
+ * A run re-checks the creator's access to the source and to this table (lost access or a
+ * deleted source pauses the sync and writes nothing), then reads the source as the creator into
+ * the staging table: a table or view in its workspace's scope, counted and read whole in one
+ * short REPEATABLE READ transaction (one snapshot, however it is edited meanwhile); an external
+ * source as it downloads. A source past the cap pauses the sync before anything is written.
+ *
+ * Writes go through the RecordService as the creator, one transaction per batch of staged
  * records, with the creator's access to this table checked again in each. A batch is compared
  * with the synced records of the same keys (a fingerprint of their synced cells, read once at the
- * start; the cells themselves only where the fingerprints differ), and only what differs is
- * created or updated: a run over an unchanged source writes nothing, so re-running is idempotent.
- * Records whose key left the source are deleted last, all in one transaction with the run's end,
- * once the whole source was read: a run that fails midway deletes nothing, and the next one
- * converges.
+ * start, by a digest of the key; the cells themselves only where the fingerprints differ), and
+ * only what differs is created or updated: a run over an unchanged source writes nothing, so
+ * re-running is idempotent. Records whose key left the source are deleted last, all in one
+ * transaction with the run's end, once the whole source was read: a run that fails midway
+ * deletes nothing, and the next one converges.
  */
 
 export const syncJobData = z.object({
@@ -123,9 +134,6 @@ class Paused extends Error {
 
 /** The synced table, or its sync, went away during the run. */
 class Gone extends Error {}
-
-/** Another run of the sync holds its lock. */
-class Busy extends Error {}
 
 /** A value as the target compares it: blanks (null, empty, the type's empty value) are null. */
 function normalized(value: unknown, empty: unknown): string {
@@ -198,28 +206,25 @@ interface Setup {
 
 export async function runSyncJob(deps: SyncRunDeps, raw: unknown): Promise<SyncRunOutcome> {
   const data = syncJobData.parse(raw);
+  // The run's own connection, closed at its end: its session lock and staging table go with it.
+  const session = await pinConnection(deps.db);
   try {
-    return await deps.db.transaction(
-      async (hold) => {
-        await setScope(hold, { userId: '', workspaceId: data.workspaceId });
-        const { rows } = await hold.execute<{ locked: boolean }>(
-          sql`SELECT pg_try_advisory_xact_lock(hashtextextended(${`syncs:run:${data.syncId}`}, 0)) AS locked`
-        );
-        if (!rows[0]?.locked) throw new Busy();
-        return runHeld(deps, hold, data);
-      },
-      { isolationLevel: 'repeatable read' }
+    const { rows } = await session.db.execute<{ locked: boolean }>(
+      sql`SELECT pg_try_advisory_lock(hashtextextended(${`syncs:run:${data.syncId}`}, 0)) AS locked`
     );
-  } catch (err) {
-    if (err instanceof Busy) return { status: 'busy' };
-    throw err;
+    if (!rows[0]?.locked) return { status: 'busy' };
+    return await runHeld({ ...deps, db: session.db }, data);
+  } finally {
+    await session.close();
   }
 }
 
-/** The run, under its lock: marks it running, runs it and records how it ended. */
+/**
+ * The run, under its lock (`deps.db` is the run's own connection): marks it running, runs it and
+ * records how it ended.
+ */
 async function runHeld(
   deps: SyncRunDeps,
-  hold: Transaction,
   data: z.infer<typeof syncJobData>
 ): Promise<SyncRunOutcome> {
   const { db } = deps;
@@ -236,7 +241,7 @@ async function runHeld(
   if (!started) return { status: 'gone' };
 
   try {
-    const outcome = await runSync(deps, hold, data);
+    const outcome = await runSync(deps, data);
     await finish(db, data, {
       ...('created' in outcome ? outcome : {}),
       status: outcome.status === 'succeeded' ? 'succeeded' : 'failed',
@@ -312,7 +317,6 @@ async function finish(
 
 async function runSync(
   deps: SyncRunDeps,
-  hold: Transaction,
   data: z.infer<typeof syncJobData>
 ): Promise<SyncRunOutcome> {
   const { db } = deps;
@@ -323,10 +327,11 @@ async function runSync(
   if ('error' in setup) return { status: 'failed', error: setup.error };
   const { sync } = setup;
 
+  const staging = await Staging.create(db);
   const source =
     sync.sourceKind === 'table'
-      ? await tableSource(deps, hold, setup, maxRecords)
-      : await externalSource(deps, hold, setup, { maxRecords, batchSize });
+      ? await tableSource(deps, staging, setup, { maxRecords, batchSize })
+      : await externalSource(deps, staging, setup, { maxRecords, batchSize });
 
   const counts: Counts = { created: 0, updated: 0, deleted: 0, unchanged: 0, skipped: 0 };
   if (source.notModified) {
@@ -343,12 +348,13 @@ async function runSync(
   let batch: { key: string; cells: Record<string, unknown> }[] = [];
   for await (const page of source.pages) {
     for (const record of page) {
-      const key = record.key;
-      if (key === null || seen.has(key)) {
+      const { key } = record;
+      const digest = key === null ? null : keyDigest(key);
+      if (key === null || digest === null || seen.has(digest)) {
         counts.skipped++;
         continue;
       }
-      seen.add(key);
+      seen.add(digest);
       batch.push({ key, cells: record.cells });
       if (batch.length >= batchSize) {
         await writeBatch(deps, setup, existing, batch, counts, writes);
@@ -360,7 +366,7 @@ async function runSync(
 
   // The whole source was read: what left it goes, in one transaction with the run's end.
   const gone: string[] = [];
-  for (const [key, record] of existing) if (!seen.has(key)) gone.push(record.id);
+  for (const [digest, record] of existing) if (!seen.has(digest)) gone.push(record.id);
   await endRun(deps, setup, {
     gone,
     counts,
@@ -494,10 +500,18 @@ function changedCells(
   return changed;
 }
 
-/** A synced record of the table: its id and the fingerprint of its compared cells. */
+/**
+ * The synced records of the table by their key's digest (keyDigest): their ids and the
+ * fingerprints of their compared cells. A few dozen bytes a record, however long the keys.
+ */
 type Held = Map<string, { id: string; print: string }>;
 
-/** The table's synced records by key, read a page at a time (ids and fingerprints only). */
+/** A source key's digest: what the run's indexes hold instead of keys of up to 1,000 characters. */
+function keyDigest(key: string): string {
+  return createHash('sha1').update(key).digest('base64');
+}
+
+/** The table's synced records by key digest, read a page at a time (ids and fingerprints only). */
 async function syncedRecords(db: Database, setup: Setup): Promise<Held> {
   return withTenant(db, setup.sync.workspaceId, async (tx) => {
     const read = {
@@ -515,7 +529,7 @@ async function syncedRecords(db: Database, setup: Setup): Promise<Held> {
       for (const r of page.records) {
         const key = r.fields[setup.keyField.id];
         if (typeof key === 'string') {
-          held.set(key, { id: r.id, print: heldPrint(setup.compared, r.fields) });
+          held.set(keyDigest(key), { id: r.id, print: heldPrint(setup.compared, r.fields) });
         }
       }
       if (!page.nextCursor) break;
@@ -555,7 +569,7 @@ async function writeBatch(
     const differing: { id: string; key: string; cells: Record<string, unknown> }[] = [];
     let unchanged = 0;
     for (const { key, cells } of batch) {
-      const held = existing.get(key);
+      const held = existing.get(keyDigest(key));
       if (!held) {
         creates.push({ ...cells, [keyFieldId]: key });
         continue;
@@ -637,117 +651,125 @@ async function endRun(
 
 /**
  * A table source: the creator's access to it re-checked, then its records (the view's, when
- * the sync has one) read in the run's transaction, in the source workspace's scope, as the
- * creator: personal views are their own, hidden fields left out. Counted before anything is
- * written: past `maxRecords` the sync pauses.
+ * the sync has one) read in the source workspace's scope, as the creator (personal views are
+ * their own, hidden fields left out), and staged as the synced table should hold them. Counted
+ * and read in one REPEATABLE READ transaction, so the run works from one snapshot of the source
+ * however it is edited meanwhile, and only for as long as the read takes. Past `maxRecords` the
+ * sync pauses before anything is staged or written.
  */
 async function tableSource(
   deps: SyncRunDeps,
-  hold: Transaction,
+  staging: Staging,
   setup: Setup,
-  maxRecords: number
+  opts: { maxRecords: number; batchSize: number }
 ): Promise<SourceRead> {
   const { sync, userId, targetFields } = setup;
   if (!sync.sourceTableId || !sync.sourceWorkspaceId) throw new Paused('source_deleted');
   const source = { tableId: sync.sourceTableId, viewId: sync.sourceViewId };
-  const access = await sourceAccess(hold, userId, source);
-  if (!access.ok) throw new Paused(access.reason);
-  if (access.workspaceId !== sync.sourceWorkspaceId) throw new Paused('source_deleted');
   const sourceWorkspaceId = sync.sourceWorkspaceId;
-  const shape = await readSourceShape(
-    hold,
-    { userId, sourceWorkspaceId, homeWorkspaceId: sync.workspaceId },
-    source
-  );
-  if (!shape) throw new Paused('source_deleted');
-  const hidden = (deps.visibility ?? allFieldsVisible).hiddenFields(
-    { userId, role: access.role },
-    shape.table.id
-  );
-  const readable = new Map(shape.fields.filter((f) => !hidden.has(f.id)).map((f) => [f.id, f]));
-  const keyRow = sync.keyFieldId ? readable.get(sync.keyFieldId) : undefined;
-  if (sync.keyFieldId && !keyRow) throw new Paused('source_deleted');
-  const key = keyRow ? typed(keyRow) : null;
-  const map = fieldMapOf(sync).flatMap((m) => {
-    const from = m.sourceFieldId ? readable.get(m.sourceFieldId) : undefined;
-    const to = targetFields.get(m.fieldId);
-    return to ? [{ from: from ? typed(from) : undefined, to }] : [];
-  });
-  const toWanted = (r: RecordData): Wanted => {
-    const cells: Record<string, unknown> = {};
-    for (const { from, to } of map) {
-      // A field the creator can no longer read (or that left the source) syncs empty.
-      cells[to.id] = from ? cellInput(from, to, r.fields[from.row.id] ?? null) : null;
-    }
-    return { key: key ? keyOf(key, r.fields[key.row.id]) : r.id, cells };
-  };
+  const label = await deps.db.transaction(
+    async (tx) => {
+      await setScope(tx, { userId: '', workspaceId: sync.workspaceId });
+      const access = await sourceAccess(tx, userId, source);
+      if (!access.ok) throw new Paused(access.reason);
+      if (access.workspaceId !== sourceWorkspaceId) throw new Paused('source_deleted');
+      const shape = await readSourceShape(
+        tx,
+        { userId, sourceWorkspaceId, homeWorkspaceId: sync.workspaceId },
+        source
+      );
+      if (!shape) throw new Paused('source_deleted');
+      const hidden = (deps.visibility ?? allFieldsVisible).hiddenFields(
+        { userId, role: access.role },
+        shape.table.id
+      );
+      const readable = new Map(shape.fields.filter((f) => !hidden.has(f.id)).map((f) => [f.id, f]));
+      const keyRow = sync.keyFieldId ? readable.get(sync.keyFieldId) : undefined;
+      if (sync.keyFieldId && !keyRow) throw new Paused('source_deleted');
+      const key = keyRow ? typed(keyRow) : null;
+      const map = fieldMapOf(sync).flatMap((m) => {
+        const from = m.sourceFieldId ? readable.get(m.sourceFieldId) : undefined;
+        const to = targetFields.get(m.fieldId);
+        return to ? [{ from: from ? typed(from) : undefined, to }] : [];
+      });
+      const toWanted = (r: RecordData): Wanted => {
+        const cells: Record<string, unknown> = {};
+        for (const { from, to } of map) {
+          // A field the creator can no longer read (or that left the source) syncs empty.
+          cells[to.id] = from ? cellInput(from, to, r.fields[from.row.id] ?? null) : null;
+        }
+        return { key: key ? keyOf(key, r.fields[key.row.id]) : r.id, cells };
+      };
 
-  // The run's transaction reads only the source from here on: it stays in its scope.
-  await setScope(hold, { userId, workspaceId: sourceWorkspaceId });
-  const read = { tx: hold, workspaceId: sourceWorkspaceId, userId, table: shape.table };
-  const query = (cursor: string | undefined, count: boolean) =>
-    queryRecords(
-      read,
-      queryRecordsSchema.parse({
-        ...(sync.sourceViewId ? { viewId: sync.sourceViewId } : {}),
-        limit: QUERY_PAGE_MAX,
-        count,
-        ...(cursor ? { cursor } : {}),
-      })
-    );
-  const first = await query(undefined, true);
-  if ((first.total ?? 0) > maxRecords) throw new Paused('too_many_records');
+      // The transaction reads only the source from here on: it stays in its scope.
+      await setScope(tx, { userId, workspaceId: sourceWorkspaceId });
+      const read = { tx, workspaceId: sourceWorkspaceId, userId, table: shape.table };
+      const query = (cursor: string | undefined, count: boolean) =>
+        queryRecords(
+          read,
+          queryRecordsSchema.parse({
+            ...(sync.sourceViewId ? { viewId: sync.sourceViewId } : {}),
+            limit: QUERY_PAGE_MAX,
+            count,
+            ...(cursor ? { cursor } : {}),
+          })
+        );
+      let page = await query(undefined, true);
+      if ((page.total ?? 0) > opts.maxRecords) throw new Paused('too_many_records');
+      for (let staged = 0; ; ) {
+        staged += page.records.length;
+        // The snapshot doesn't change under the count; this never fires unless it does.
+        if (staged > opts.maxRecords) throw new Paused('too_many_records');
+        await staging.add(page.records.map(toWanted), tx);
+        if (!page.nextCursor) break;
+        page = await query(page.nextCursor, false);
+      }
+      return shape.label;
+    },
+    { isolationLevel: 'repeatable read' }
+  );
 
   async function* pages(): AsyncGenerator<Wanted[]> {
-    let page = first;
-    let read = 0;
-    for (;;) {
-      read += page.records.length;
-      // The snapshot doesn't change under the count; this never fires unless it does.
-      if (read > maxRecords) throw new Paused('too_many_records');
-      yield page.records.map(toWanted);
-      if (!page.nextCursor) return;
-      page = await query(page.nextCursor, false);
+    for await (const rows of staging.pages(opts.batchSize)) {
+      yield rows.map(({ item }) => item as Wanted);
     }
   }
-  return { notModified: false, pages: pages(), label: shape.label };
+  return { notModified: false, pages: pages(), label };
 }
 
 /**
- * An external source's rows, staged for the run in a temporary table of the run's transaction
- * (dropped when it ends) as they are read, so a large source is never held in memory. Staged
- * rows are numbered from 1: the row number is the key of a sync without a key column.
+ * A run's source rows, staged in a temporary table of the run's connection as they are read
+ * (gone with the connection), so a large source is never held in memory and the writes can
+ * follow the read without a transaction held open across them. Staged rows are numbered from 1,
+ * in the order they were read: the row number is the key of a sync without a key column.
  */
 class Staging {
   private count = 0;
 
-  private constructor(private readonly tx: Transaction) {}
+  private constructor(private readonly db: Database) {}
 
-  static async create(tx: Transaction): Promise<Staging> {
-    await tx.execute(
-      sql`CREATE TEMP TABLE sync_run_rows (n int PRIMARY KEY, cells jsonb NOT NULL) ON COMMIT DROP`
-    );
-    return new Staging(tx);
+  static async create(db: Database): Promise<Staging> {
+    await db.execute(sql`DROP TABLE IF EXISTS pg_temp.sync_run_rows`);
+    // `json`, not `jsonb`: values come back exactly as staged (the same keys in the same order).
+    await db.execute(sql`CREATE TEMP TABLE sync_run_rows (n int PRIMARY KEY, item json NOT NULL)`);
+    return new Staging(db);
   }
 
-  async add(rows: (string | null)[][]): Promise<void> {
-    if (rows.length === 0) return;
+  /** Stages `items` after the ones before, in `tx` when given (else on its own). */
+  async add(items: unknown[], tx?: Transaction): Promise<void> {
+    if (items.length === 0) return;
     const from = this.count;
-    this.count += rows.length;
-    // Text can't hold NUL characters, in jsonb or in a record.
-    const json = JSON.stringify(
-      rows.map((row) => row.map((c) => (c?.includes('\0') ? c.replaceAll('\0', '') : c)))
-    );
-    await this.tx.execute(sql`
-      INSERT INTO sync_run_rows (n, cells)
+    this.count += items.length;
+    await (tx ?? this.db).execute(sql`
+      INSERT INTO sync_run_rows (n, item)
       SELECT ${from}::int + t.ord::int, t.value
-      FROM jsonb_array_elements(${json}::jsonb) WITH ORDINALITY AS t(value, ord)`);
+      FROM json_array_elements(${JSON.stringify(items)}::json) WITH ORDINALITY AS t(value, ord)`);
   }
 
-  async *pages(size: number): AsyncGenerator<{ n: number; cells: (string | null)[] }[]> {
+  async *pages(size: number): AsyncGenerator<{ n: number; item: unknown }[]> {
     for (let after = 0; ; ) {
-      const { rows } = await this.tx.execute<{ n: number; cells: (string | null)[] }>(
-        sql`SELECT n, cells FROM sync_run_rows WHERE n > ${after} ORDER BY n LIMIT ${size}`
+      const { rows } = await this.db.execute<{ n: number; item: unknown }>(
+        sql`SELECT n, item FROM sync_run_rows WHERE n > ${after} ORDER BY n LIMIT ${size}`
       );
       const last = rows.at(-1);
       if (!last) return;
@@ -766,17 +788,20 @@ class Staging {
  */
 async function externalSource(
   deps: SyncRunDeps,
-  hold: Transaction,
+  staging: Staging,
   setup: Setup,
   opts: { maxRecords: number; batchSize: number }
 ): Promise<SourceRead> {
   const { sync, userId, targetFields } = setup;
   const sources = deps.sources;
   if (!sources) throw new SourceError('This source is not available here.');
-  const staging = await Staging.create(hold);
   const stage = {
     maxRows: opts.maxRecords,
-    onRows: (rows: (string | null)[][]) => staging.add(rows),
+    // Text can't hold NUL characters, in a record.
+    onRows: (rows: (string | null)[][]) =>
+      staging.add(
+        rows.map((row) => row.map((c) => (c?.includes('\0') ? c.replaceAll('\0', '') : c)))
+      ),
   };
   let read: StreamedRead;
   try {
@@ -821,7 +846,8 @@ async function externalSource(
     throw new SourceError(`The key column "${sync.keyColumn}" is gone from the source.`);
   }
   const keyType = getFieldType('syncSource');
-  const toWanted = ({ n, cells: row }: { n: number; cells: (string | null)[] }): Wanted => {
+  const toWanted = ({ n, item }: { n: number; item: unknown }): Wanted => {
+    const row = item as (string | null)[];
     const key = keyType.coerce(keyAt === null ? String(n) : row[keyAt], {}) as string | null;
     const cells: Record<string, unknown> = {};
     // A column that left the source syncs empty.

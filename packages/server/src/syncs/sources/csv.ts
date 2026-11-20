@@ -3,6 +3,7 @@ import {
   CsvRowStream,
   MAX_SYNC_CELL_CHARS,
   MAX_SYNC_CSV_BYTES,
+  MAX_SYNC_CSV_ROW_CHARS,
 } from '@openrows/shared';
 import { type BodySink, type SafeFetch, SafeFetchError } from '../../lib/safe-fetch/index.js';
 import {
@@ -55,6 +56,8 @@ export interface CsvReadOptions {
   /** More data rows than this: TooManyRows. */
   maxRows: number;
   maxBytes?: number;
+  /** The longest row, in characters (MAX_SYNC_CSV_ROW_CHARS): longer fails the read. */
+  maxRowChars?: number;
   timeoutMs?: number;
   /** Stops after this many data rows (a preview): the rest is neither read nor counted. */
   limit?: number;
@@ -95,22 +98,25 @@ export async function streamCsv(
   let columns: string[] | undefined;
   let count = 0;
   let page: (string | null)[][] = [];
-  const parser = new CsvRowStream((cells) => {
-    if (!columns) {
-      columns = columnNames(cells);
-      return;
-    }
-    if (opts.limit !== undefined && count >= opts.limit) throw new Enough();
-    count++;
-    if (count > opts.maxRows) throw new TooManyRows();
-    page.push(
-      columns.map((_, i) => {
-        const cell = cells[i];
-        if (cell === undefined || cell === '') return null;
-        return cell.length > MAX_SYNC_CELL_CHARS ? cell.slice(0, MAX_SYNC_CELL_CHARS) : cell;
-      })
-    );
-  });
+  const parser = new CsvRowStream(
+    (cells) => {
+      if (!columns) {
+        columns = columnNames(cells);
+        return;
+      }
+      if (opts.limit !== undefined && count >= opts.limit) throw new Enough();
+      count++;
+      if (count > opts.maxRows) throw new TooManyRows();
+      page.push(
+        columns.map((_, i) => {
+          const cell = cells[i];
+          if (cell === undefined || cell === '') return null;
+          return cell.length > MAX_SYNC_CELL_CHARS ? cell.slice(0, MAX_SYNC_CELL_CHARS) : cell;
+        })
+      );
+    },
+    { maxRowChars: opts.maxRowChars ?? MAX_SYNC_CSV_ROW_CHARS }
+  );
   const flush = async () => {
     if (page.length === 0) return;
     const rows = page;

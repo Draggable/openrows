@@ -1,9 +1,11 @@
 import type { Base, RecordData as RecordT, TableMeta, TableSync } from '@openrows/shared';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import pg from 'pg';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_COOKIE } from '../../src/auth/session-token.js';
 import { tableSyncs, workspaceMembers } from '../../src/db/index.js';
+import { ossEntitlements } from '../../src/edition/oss.js';
+import type { EntitlementsProvider } from '../../src/edition/types.js';
 import { runSyncJob, type SyncRunDeps } from '../../src/syncs/run.js';
 import { scheduleDueSyncs } from '../../src/syncs/service.js';
 import { testApp } from '../helpers/app.js';
@@ -659,6 +661,70 @@ describe('synced tables', () => {
       await holder.end();
     }
     expect(await run(sync)).toMatchObject({ status: 'succeeded' });
+  });
+
+  it('runs on one connection with no transaction open between batches; a lost one frees the sync', async () => {
+    const items = await ok<TableMeta>(
+      json('POST', `/api/bases/${source.id}/tables`, { name: 'Batched' }),
+      201
+    );
+    const name = fieldId(items, 'Name');
+    await ok(
+      json('POST', `/api/tables/${items.id}/records`, {
+        records: [1, 2, 3, 4, 5].map((n) => ({ fields: { [name]: `Row ${n}` } })),
+      }),
+      201
+    );
+    const sync = await ok<TableSync>(
+      json('POST', `/api/bases/${target.id}/syncs`, {
+        source: { baseId: source.id, tableId: items.id },
+        schedule: 'manual',
+      }),
+      201
+    );
+    const queued = sync.runs[0];
+    if (!queued) throw new Error('no run');
+    // The backends holding an advisory lock, seen from outside.
+    const lockHolders = async () =>
+      (
+        await t.db.execute<{ pid: number }>(
+          sql`SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND granted ORDER BY pid`
+        )
+      ).rows.map((r) => r.pid);
+    // In each batch: the transactions open on the backends holding the sync's lock, and whether
+    // the batch's own backend is the one.
+    const seen: { holders: number; ownTransactionOnly: boolean }[] = [];
+    let kill = false;
+    const entitlements: EntitlementsProvider = {
+      ...ossEntitlements,
+      forWorkspace: async (id, tx) => {
+        const own = (await tx.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`)).rows[0]
+          ?.pid;
+        const holders = await lockHolders();
+        seen.push({ holders: holders.length, ownTransactionOnly: holders[0] === own });
+        if (kill && own) {
+          // The run's connection is lost midway, as when its worker dies.
+          await t.db.execute(sql`SELECT pg_terminate_backend(${own}, 5000)`);
+        }
+        return ossEntitlements.forWorkspace(id, tx);
+      },
+    };
+    const job = { workspaceId, syncId: sync.id, runId: queued.id };
+    kill = true;
+    await expect(runSyncJob({ db: t.appDb, entitlements, batchSize: 2 }, job)).rejects.toThrow();
+    expect(seen).toEqual([{ holders: 1, ownTransactionOnly: true }]);
+    // Postgres let go of the lost connection's lock: the job's retry runs, it isn't deferred.
+    expect(await lockHolders()).toEqual([]);
+    kill = false;
+    seen.length = 0;
+    expect(await runSyncJob({ db: t.appDb, entitlements, batchSize: 2 }, job)).toMatchObject({
+      status: 'succeeded',
+      created: 5,
+    });
+    // Three batches of 2 and the run's end, each a transaction of its own on the connection
+    // holding the lock: no other transaction (and no other connection) is held across them.
+    expect(seen).toEqual(Array(4).fill({ holders: 1, ownTransactionOnly: true }));
+    expect(await lockHolders()).toEqual([]);
   });
 
   it('pauses when the source table is deleted', async () => {

@@ -68,6 +68,12 @@ export const MAX_SYNC_QUERY_CHARS = 10_000;
 export const SYNC_POSTGRES_STATEMENT_TIMEOUT_MS = 30_000;
 /** A cell longer than this (characters) is cut, from both external sources. */
 export const MAX_SYNC_CELL_CHARS = 100_000;
+/**
+ * The longest row of a CSV source (characters, its cells' and one per cell): as it is parsed a
+ * row is held whole, so a longer one fails the read before it fills the worker's memory. Room for
+ * MAX_SYNC_FIELDS cells of MAX_SYNC_CELL_CHARS and more.
+ */
+export const MAX_SYNC_CSV_ROW_CHARS = 16 * 1024 * 1024;
 /** Rows a preview shows. */
 export const SYNC_PREVIEW_ROWS = 5;
 

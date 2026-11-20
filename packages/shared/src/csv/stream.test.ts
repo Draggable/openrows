@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CsvParseError, CsvRowStream, parseCsv } from './index.js';
 
 /** Streams `pieces` through a CsvRowStream: its rows, or the error it threw. */
-function streamed(pieces: string[], opts: { delimiter?: string } = {}) {
+function streamed(pieces: string[], opts: { delimiter?: string; maxRowChars?: number } = {}) {
   const rows: string[][] = [];
   const stream = new CsvRowStream((row) => rows.push(row), opts);
   try {
@@ -37,6 +37,28 @@ function split(text: string, cuts: number[]): string[] {
 }
 
 describe('CsvRowStream', () => {
+  it('fails a row longer than maxRowChars as soon as it gets there', () => {
+    const opts = { delimiter: ',', maxRowChars: 10 };
+    // Its cells' characters and one per cell: 4 + 2 = 6, then 3 + 2 = 5 (a doubled quote is one).
+    expect(streamed(['ab,c', 'd\n"x""",y\n'], opts)).toEqual({
+      rows: [
+        ['ab', 'cd'],
+        ['x"', 'y'],
+      ],
+    });
+    expect(streamed(['ok\n', 'a,b,c,d,e,f', ',g\n'], opts)).toEqual({
+      error: 'A row is longer than 10 characters (line 2)',
+    });
+    // One quoted cell and no line break: refused while it is still being read.
+    const rows: string[][] = [];
+    const stream = new CsvRowStream((row) => rows.push(row), opts);
+    stream.push('"');
+    expect(() => {
+      for (let i = 0; i < 1000; i++) stream.push('0123456789');
+    }).toThrow(/longer than 10 characters \(line 1\)/);
+    expect(rows).toEqual([]);
+  });
+
   it('reads rows as they end, across pieces', () => {
     const rows: string[][] = [];
     const stream = new CsvRowStream((row) => rows.push(row));

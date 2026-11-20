@@ -35,7 +35,7 @@ A run reads the source a page at a time and writes its changes in batches, so a 
 ## Limits
 
 - 100,000 records and 100 fields per synced table, and 50 synced tables per base.
-- A CSV file up to 200 MB; a database source's rows up to 200 MB as text. Cells longer than 100,000 characters are cut.
+- A CSV file up to 200 MB, each of its rows up to 16 million characters; a database source's rows up to 200 MB as text. Cells longer than 100,000 characters are cut.
 - A database query up to 10,000 characters, one SELECT (or WITH … SELECT) statement, run in a read-only transaction. Each page of rows must arrive within 30 seconds.
 - A run reads a CSV file or a database within 10 minutes.
 - The table's sync history shows the last 20 runs.
