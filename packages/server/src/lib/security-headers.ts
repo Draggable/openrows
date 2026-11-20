@@ -14,6 +14,8 @@ function objectStoreOrigin(config: Config): string | undefined {
  *
  * - Scripts: `'self'` only. The theme bootstrap is an external file (public/theme.js), and the
  *   Vite build emits no inline script, so neither `'unsafe-inline'` nor `'unsafe-eval'`.
+ *   `'wasm-unsafe-eval'` lets the app compile its own WebAssembly (the barcode scanner's
+ *   decoder where the browser has no BarcodeDetector); it allows no JavaScript eval.
  * - Styles: `'self' 'unsafe-inline'`. The toaster (sonner) injects its stylesheet as a `<style>`
  *   element at runtime and Radix/React set inline `style` attributes for positioning; inline
  *   styles can't run code, so this is the accepted trade-off (scripts stay strict).
@@ -30,7 +32,7 @@ export function contentSecurityPolicy(config: Config): string {
     ["'self'", ...extra.filter((s): s is string => Boolean(s))].join(' ');
   return [
     `default-src 'self'`,
-    `script-src 'self'`,
+    `script-src 'self' 'wasm-unsafe-eval'`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src ${sources(s3)}`,
     `font-src 'self'`,
@@ -113,13 +115,23 @@ export const SHARE_HEADERS: Record<string, string> = {
   'Cache-Control': 'private, no-store',
 };
 
+const OTHER_FEATURES = 'microphone=(), geolocation=(), payment=(), usb=()';
+
+/** The app may use the camera (scanning a barcode into a cell), from its own origin only. */
+export const APP_PERMISSIONS_POLICY = `camera=(self), ${OTHER_FEATURES}`;
+
+/** Pages that never use the camera: share links, embeds, public forms and the sandbox frames. */
+export const NO_CAMERA_PERMISSIONS_POLICY = `camera=(), ${OTHER_FEATURES}`;
+
+const NO_CAMERA_PATHS = /^\/(s|embed|api\/shared|f|api\/forms|sandbox)(\/|$)/;
+
 /** The headers every response gets (see securityHeaders). */
 export function securityHeaderValues(config: Config): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Security-Policy': contentSecurityPolicy(config),
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    'Permissions-Policy': APP_PERMISSIONS_POLICY,
     'Cross-Origin-Opener-Policy': 'same-origin',
     'X-Frame-Options': 'DENY',
   };
@@ -176,6 +188,9 @@ export function securityHeaders(config: Config): MiddlewareHandler<AppEnv> {
       if (framed) {
         headers.set('Content-Security-Policy', shareContentSecurityPolicy(config, ancestors));
       }
+    }
+    if (NO_CAMERA_PATHS.test(c.req.path)) {
+      headers.set('Permissions-Policy', NO_CAMERA_PERMISSIONS_POLICY);
     }
     if (OAUTH_POPUP_PATHS.test(c.req.path))
       headers.set('Cross-Origin-Opener-Policy', 'unsafe-none');

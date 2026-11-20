@@ -68,7 +68,7 @@ test('sign up, build a base, work with data, import, export and invite', async (
     const headers = res?.headers() ?? {};
     // Enforced, not report-only: every page of this test runs under it, and the auto fixture
     // in helpers/test.ts fails the test on any violation.
-    expect(headers['content-security-policy']).toContain("script-src 'self';");
+    expect(headers['content-security-policy']).toContain("script-src 'self' 'wasm-unsafe-eval';");
     expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
     expect(headers['x-content-type-options']).toBe('nosniff');
     // /login is on an OAuth app's popup path, so it keeps its opener (unsafe-none); other pages

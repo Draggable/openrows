@@ -5,8 +5,10 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { testApp } from '../../test/helpers/app.js';
 import { loadConfig } from '../config.js';
 import {
+  APP_PERMISSIONS_POLICY,
   contentSecurityPolicy,
   formContentSecurityPolicy,
+  NO_CAMERA_PERMISSIONS_POLICY,
   shareContentSecurityPolicy,
 } from './security-headers.js';
 
@@ -46,7 +48,8 @@ describe('contentSecurityPolicy', () => {
     const csp = directives(contentSecurityPolicy(config()));
     expect(csp).toEqual({
       'default-src': ["'self'"],
-      'script-src': ["'self'"],
+      // WebAssembly compilation only (the barcode scanner's decoder), never JavaScript eval.
+      'script-src': ["'self'", "'wasm-unsafe-eval'"],
       'style-src': ["'self'", "'unsafe-inline'"],
       'img-src': ["'self'"],
       'font-src': ["'self'"],
@@ -88,9 +91,9 @@ describe('security headers on every response', () => {
     expect(res.headers.get('content-security-policy'), what).toBe(expectedCsp);
     expect(res.headers.get('x-content-type-options'), what).toBe('nosniff');
     expect(res.headers.get('referrer-policy'), what).toBe('strict-origin-when-cross-origin');
-    expect(res.headers.get('permissions-policy'), what).toMatch(
-      /camera=\(\).*microphone=\(\).*geolocation=\(\)/
-    );
+    // The camera from the app's own origin only (barcode scanning); nothing else.
+    expect(res.headers.get('permissions-policy'), what).toBe(APP_PERMISSIONS_POLICY);
+    expect(APP_PERMISSIONS_POLICY).toMatch(/^camera=\(self\), microphone=\(\).*geolocation=\(\)/);
     expect(res.headers.get('cross-origin-opener-policy'), what).toBe('same-origin');
     expect(res.headers.get('x-frame-options'), what).toBe('DENY');
     // APP_URL is http in tests: no HSTS.
@@ -247,6 +250,27 @@ describe('security headers on every response', () => {
       expect(directives(res.headers.get('content-security-policy'))['frame-ancestors']).toEqual([
         "'none'",
       ]);
+    }
+  });
+
+  it('keeps the camera off on share links, embeds, public forms and the sandbox frames', async () => {
+    expect(NO_CAMERA_PERMISSIONS_POLICY).toMatch(/^camera=\(\), microphone=\(\)/);
+    const token = 'A'.repeat(43);
+    for (const path of [
+      `/s/${token}`,
+      '/embed/short',
+      '/api/shared/short',
+      '/f/abc',
+      '/api/forms/abc',
+      '/sandbox/script',
+      '/sandbox/extension',
+    ]) {
+      const res = await app.request(path);
+      expect(res.headers.get('permissions-policy'), path).toBe(NO_CAMERA_PERMISSIONS_POLICY);
+    }
+    for (const path of ['/workspaces/1', '/settings']) {
+      const res = await app.request(path);
+      expect(res.headers.get('permissions-policy'), path).toBe(APP_PERMISSIONS_POLICY);
     }
   });
 

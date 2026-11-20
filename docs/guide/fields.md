@@ -40,7 +40,7 @@ The primary field (the first column, which names each record) can't be deleted o
 | Date and time | Basic | A point in time | Date format, **Time format** (12 hour or 24 hour), **Time zone** (default UTC; times you type are read in it) |
 | Duration | Basic | A length of time | **Duration format**: h:mm, h:mm:ss, h:mm:ss.s, h:mm:ss.ss, h:mm:ss.sss. A plain number is read as minutes in h:mm, as seconds otherwise |
 | Rating | Basic | 1 to the maximum | **Maximum** (1 to 10, default 5), **Icon**, **Color** |
-| Barcode | Basic | A code and its symbology | EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39, ITF, QR and Data Matrix; check digits are verified. The cell shows the code's text |
+| Barcode | Basic | A code and its symbology | EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39, ITF, QR and Data Matrix; check digits are verified. The cell shows the code's text. Type or paste a code, or [scan it with the camera](#scanning-a-barcode) |
 | Single select | Choice | One choice from a list | **Choices**: add, rename, recolor, reorder (drag, or Alt+Up/Down), remove. Up to 1,000 choices |
 | Multiple select | Choice | Any number of choices | Same choices editor. Pasted text is split on commas |
 | Email | Contact | An email address | Text that isn't an address is left empty |
@@ -60,6 +60,25 @@ The primary field (the first column, which names each record) can't be deleted o
 | Button | Computed | A clickable button in each cell | **Button label** (default "Open") and **When clicked**: **Open a URL** (the URL comes from a formula; only http and https results work, and they open in a new tab) or **Run automations** (see [Automations](automations.md)) |
 
 Read-only and computed fields can't be typed into; OpenRows fills them for you.
+
+## Scanning a barcode
+
+A barcode cell's editor has a **Type** list (**Detect** picks the symbology from the text) and a **Scan** button that reads a code with your device's camera. Scanning works in the browser and in the installed app (see [Install the app and work offline](getting-started.md#install-the-app-and-work-offline)) on phones, tablets and computers with a camera. There is no separate native app.
+
+1. Open the cell's editor and choose **Scan**. Only then does the browser ask for the camera; opening the editor never does. On a phone the back camera is used when there is one.
+2. Point the camera at the barcode or QR code. A preview shows what the camera sees. **Cancel scan** (or Esc) stops the camera and returns to typing.
+3. When a code is read, the camera turns off, and the code and its symbology fill the editor. The code is checked exactly like typed text: a value that isn't valid for its type (a wrong check digit, say) says so and isn't saved. Edit the text by hand, choose **Discard scan** to put back what was there before, or choose **Scan** to try again. Press Enter to save.
+
+The camera also turns off when the editor closes, whether you save, cancel or click elsewhere.
+
+Codes are decoded on your device: no camera image is sent to the server or anywhere else. Browsers with a built-in barcode reader (the `BarcodeDetector` API) use it; elsewhere OpenRows uses its own decoder, which the app downloads from your OpenRows server the first time you scan.
+
+If the camera can't be used, the editor says why and you can still type or paste the code:
+
+- **Camera access is blocked**: you (or the browser) denied the permission. Allow the camera for this site in the browser's site settings, then choose **Scan** again.
+- **No camera was found**, or **The camera is in use by another app**.
+- **The camera can only be used on a secure (HTTPS) connection**: browsers only offer the camera to pages served over HTTPS (or from `localhost`). Open OpenRows at its `https://` address to scan.
+- **This browser can't use a camera here**: the browser has no camera API.
 
 ## Converting field types
 
