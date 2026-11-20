@@ -12,6 +12,7 @@ import {
   MAX_SYNC_SOURCES_PER_TABLE,
   MAX_SYNCS_PER_BASE,
   type PreviewSyncInput,
+  permissionAllows,
   previewSyncSchema,
   roleAllows,
   SYNC_RUN_HISTORY,
@@ -26,6 +27,7 @@ import {
   syncedTypeOf,
   syncTargetCompatible,
   type TableSync,
+  tablePermissionsOf,
   type tableSyncSourceSchema,
   type UpdateSyncInput,
   type UserRole,
@@ -41,6 +43,7 @@ import {
   type Database,
   fields,
   type Transaction,
+  tableSyncRecords,
   tableSyncRuns,
   tableSyncs,
   tables,
@@ -97,6 +100,13 @@ export function fieldMapOf(row: SyncRow): FieldMapEntry[] {
   return Array.isArray(row.fieldMap) ? (row.fieldMap as FieldMapEntry[]) : [];
 }
 
+/** The synced fields a two-way source writes back, as its last run found them. */
+export function writeBackFieldsOf(row: Pick<SyncRow, 'writeBackFieldIds'>): string[] {
+  return Array.isArray(row.writeBackFieldIds)
+    ? (row.writeBackFieldIds as unknown[]).filter((id): id is string => typeof id === 'string')
+    : [];
+}
+
 /** The synced field's type and options for a source field. */
 export function targetTypeOf(source: FieldRow): {
   type: string;
@@ -124,6 +134,8 @@ function toRun(row: RunRow): SyncRun {
     deleted: row.deleted,
     unchanged: row.unchanged,
     skipped: row.skipped,
+    writtenBack: row.writtenBack,
+    removedFromSource: row.removedFromSource,
     error: row.error,
     createdAt: row.createdAt.toISOString(),
     startedAt: row.startedAt?.toISOString() ?? null,
@@ -169,6 +181,9 @@ export async function toTableSync(
     })),
     sourceFieldId: row.sourceFieldId,
     ownerFieldId: row.ownerFieldId,
+    ownsUnattributed: row.ownsUnattributed,
+    twoWay: row.twoWay,
+    writeBackFieldIds: row.twoWay ? writeBackFieldsOf(row) : [],
     schedule: row.schedule as SyncSchedule,
     status: row.status === 'paused' ? 'paused' : 'active',
     pauseReason: (row.pauseReason as SyncPauseReason | null) ?? null,
@@ -458,6 +473,7 @@ function sourceColumns(
 export async function createSync(ctx: SyncContext, input: CreateSyncInput): Promise<TableSync> {
   const parsed = createSyncSchema.parse(input);
   const { source } = parsed;
+  if (parsed.twoWay && source.kind !== undefined && source.kind !== 'table') throw oneWayOnly();
   // Each column or field to copy: its name, type and options, and what it is in the source.
   let checked:
     | { kind: 'table'; src: CheckedTableSource }
@@ -539,6 +555,17 @@ export async function createSync(ctx: SyncContext, input: CreateSyncInput): Prom
     .where(inArray(fields.id, [targetPrimary.id, ...map.map((m) => m.fieldId), sourceField.id]));
   await ctx.tx.update(tables).set({ synced: true }).where(eq(tables.id, table.id));
 
+  if (parsed.twoWay) {
+    await assertTwoWayAllowed(ctx, {
+      tableId: table.id,
+      syncId: null,
+      sourceKind: checked.kind === 'table' ? 'table' : checked.src.split.kind,
+      source:
+        checked.kind === 'table'
+          ? { tableId: checked.src.shape.table.id, viewId: checked.src.shape.view?.id ?? null }
+          : null,
+    });
+  }
   const [row] = await ctx.tx
     .insert(tableSyncs)
     .values({
@@ -547,6 +574,7 @@ export async function createSync(ctx: SyncContext, input: CreateSyncInput): Prom
       baseId: ctx.baseId,
       tableId: table.id,
       ...sourceColumns(checked),
+      twoWay: parsed.twoWay,
       keyFieldId: checked.kind === 'table' ? parsed.keyFieldId : null,
       keyColumn: checked.kind === 'external' ? parsed.keyColumn : null,
       fieldMap: map,
@@ -580,6 +608,7 @@ export async function addSource(
   }
   const body = addSyncSourceSchema.parse(input);
   const { source } = body;
+  if (body.twoWay && source.kind !== undefined && source.kind !== 'table') throw oneWayOnly();
 
   // What the source copies, each with the type a new field of it would have.
   let checked:
@@ -721,6 +750,17 @@ export async function addSource(
       .where(eq(tableSyncs.id, first.id));
   }
 
+  if (body.twoWay) {
+    await assertTwoWayAllowed(ctx, {
+      tableId,
+      syncId: null,
+      sourceKind: checked.kind === 'table' ? 'table' : checked.src.split.kind,
+      source:
+        checked.kind === 'table'
+          ? { tableId: checked.src.shape.table.id, viewId: checked.src.shape.view?.id ?? null }
+          : null,
+    });
+  }
   const [row] = await ctx.tx
     .insert(tableSyncs)
     .values({
@@ -729,6 +769,7 @@ export async function addSource(
       baseId: table.baseId,
       tableId,
       ...sourceColumns(checked),
+      twoWay: body.twoWay,
       keyFieldId: checked.kind === 'table' ? body.keyFieldId : null,
       keyColumn: checked.kind === 'external' ? body.keyColumn : null,
       fieldMap: map,
@@ -911,7 +952,14 @@ export async function pruneRuns(tx: Transaction, syncId: string) {
   );
 }
 
-/** Changes one source's schedule, pauses or resumes it (a resume runs it now). */
+/**
+ * Changes one source's schedule, pauses or resumes it (a resume runs it now), or turns two-way
+ * on or off. Turning it on (assertTwoWayAllowed) makes the caller the source's creator, whose
+ * access every run uses, and queues a run unless the source is paused; turning it off makes the
+ * source one-way again. Either way the last applied values are dropped: the next two-way run
+ * starts again from the source's values. Resuming a two-way source checks the same rules, as the
+ * person resuming becomes its creator.
+ */
 async function updateOne(ctx: SyncContext, row: SyncRow, input: UpdateSyncInput): Promise<SyncRow> {
   const schedule = input.schedule ?? (row.schedule as SyncSchedule);
   const set: Partial<typeof tableSyncs.$inferInsert> = {
@@ -920,18 +968,105 @@ async function updateOne(ctx: SyncContext, row: SyncRow, input: UpdateSyncInput)
     updatedAt: new Date(),
   };
   const resume = input.paused === false && row.status === 'paused';
+  const twoWay = input.twoWay ?? row.twoWay;
+  const toggled = twoWay !== row.twoWay;
+  if (twoWay && (toggled || resume)) await assertTwoWayAllowed(ctx, syncTarget(row));
   if (input.paused === true) Object.assign(set, { status: 'paused', pauseReason: 'paused' });
   if (resume) Object.assign(set, { status: 'active', pauseReason: null });
   // A resume runs as whoever resumed it: they become the source's reader.
   if (resume) set.createdBy = ctx.userId;
+  if (toggled) {
+    // Turning two-way on: the caller becomes the source's reader and writer.
+    Object.assign(set, { twoWay, writeBackFieldIds: [] });
+    if (twoWay) set.createdBy = ctx.userId;
+    await ctx.tx.delete(tableSyncRecords).where(eq(tableSyncRecords.syncId, row.id));
+  }
   const [updated] = await ctx.tx
     .update(tableSyncs)
     .set(set)
     .where(eq(tableSyncs.id, row.id))
     .returning();
   if (!updated) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
-  if (resume) await queueRun(ctx.tx, ctx.jobs, updated, 'manual');
+  if (resume || (toggled && twoWay && updated.status !== 'paused')) {
+    await queueRun(ctx.tx, ctx.jobs, updated, 'manual');
+  }
   return updated;
+}
+
+/** What assertTwoWayAllowed checks of an existing source. */
+function syncTarget(row: SyncRow): TwoWayTarget {
+  return {
+    tableId: row.tableId,
+    syncId: row.id,
+    sourceKind: row.sourceKind,
+    source: row.sourceTableId ? { tableId: row.sourceTableId, viewId: row.sourceViewId } : null,
+  };
+}
+
+interface TwoWayTarget {
+  /** The synced table. */
+  tableId: string;
+  /** The source being changed; null for a new one. */
+  syncId: string | null;
+  sourceKind: string;
+  /** A table source's table and view. */
+  source: { tableId: string; viewId: string | null } | null;
+}
+
+/** A CSV, database or connector source asked to sync both ways (422). */
+function oneWayOnly(): AppError {
+  return invalid(
+    'twoWay',
+    'Only a table or view in OpenRows can sync both ways: this source syncs one way.'
+  );
+}
+
+/** Lock name serializing two-way opt-ins, so two of them can't close a loop together. */
+const TWO_WAY_LOCK = 'syncs:two-way';
+
+/**
+ * Whether the caller may turn two-way on for a source of `target.tableId` (422 with the reason
+ * otherwise): the source is a table or view of OpenRows; it isn't the synced table itself, nor
+ * joined to it already by a chain of two-way syncs (`table_sync_two_way_loop`, across every
+ * workspace: one two-way sync per pair of tables, and no loops); and the caller can read it and
+ * edit its records, as they would by hand (their live role, editors and up, and the source
+ * table's record edit permission). A run checks the same again before it writes.
+ */
+export async function assertTwoWayAllowed(ctx: SyncContext, target: TwoWayTarget): Promise<void> {
+  if (target.sourceKind !== 'table' || !target.source) throw oneWayOnly();
+  const source = target.source;
+  await ctx.tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${TWO_WAY_LOCK}, 0))`);
+  const { rows } = await ctx.tx.execute<{ loop: boolean }>(
+    sql`SELECT table_sync_two_way_loop(${target.tableId}::uuid, ${source.tableId}::uuid, ${target.syncId}::uuid) AS loop`
+  );
+  if (rows[0]?.loop) {
+    throw invalid(
+      'twoWay',
+      source.tableId === target.tableId
+        ? "A table can't sync both ways with itself."
+        : 'These tables are already joined by a two-way sync: another would make changes go round in a loop.'
+    );
+  }
+  const noEdit = () =>
+    invalid('twoWay', "To sync both ways, you need to be able to edit the source's records.");
+  const access = await sourceAccess(ctx.tx, ctx.userId, source);
+  if (!access.ok || !roleAllows(access.role, 'record:update')) throw noEdit();
+  const shape = await readSourceShape(
+    ctx.tx,
+    { userId: ctx.userId, sourceWorkspaceId: access.workspaceId, homeWorkspaceId: ctx.workspaceId },
+    source
+  );
+  if (!shape) throw noEdit();
+  if (shape.table.synced) {
+    throw invalid(
+      'twoWay',
+      'A synced table is never a source: syncing both ways with it would make a loop.'
+    );
+  }
+  const who = { role: access.role, userId: ctx.userId };
+  if (!permissionAllows(tablePermissionsOf(shape.table.permissions).editRecords, who)) {
+    throw noEdit();
+  }
 }
 
 /**

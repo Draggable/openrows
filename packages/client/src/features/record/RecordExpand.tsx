@@ -292,7 +292,7 @@ export function RecordExpand(props: RecordExpandProps) {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-danger"
-                        disabled={!rights.canDelete}
+                        disabled={!rights.canDeleteRecord(record)}
                         onSelect={deleteRecord}
                       >
                         <Trash2 className="size-4" aria-hidden />
@@ -517,7 +517,7 @@ function FieldList({
           key={`${record.id}:${field.id}`}
           field={field}
           value={record.fields[field.id]}
-          canEdit={canEdit && rights.canEditField(field)}
+          canEdit={canEdit && rights.canEditCell(field, record)}
           error={errors.get(field.id)}
           onSave={(v, typecast) => save(field, v, typecast)}
           onError={(e) => setError(field.id, e)}

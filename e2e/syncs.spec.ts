@@ -9,7 +9,9 @@ import { expect, test } from './helpers/test.js';
 // edited (a local field can); a paused sync says why and offers Resume.: a CSV URL or a
 // Postgres source is previewed, its columns mapped (included, field type, key) and synced.:
 // a sync connector (Google Sheets) is connected, browsed and synced the same way. A table with
-// several sources lists them, removes one, and adds another with its fields mapped.
+// several sources lists them, removes one, and adds another with its fields mapped. A table or
+// view source can sync both ways: the dialog sends the option only when it's ticked, and a
+// two-way source's own records open their written-back fields for editing.
 
 const GRID_URL = `/b/${IDS.base}/${IDS.table}/${IDS.view}`;
 const grid = (page: Page) => page.getByRole('grid');
@@ -38,6 +40,8 @@ function syncOf(
     status?: string;
     pauseReason?: string | null;
     runs?: Run[];
+    twoWay?: boolean;
+    writeBackFieldIds?: string[];
   } = {}
 ) {
   const at = '2026-10-29T10:00:00.000Z';
@@ -59,6 +63,9 @@ function syncOf(
     fields: [],
     sourceFieldId: IDS.notes,
     ownerFieldId: null,
+    ownsUnattributed: false,
+    twoWay: over.twoWay ?? false,
+    writeBackFieldIds: over.writeBackFieldIds ?? [],
     schedule: 'hourly',
     status: over.status ?? 'active',
     pauseReason: over.pauseReason ?? null,
@@ -74,6 +81,8 @@ function syncOf(
       deleted: 0,
       unchanged: 0,
       skipped: 0,
+      writtenBack: 0,
+      removedFromSource: 0,
       error: null,
       createdAt: at,
       startedAt: at,
@@ -171,6 +180,59 @@ test('a synced table shows its source, syncs now and keeps synced cells read-onl
   await expect(
     page.locator('[data-cell="0:3"] input, [role="dialog"] input').first()
   ).toBeVisible();
+});
+
+test('"Sync both ways" is sent only when ticked, for a table source', async ({ page }) => {
+  await mockApi(page, { rows: 3 });
+  const bodies: unknown[] = [];
+  await page.route(`**/api/bases/${IDS.base}/syncs`, async (route) => {
+    bodies.push(JSON.parse(route.request().postData() ?? '{}'));
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify(syncOf({ twoWay: true, runs: [{ status: 'queued' }] })),
+    });
+  });
+  await page.goto(GRID_URL);
+  await page.getByRole('button', { name: 'Sync data' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Sync data' });
+  const twoWay = dialog.getByRole('checkbox', { name: 'Sync both ways' });
+  await expect(twoWay).not.toBeChecked();
+  await expect(dialog).toContainText('the record updated last wins');
+  await twoWay.check();
+  await expectNoSeriousA11yIssues(page, '[role="dialog"]');
+  // A CSV URL syncs one way: no such option there.
+  await dialog.getByLabel('Source', { exact: true }).selectOption({ label: 'A CSV file at a URL' });
+  await expect(dialog.getByRole('checkbox', { name: 'Sync both ways' })).toHaveCount(0);
+  await dialog.getByLabel('Source', { exact: true }).selectOption({ label: 'A table in OpenRows' });
+  await dialog.getByRole('checkbox', { name: 'Sync both ways' }).check();
+  await dialog.getByRole('button', { name: 'Sync table' }).click();
+  await expect(dialog).toBeHidden();
+  expect(bodies).toEqual([
+    {
+      source: { baseId: IDS.base, tableId: IDS.table, viewId: null },
+      schedule: 'hourly',
+      twoWay: true,
+    },
+  ]);
+});
+
+test("a two-way source's own records open their written-back fields", async ({ page }) => {
+  await mockApi(page, { rows: 3, synced: true });
+  // Records are keyed by Notes here: record 1 has one (the source's), record 2 none.
+  await mockSync(page, syncOf({ twoWay: true, writeBackFieldIds: [IDS.name] }));
+  await page.goto(GRID_URL);
+  const bar = page.getByTestId('sync-bar');
+  await expect(bar).toContainText('Synced both ways with CRM / Tasks');
+  await cell(page, 0, COL.name).click();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-cell="0:0"] input').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await cell(page, 1, COL.name).click();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Name is synced from another table')).toBeVisible();
+  // Still no new records by hand.
+  await expect(page.getByRole('button', { name: 'Add record' })).toHaveCount(0);
 });
 
 test('a paused sync says why and resumes', async ({ page }) => {

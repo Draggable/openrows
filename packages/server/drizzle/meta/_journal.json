@@ -806,6 +806,20 @@
       "when": 1795191815891,
       "tag": "0114_table_sync_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1795199497915,
+      "tag": "0115_sync_two_way",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1795199499265,
+      "tag": "0116_sync_two_way_rls",
+      "breakpoints": true
     }
   ]
 }

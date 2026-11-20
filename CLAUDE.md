@@ -236,14 +236,21 @@ packages/
                              fields of a fitting type or new ones, the "Sync source ID" field
                              naming each record's source; the first source also owns keyed
                              records with an empty one); schedule, pause, remove per source or
-                             the whole table; queueRun; `syncs.schedule` through
+                             the whole table; two-way opt-in per table source
+                             (assertTwoWayAllowed: the caller's edit rights on the source, no
+                             loop by `table_sync_two_way_loop`); queueRun; `syncs.schedule` through
                              `table_syncs_due`), run.ts (the worker's `syncs.run`: one run per
                              source at a time, only its own records (a session advisory lock on the run's own connection,
                              db/index.ts's pinConnection; no transaction held across its steps),
                              access re-checked, pauses, the source read in one snapshot or as it
                              downloads into a temp table before any write, upserts
                              in batches and deletes at the end by key through the RecordService
-                             with `ctx.sync`, idempotent; MAX_SYNC_RECORDS), routes.ts; sources/
+                             with `ctx.sync`, idempotent; MAX_SYNC_RECORDS; two-way sources: each
+                             side compared with `table_sync_records` (last applied values per
+                             key), write-back as the creator in the batch's transaction,
+                             last-write-wins, deletes both ways at the end, `write_access_lost`
+                             pauses), routes.ts; records/synced.ts: people's edits and deletes of
+                             a two-way source's own records (its `write_back_field_ids`); sources/
                              (csv.ts, a CSV URL through safe-fetch with conditional GETs, parsed
                              as it streams;
                              postgres.ts, a table or SELECT on a pinned, checked address
@@ -541,8 +548,9 @@ packages/
                              column mapping),
                              and "Add a source" (`addTo`: the field mapping), SyncBar (the
                              table header's source or sources, status, Sync now, settings, the
-                             Sources dialog: each source's schedule, pause, run, removal),
-                             model.ts
+                             Sources dialog: each source's schedule, pause, run, removal, "Both
+                             ways"), model.ts (TWO_WAY_HELP); permissions/model.ts's canEditCell and
+                             canDeleteRecord open a two-way source's records
     src/features/scripts/    the Scripts page (/b/:baseId/scripts, lazy): ScriptsPage (list,
                              samples, Run/Stop, output, inline prompts), ScriptEditor (CodeMirror,
                              completions from model.ts), host.ts (the sandboxed frame, the checked

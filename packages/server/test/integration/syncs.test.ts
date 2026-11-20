@@ -511,6 +511,8 @@ describe('synced tables', () => {
       deleted: 0,
       unchanged: 0,
       skipped: 0,
+      writtenBack: 0,
+      removedFromSource: 0,
     });
     expect(await total(sync.tableId)).toBe(10_001);
     const first = await records(sync.tableId);

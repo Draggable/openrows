@@ -29,12 +29,15 @@ import {
 } from '../../components/ui';
 import { cn } from '../../lib/utils';
 import {
+  canSyncBothWays,
   isBusy,
   runSummary,
   SCHEDULE_LABELS,
   SOURCE_KIND_LABELS,
+  sourceLine,
   sourcesStatusLine,
   statusLine,
+  TWO_WAY_HELP,
 } from './model';
 import { SyncDataDialog } from './SyncDataDialog';
 
@@ -49,7 +52,8 @@ const selectClass =
  * why it's paused), "Sync now" for editors and up, and the sync's settings for creators
  * (schedule, pause or resume, add a source, stop syncing). A table with several sources says
  * how many, and "Sources" lists each one with its own status, schedule, "Sync now", pause and
- * removal. Ledger: neutral fill; a paused sync gets the banner's 2 px top accent, never a
+ * removal. A table or view source can be switched to "Sync both ways" (and back) there or in the
+ * settings menu. Ledger: neutral fill; a paused sync gets the banner's 2 px top accent, never a
  * coloured left border.
  */
 export function SyncBar({
@@ -75,6 +79,19 @@ export function SyncBar({
   const canRun = role === 'owner' || role === 'creator' || role === 'editor';
   const canAdd = s.canManage && sources.length < MAX_SYNC_SOURCES_PER_TABLE && !!base;
   const last = s.runs.find((r) => r.status === 'succeeded');
+  const setTwoWay = (source: TableSync, on: boolean) => {
+    if (on && !window.confirm(`Sync both ways with ${source.source.label}? ${TWO_WAY_HELP}`)) {
+      return;
+    }
+    update.mutate(
+      { twoWay: on },
+      {
+        onSuccess: () =>
+          toast.success(on ? 'The table now syncs both ways' : 'The table now syncs one way'),
+        onError: failed(on ? 'sync both ways' : 'sync one way'),
+      }
+    );
+  };
   const stop = () => {
     if (
       !window.confirm(
@@ -117,7 +134,7 @@ export function SyncBar({
           </>
         ) : (
           <>
-            <span className="text-text">Synced from {s.source.label || 'another table'}</span>
+            <span className="text-text">{sourceLine(s)}</span>
             <span aria-hidden> · </span>
             <span>{statusLine(s)}</span>
             {!paused && !busy && last && (
@@ -175,6 +192,18 @@ export function SyncBar({
                   {SCHEDULE_LABELS[schedule]}
                 </DropdownMenuCheckboxItem>
               ))}
+            {!several && canSyncBothWays(s.source.kind) && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={s.twoWay}
+                  title={TWO_WAY_HELP}
+                  onCheckedChange={(on) => setTwoWay(s, on === true)}
+                >
+                  Sync both ways
+                </DropdownMenuCheckboxItem>
+              </>
+            )}
             {several && (
               <DropdownMenuItem onSelect={() => setShowSources(true)}>
                 Manage sources…
@@ -284,12 +313,17 @@ function SourceRow({
   const busy = isBusy(source);
   const last = source.runs.find((r) => r.status !== 'queued' && r.status !== 'running');
   const label = source.source.label || SOURCE_KIND_LABELS[source.source.kind];
-  const update = (body: { schedule?: SyncSchedule; paused?: boolean }, what: string) =>
-    updateSource.mutate({ syncId: source.id, body }, { onError: failed(what) });
+  const update = (
+    body: { schedule?: SyncSchedule; paused?: boolean; twoWay?: boolean },
+    what: string
+  ) => updateSource.mutate({ syncId: source.id, body }, { onError: failed(what) });
   return (
     <li className="flex flex-col gap-1.5 px-3 py-2" data-testid="sync-source">
       <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-body text-text">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-body text-text">
+          {label}
+          {source.twoWay && <span className="text-small text-text-2"> · both ways</span>}
+        </span>
         {!paused && canRun && (
           <Button
             size="sm"
@@ -341,6 +375,22 @@ function SourceRow({
             >
               Pause
             </Button>
+          )}
+          {canSyncBothWays(source.source.kind) && (
+            <label className="flex items-center gap-1.5 text-small text-text" title={TWO_WAY_HELP}>
+              <input
+                type="checkbox"
+                checked={source.twoWay}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  if (on && !window.confirm(`Sync both ways with ${label}? ${TWO_WAY_HELP}`))
+                    return;
+                  update({ twoWay: on }, on ? 'sync both ways' : 'sync one way');
+                }}
+                className="size-4 accent-[var(--accent)]"
+              />
+              Both ways
+            </label>
           )}
           <Button
             size="sm"
