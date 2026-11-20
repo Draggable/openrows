@@ -7,6 +7,7 @@ import {
   type TableSync,
 } from '@openrows/shared';
 import { and, eq, sql } from 'drizzle-orm';
+import { uuidv7 } from 'uuidv7';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_COOKIE } from '../../src/auth/session-token.js';
 import { tableSyncs, workspaceMembers } from '../../src/db/index.js';
@@ -623,6 +624,38 @@ describe('synced tables with more than one source', () => {
       'I5',
     ]);
     expect(rows.filter((r) => r[0] === added.id).map((r) => r[1])).toEqual(['I2']);
+  });
+
+  it('keeps a source added while another one is being removed', async () => {
+    const left = await sourceTable('Left side', [{ name: 'L1', points: 1 }]);
+    const a = await syncedFrom(left, 'Raced removal');
+    const [row] = await t.db.select().from(tableSyncs).where(eq(tableSyncs.id, a.id));
+    if (!row) throw new Error('no sync row');
+    const { id: _id, createdAt: _c, updatedAt: _u, ...copy } = row;
+    const addedId = uuidv7();
+    // An add in progress (it holds the table's sources, then inserts its own and commits)
+    // while the only other source is removed: the removal waits, then must see the new source,
+    // so the table goes on syncing from it, with the fields it fills still synced.
+    let removing: Promise<Response> | undefined;
+    await t.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM table_syncs WHERE id = ${a.id} FOR UPDATE`);
+      removing = Promise.resolve(json('DELETE', `/api/tables/${a.tableId}/syncs/${a.id}`));
+      for (let waited = 0; ; waited += 20) {
+        const { rows } = await t.db.execute<{ n: number }>(
+          sql`SELECT count(*)::int AS n FROM pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'`
+        );
+        if ((rows[0]?.n ?? 0) > 0) break;
+        if (waited > 10_000) throw new Error('the removal never waited for the add');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      await tx.insert(tableSyncs).values({ ...copy, id: addedId });
+    });
+    await ok(removing ?? Promise.reject(new Error('no removal')), 204);
+    expect((await sources(a.tableId)).map((s) => s.id)).toEqual([addedId]);
+    const table = await meta(a.tableId);
+    expect(table.synced).toBe(true);
+    expect(table.fields.find((f) => f.name === 'Points')?.synced).toBe(true);
   });
 
   it('pauses only the source past the record cap, and caps sources per table and base', async () => {

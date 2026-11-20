@@ -184,14 +184,22 @@ export async function toTableSync(
 /**
  * The table's sources, oldest (the one it was made with) first; none when it isn't synced.
  * Optionally locked for the transaction.
+ *
+ * Locked, they are read twice: a locking read that waited for another transaction returns only
+ * the rows its snapshot had, so a source added by that transaction (which held these rows while
+ * adding it) would be missed. The second read, once the rows are held, sees and locks it too; no
+ * other source can be added meanwhile, as adding one locks the table's sources first.
  */
 export async function loadSyncs(tx: Transaction, tableId: string, lock = false) {
-  const query = tx
-    .select()
-    .from(tableSyncs)
-    .where(eq(tableSyncs.tableId, tableId))
-    .orderBy(asc(tableSyncs.createdAt), asc(tableSyncs.id));
-  return lock ? query.for('update') : query;
+  const query = () =>
+    tx
+      .select()
+      .from(tableSyncs)
+      .where(eq(tableSyncs.tableId, tableId))
+      .orderBy(asc(tableSyncs.createdAt), asc(tableSyncs.id));
+  if (!lock) return query();
+  await query().for('update');
+  return query().for('update');
 }
 
 /** The table's first source (404 when it isn't synced), optionally locked. */
@@ -567,10 +575,9 @@ export async function addSource(
   tableId: string,
   input: AddSyncSourceInput
 ): Promise<TableSync> {
-  // Locked: runs of the table's sources wait (and then see the change), and so do other adds.
-  const existing = await loadSyncs(ctx.tx, tableId, true);
-  const first = existing[0];
-  if (!first) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  if (!(await loadSyncs(ctx.tx, tableId)).length) {
+    throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
+  }
   const body = addSyncSourceSchema.parse(input);
   const { source } = body;
 
@@ -605,6 +612,11 @@ export async function addSource(
     }));
   }
 
+  // Locked once the source is checked (which may wait on the network): from here, runs of the
+  // table's sources wait for the add (and then see it), and so do other adds and removals.
+  const existing = await loadSyncs(ctx.tx, tableId, true);
+  const first = existing[0];
+  if (!first) throw new AppError('NOT_FOUND', { detail: "This table isn't synced." });
   const [table] = await ctx.tx
     .select()
     .from(tables)
