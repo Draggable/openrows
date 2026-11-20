@@ -6,7 +6,7 @@ import { SESSION_COOKIE } from '../../src/auth/session-token.js';
 import { tableSyncs, workspaceMembers } from '../../src/db/index.js';
 import { ossEntitlements } from '../../src/edition/oss.js';
 import type { EntitlementsProvider } from '../../src/edition/types.js';
-import { runSyncJob, type SyncRunDeps } from '../../src/syncs/run.js';
+import { runSyncJob, type SyncRunDeps, syncRunLockName } from '../../src/syncs/run.js';
 import { scheduleDueSyncs } from '../../src/syncs/service.js';
 import { testApp } from '../helpers/app.js';
 import { useTestDb } from '../helpers/db.js';
@@ -645,7 +645,7 @@ describe('synced tables', () => {
     try {
       await holder.query('BEGIN');
       await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
-        `syncs:run:${sync.id}`,
+        syncRunLockName(sync.id),
       ]);
       const queued = sync.runs[0];
       if (!queued) throw new Error('no run');
@@ -684,27 +684,51 @@ describe('synced tables', () => {
     );
     const queued = sync.runs[0];
     if (!queued) throw new Error('no run');
-    // The backends holding an advisory lock, seen from outside.
-    const lockHolders = async () =>
-      (
-        await t.db.execute<{ pid: number }>(
-          sql`SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND granted ORDER BY pid`
-        )
-      ).rows.map((r) => r.pid);
-    // In each batch: the transactions open on the backends holding the sync's lock, and whether
-    // the batch's own backend is the one.
+    // Seen from outside, in this file's database only (the other test files share the server):
+    // the backends holding this sync's run lock (a bigint key: classid is its high half, objid its
+    // low half), and the client backends with a transaction open, the observer's own left out.
+    const lockName = syncRunLockName(sync.id);
+    const observe = async () => {
+      const [row] = (
+        await t.db.execute<{ holders: number[]; open: number[] }>(sql`
+          SELECT
+            (SELECT coalesce(array_agg(l.pid ORDER BY l.pid), '{}')
+               FROM pg_locks l
+              WHERE l.locktype = 'advisory' AND l.granted AND l.objsubid = 1
+                AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+                AND ((l.classid::int8 << 32) | l.objid::int8) = hashtextextended(${lockName}, 0)
+            ) AS holders,
+            (SELECT coalesce(array_agg(a.pid ORDER BY a.pid), '{}')
+               FROM pg_stat_activity a
+              WHERE a.datname = current_database() AND a.backend_type = 'client backend'
+                AND a.xact_start IS NOT NULL AND a.pid <> pg_backend_pid()
+            ) AS open`)
+      ).rows;
+      if (!row) throw new Error('nothing observed');
+      return row;
+    };
+    // In each batch: the backends holding the sync's lock, whether the batch's own backend is the
+    // only one and the only one with a transaction open, and when the batch's transaction began.
     const seen: { holders: number; ownTransactionOnly: boolean }[] = [];
+    const began: string[] = [];
     let kill = false;
     const entitlements: EntitlementsProvider = {
       ...ossEntitlements,
       forWorkspace: async (id, tx) => {
-        const own = (await tx.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`)).rows[0]
-          ?.pid;
-        const holders = await lockHolders();
-        seen.push({ holders: holders.length, ownTransactionOnly: holders[0] === own });
+        const [own] = (
+          await tx.execute<{ pid: number; began: string }>(
+            sql`SELECT pg_backend_pid() AS pid, now()::text AS began`
+          )
+        ).rows;
+        const { holders, open } = await observe();
+        seen.push({
+          holders: holders.length,
+          ownTransactionOnly: holders[0] === own?.pid && open.length === 1 && open[0] === own?.pid,
+        });
+        if (own) began.push(own.began);
         if (kill && own) {
           // The run's connection is lost midway, as when its worker dies.
-          await t.db.execute(sql`SELECT pg_terminate_backend(${own}, 5000)`);
+          await t.db.execute(sql`SELECT pg_terminate_backend(${own.pid}, 5000)`);
         }
         return ossEntitlements.forWorkspace(id, tx);
       },
@@ -714,9 +738,10 @@ describe('synced tables', () => {
     await expect(runSyncJob({ db: t.appDb, entitlements, batchSize: 2 }, job)).rejects.toThrow();
     expect(seen).toEqual([{ holders: 1, ownTransactionOnly: true }]);
     // Postgres let go of the lost connection's lock: the job's retry runs, it isn't deferred.
-    expect(await lockHolders()).toEqual([]);
+    expect((await observe()).holders).toEqual([]);
     kill = false;
     seen.length = 0;
+    began.length = 0;
     expect(await runSyncJob({ db: t.appDb, entitlements, batchSize: 2 }, job)).toMatchObject({
       status: 'succeeded',
       created: 5,
@@ -724,7 +749,9 @@ describe('synced tables', () => {
     // Three batches of 2 and the run's end, each a transaction of its own on the connection
     // holding the lock: no other transaction (and no other connection) is held across them.
     expect(seen).toEqual(Array(4).fill({ holders: 1, ownTransactionOnly: true }));
-    expect(await lockHolders()).toEqual([]);
+    // Each one a new transaction, not savepoints of one held across the run.
+    expect(new Set(began).size).toBe(4);
+    expect((await observe()).holders).toEqual([]);
   });
 
   it('pauses when the source table is deleted', async () => {

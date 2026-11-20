@@ -204,13 +204,22 @@ interface Setup {
   compared: TypedField[];
 }
 
+/**
+ * The name of a sync's run lock (session-level, held for the run on its own connection), as
+ * `pg_try_advisory_lock(hashtextextended(name, 0))` takes it. Its `syncs:run:` prefix keeps it
+ * apart from the app's other advisory locks, `syncs:<baseId>` (creating syncs) among them.
+ */
+export function syncRunLockName(syncId: string): string {
+  return `syncs:run:${syncId}`;
+}
+
 export async function runSyncJob(deps: SyncRunDeps, raw: unknown): Promise<SyncRunOutcome> {
   const data = syncJobData.parse(raw);
   // The run's own connection, closed at its end: its session lock and staging table go with it.
   const session = await pinConnection(deps.db);
   try {
     const { rows } = await session.db.execute<{ locked: boolean }>(
-      sql`SELECT pg_try_advisory_lock(hashtextextended(${`syncs:run:${data.syncId}`}, 0)) AS locked`
+      sql`SELECT pg_try_advisory_lock(hashtextextended(${syncRunLockName(data.syncId)}, 0)) AS locked`
     );
     if (!rows[0]?.locked) return { status: 'busy' };
     return await runHeld({ ...deps, db: session.db }, data);
