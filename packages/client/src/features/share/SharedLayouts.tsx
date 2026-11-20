@@ -1,7 +1,6 @@
 import {
   type CalendarMode,
   type Choice,
-  downloads,
   type FieldMeta,
   isCalendarDateField,
   type RecordData,
@@ -13,7 +12,6 @@ import {
 import { type UseQueryOptions, useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
-import { downloadUrl } from '../../api/client';
 import { shareQueries } from '../../api/queries';
 import { Button, Skeleton } from '../../components/ui';
 import { cn } from '../../lib/utils';
@@ -45,7 +43,7 @@ import {
   rowsOf as timelineRowsOf,
   windowOf,
 } from '../views/timeline/model';
-import { asFieldMeta, SharedCell } from './SharedCell';
+import { asFieldMeta, type FileLinks, SharedCell, shareFileLinks } from './SharedCell';
 
 /**
  * The public, read-only kanban, calendar, gallery, timeline and list views of a share link
@@ -61,13 +59,16 @@ export function SharedLayout({
   viewId,
   shared,
   records,
+  files,
 }: {
-  /** The share link's token, for files; null (an interface page): files by name only. */
+  /** The share link's token, for its records and files; null on an interface page. */
   token: string | null;
   viewId: string;
   shared: SharedView;
   /** Where the records come from; a share link's records route by default. */
   records?: LayoutRecordsSource | undefined;
+  /** Where files download from; the share link's by default (names only without a token). */
+  files?: FileLinks | null | undefined;
 }) {
   const fields = useMemo(() => shared.fields.map(asFieldMeta), [shared.fields]);
   const source =
@@ -75,7 +76,9 @@ export function SharedLayout({
     // The share link's query keys are narrower than a source's; its data is the same.
     (((window: { from: string; to: string } | null) =>
       shareQueries.layoutRecords(token ?? '', viewId, window)) as unknown as LayoutRecordsSource);
-  const ctx: LayoutContext = { token, viewId, shared, fields, source };
+  const fileLinks =
+    files !== undefined ? files : token === null ? null : shareFileLinks(token, viewId);
+  const ctx: LayoutContext = { files: fileLinks, shared, fields, source };
   switch (shared.view.type) {
     case 'kanban':
       return <SharedKanban ctx={ctx} />;
@@ -103,8 +106,7 @@ export type LayoutRecordsSource = (
 >;
 
 interface LayoutContext {
-  token: string | null;
-  viewId: string;
+  files: FileLinks | null;
   shared: SharedView;
   fields: FieldMeta[];
   source: LayoutRecordsSource;
@@ -187,14 +189,12 @@ function Cover({
   fit?: 'crop' | 'fit';
 }) {
   if (!field) return null;
-  const cover = ctx.token === null ? null : coverOf(record.fields[field.id]);
+  const cover = ctx.files === null ? null : coverOf(record.fields[field.id]);
   return (
     <div className="mb-2 shrink-0 overflow-hidden rounded-sm bg-header" style={{ height }}>
       {cover && (
         <img
-          src={downloadUrl(downloads.sharedAttachmentThumbnail, {
-            params: { shareToken: ctx.token ?? '', viewId: ctx.viewId, attachmentId: cover.id },
-          })}
+          src={ctx.files?.thumbnail(cover.id)}
           alt={cover.filename}
           loading="lazy"
           className={cn('size-full', fit === 'fit' ? 'object-contain' : 'object-cover')}
@@ -272,12 +272,7 @@ function Card({
             <span className="sr-only">{f.name}: </span>
           )}
           <div className="flex min-w-0 items-center overflow-hidden" style={{ height: CARD.row }}>
-            <SharedCell
-              token={ctx.token}
-              viewId={ctx.viewId}
-              field={f}
-              value={record.fields[f.id] ?? null}
-            />
+            <SharedCell files={ctx.files} field={f} value={record.fields[f.id] ?? null} />
           </div>
         </div>
       ))}
@@ -519,12 +514,7 @@ function SharedList({ ctx }: { ctx: LayoutContext }) {
                   {rowFields.map((f) => (
                     <span key={f.id} className="flex max-w-56 min-w-0 items-center">
                       <span className="sr-only">{f.name}: </span>
-                      <SharedCell
-                        token={ctx.token}
-                        viewId={ctx.viewId}
-                        field={f}
-                        value={record.fields[f.id] ?? null}
-                      />
+                      <SharedCell files={ctx.files} field={f} value={record.fields[f.id] ?? null} />
                     </span>
                   ))}
                 </li>

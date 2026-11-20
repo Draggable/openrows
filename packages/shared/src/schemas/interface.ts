@@ -415,6 +415,20 @@ export const interfacePageRecordsQuerySchema = z
   });
 
 /**
+ * Whether a page's viewer may click one of its buttons that run automations: `ready`;
+ * `readOnly`: their access doesn't let them edit the table's records (read-only access, or the
+ * table's "edit records" permission); `noAutomation`: no automation is turned on for the button;
+ * `unavailable`: the button field is gone, hidden from them or no longer runs automations.
+ */
+export const INTERFACE_BUTTON_STATES = [
+  'ready',
+  'readOnly',
+  'noAutomation',
+  'unavailable',
+] as const;
+export type InterfaceButtonState = (typeof INTERFACE_BUTTON_STATES)[number];
+
+/**
  * A page's records as its viewer may see them: only the fields the page shows (links and
  * people as names, as share links show them), the records its filter keeps for this viewer.
  */
@@ -428,6 +442,11 @@ export const InterfacePageRecordsSchema = z.object({
   editable: z.array(z.uuid()),
   /** The viewer may submit the page's form. */
   canSubmit: z.boolean(),
+  /**
+   * The page's buttons that run automations, by button field id, as this viewer finds them:
+   * `ready` to click on the selected record, else why not (INTERFACE_BUTTON_STATES).
+   */
+  buttons: z.record(z.uuid(), z.enum(INTERFACE_BUTTON_STATES)),
   /** A view-like page's layout, resolved as a shared view's (fields it shows only). */
   kanban: kanbanLayoutSchema.optional(),
   calendar: calendarLayoutSchema.optional(),

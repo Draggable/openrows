@@ -17,10 +17,10 @@ import { interfaceRecordsQuery } from '../../api/queries';
 import { Button, Skeleton, toast } from '../../components/ui';
 import { cn } from '../../lib/utils';
 import { cellText } from '../grid/cells/model';
-import { asFieldMeta, SharedCell } from '../share/SharedCell';
+import { asFieldMeta, type FileLinks, interfaceFileLinks, SharedCell } from '../share/SharedCell';
 import { type LayoutRecordsSource, SharedLayout } from '../share/SharedLayouts';
 import { PreviewInput } from '../views/form/FormPreview';
-import { Canvas, type DesignerProps, type ElementContext } from './Canvas';
+import { Canvas, type DesignerProps, type ElementContext, type PageButtons } from './Canvas';
 import { dataFilters, type FilterValues } from './model';
 import { type PageSource, useDashboardData } from './useDashboardData';
 
@@ -58,6 +58,10 @@ export function PageRuntime({
   );
   const table = runtimeTable(records.data, fields);
   const dataOf = useDashboardData(source, config, filterValues, fields);
+  const files = useMemo(
+    () => interfaceFileLinks(source.interfaceId, source.pageId, source.draft),
+    [source.interfaceId, source.pageId, source.draft]
+  );
 
   if (records.isPending) return <Skeleton className="h-10" />;
   if (records.isError || !records.data) {
@@ -71,6 +75,12 @@ export function PageRuntime({
   const rows = data.records;
   const record = rows.find((r) => r.id === selected) ?? rows[0];
   const primary = fields.find((f) => f.isPrimary);
+  // Buttons click through the published page; the server says which this viewer may click.
+  const pageButtons: PageButtons = {
+    state: (fieldId) => (source.draft ? 'unavailable' : (data.buttons[fieldId] ?? 'unavailable')),
+    click: (fieldId, recordId) =>
+      api.interfaces.clickPageButton({ params: { ...ids, recordId, fieldId } }),
+  };
   const context: ElementContext = {
     table,
     record: record ? { id: record.id, fields: record.fields, version: 0 } : undefined,
@@ -78,11 +88,12 @@ export function PageRuntime({
     filterValues,
     onFilterChange: (id, value) => setFilterValues((prev) => ({ ...prev, [id]: value })),
     dataOf,
-    noAutomations: true,
+    pageButtons,
     renderField: (element, field) =>
       record ? (
         <RuntimeField
           source={source}
+          files={files}
           field={field}
           record={record}
           editable={element.editable && data.editable.includes(field.id) && !designer}
@@ -166,6 +177,7 @@ export function PageRuntime({
             viewId={source.pageId}
             shared={shared}
             records={layoutSource}
+            files={files}
           />
         </div>
       </div>
@@ -203,12 +215,7 @@ export function PageRuntime({
                 <tr key={r.id} className="h-[34px] border-b border-border last:border-0">
                   {columns.map((f) => (
                     <td key={f.id} className="max-w-[320px] truncate px-3">
-                      <SharedCell
-                        token={null}
-                        viewId={source.pageId}
-                        field={f}
-                        value={r.fields[f.id] ?? null}
-                      />
+                      <SharedCell files={files} field={f} value={r.fields[f.id] ?? null} />
                     </td>
                   ))}
                 </tr>
@@ -283,11 +290,13 @@ function runtimeTable(data: InterfacePageRecords | undefined, fields: FieldMeta[
  */
 function RuntimeField({
   source,
+  files,
   field,
   record,
   editable,
 }: {
   source: PageSource;
+  files: FileLinks;
   field: FieldMeta;
   record: SharedRecord;
   editable: boolean;
@@ -316,7 +325,7 @@ function RuntimeField({
       <div className="flex flex-col gap-1 px-2">
         <span className="text-small text-text-2">{field.name}</span>
         <div className="flex min-h-8 items-center">
-          <SharedCell token={null} viewId={source.pageId} field={field} value={value} />
+          <SharedCell files={files} field={field} value={value} />
         </div>
       </div>
     );

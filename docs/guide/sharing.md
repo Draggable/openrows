@@ -66,11 +66,17 @@ To give someone access to one base without adding them to the whole workspace, o
 
 To share an interface without its base, open the interface's page (**Interfaces** in the base's top bar) and click **Share** (creators and owners). Invite people by email with **Can view** or **Can edit**. They see the interface's published pages at their own address, and under **Interfaces shared with you** on Home, but never the base, its grid, its other interfaces or the fields a page doesn't show.
 
-- **Can view**: read the pages.
-- **Can edit**: also change the fields a record review page marks as editable (on the records the page lists) and submit its form pages.
+- **Can view**: read the pages and download the files they show.
+- **Can edit**: also change the fields a record review page marks as editable (on the records the page lists), submit its form pages and click its buttons that run automations.
 - A page filter on a user field or **Created by** set to **Me** shows each viewer their own records, interface-only collaborators included. They can be assigned in the base's user fields.
 - People with access to the base see its interfaces already, so they aren't invited to one.
-- Buttons that run automations and file downloads aren't available to interface-only collaborators yet.
+
+### Buttons and files on a page
+
+- **Buttons that run automations**: a button on a record review page clicks a button field of the selected record and starts the automations turned on for it, the same ones a click in the base starts. Someone with **Can edit** can click it on the records the page lists. With **Can view**, or when the table's edit permissions don't include them, the button is greyed out with the reason beside it. It is also greyed out when no automation is turned on for it.
+- **Files**: anyone who can open a page can open and download the files in the fields it shows, on the records it lists, with thumbnails for images. Files in fields the page doesn't show, or on records its filter leaves out, stay out of reach. No one can upload files through a page.
+- Every click and download is checked against the published page at that moment. Someone removed from the interface, or a page that's unpublished, loses them at once; a file link it already handed out stops working within 10 minutes.
+- Neither gives access to the base: interface-only collaborators still can't open its grid, its automations or its files outside the page.
 
 ## Edit permissions
 

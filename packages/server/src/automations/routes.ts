@@ -1,16 +1,11 @@
-import { type Automation, type ButtonOptions, contracts } from '@openrows/shared';
-import { and, eq, sql } from 'drizzle-orm';
-import { uuidv7 } from 'uuidv7';
+import { type Automation, contracts } from '@openrows/shared';
 import { audit } from '../audit/record.js';
 import type { RouteRegistry } from '../authz/routes.js';
-import { automations } from '../db/index.js';
 import type { Edition } from '../edition/types.js';
-import { workspaceGroup } from '../jobs/defer.js';
 import type { Jobs } from '../jobs/send.js';
-import { AppError } from '../lib/errors.js';
-import { assertTableAllows } from '../records/permissions.js';
-import { getRecord, tableFields } from '../records/service.js';
+import { tableFields } from '../records/service.js';
 import { loadTable } from '../tables/service.js';
+import { automationButton, clickRecordButton } from './buttons.js';
 import { type AutomationRunDeps, retryRun, testAutomation } from './run.js';
 import {
   type AutomationContext,
@@ -26,7 +21,6 @@ import {
   toAutomation,
   updateAutomation,
 } from './service.js';
-import { AUTOMATION_QUEUE } from './subscriber.js';
 
 /**
  * Automations under the base: its creators list, create, change, turn on and off and
@@ -182,49 +176,24 @@ export function automationRoutes(
     { resource: 'table', action: 'record:update' },
     async (c, { params }) => {
       const { tx, resource, principal } = c.var;
-      const userId = principal.user.id;
       const table = await loadTable(tx, resource.id);
       const field = (await tableFields(tx, table)).find((f) => f.row.id === params.fieldId);
-      if (field?.row.type !== 'button') {
-        throw new AppError('NOT_FOUND', { detail: 'No such button field in this table.' });
-      }
-      if ((field.options as ButtonOptions).action !== 'runAutomation') {
-        throw new AppError('CONFLICT', { detail: 'This button opens a URL; it runs nothing.' });
-      }
-      assertTableAllows(table, 'editRecords', { role: resource.role, userId });
-      const record = await getRecord(
-        { tx, workspaceId: resource.workspaceId, userId, table },
+      const { started } = await clickRecordButton(
+        {
+          tx,
+          workspaceId: resource.workspaceId,
+          table,
+          who: { role: resource.role, userId: principal.user.id },
+          jobs: deps.jobs,
+        },
+        automationButton(field),
         params.recordId
       );
-      const targets = await tx
-        .select({ id: automations.id })
-        .from(automations)
-        .where(
-          and(
-            eq(automations.tableId, table.id),
-            eq(automations.enabled, true),
-            eq(automations.triggerType, 'buttonClicked'),
-            sql`${automations.trigger}->>'fieldId' = ${field.row.id}`
-          )
-        );
-      const clickId = uuidv7();
-      for (const target of targets) {
-        await deps.jobs.send(
-          tx,
-          AUTOMATION_QUEUE,
-          {
-            workspaceId: resource.workspaceId,
-            subscriberId: target.id,
-            button: { clickId, recordId: record.id, fieldId: field.row.id, userId },
-          },
-          { group: workspaceGroup(resource.workspaceId) }
-        );
-      }
       c.var.logger.info(
-        { tableId: table.id, fieldId: field.row.id, started: targets.length },
+        { tableId: table.id, fieldId: params.fieldId, started },
         'automation button clicked'
       );
-      return { started: targets.length };
+      return { started };
     }
   );
 }

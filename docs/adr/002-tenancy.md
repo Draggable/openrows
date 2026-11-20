@@ -115,7 +115,11 @@ tenancy model before M1 adds any tenant data.
   `interfaces`, `interface_pages` and `interface_members` then show that interface's rows only.
   What a page reads leaves through a share-like projection (only the fields it shows, its filter
   applied with `me` as the viewer), and what it writes goes through the RecordService with the
-  viewer's role, limited to the page's editable fields and form fields. Every route of the
+  viewer's role, limited to the page's editable fields and form fields. A record review's
+  buttons that run automations click through the page (the button the page has, a record it
+  lists, `record:update` and the table's "edit records" permission), and the files a page shows
+  download through it (a field it shows, a record it lists), both checked against the published
+  page on every request; the base's click and file routes stay a 404 to them. Every route of the
   matrix also runs as an interface-only editor and viewer.
 
 - **Data residency.** A region is a separate stack with its own database, so tenancy
