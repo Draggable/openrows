@@ -135,7 +135,7 @@ derived from the config, never from hard-coded hosts:
 | Directive | Value |
 | --- | --- |
 | `default-src`, `font-src`, `base-uri` | `'self'` |
-| `script-src` | `'self'` (no `'unsafe-inline'` or `'unsafe-eval'`: the theme bootstrap is the external `/theme.js`, and the client runs Zod without code generation) |
+| `script-src` | `'self' 'wasm-unsafe-eval'` (no `'unsafe-inline'` or `'unsafe-eval'`: the theme bootstrap is the external `/theme.js`, and the client runs Zod without code generation; `'wasm-unsafe-eval'` only lets the app compile its own WebAssembly, the barcode scanner's decoder in browsers without `BarcodeDetector`) |
 | `style-src` | `'self' 'unsafe-inline'`: the toaster injects a `<style>` element and Radix/React set inline `style` attributes; styles can't run code |
 | `img-src`, `connect-src` | `'self'` plus the origin of `S3_PUBLIC_URL` (or `S3_ENDPOINT` without it): presigned uploads and signed thumbnail/download URLs |
 | `form-action` | `'self'` plus the origin of `OIDC_ISSUER_URL`: signing out is a form POST that redirects to the provider's end-session endpoint |
@@ -149,7 +149,9 @@ redirect is refused: put both on one origin.
 Also: `Strict-Transport-Security: max-age=31536000; includeSubDomains` when `APP_URL` is https
 (never over http), `X-Content-Type-Options: nosniff`,
 `Referrer-Policy: strict-origin-when-cross-origin`,
-`Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()` and
+`Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=(), usb=()` (the
+barcode editor's Scan uses the camera; share links, embeds, public forms and the sandbox frames
+get `camera=()`) and
 `Cross-Origin-Opener-Policy: same-origin` (except the OAuth popup chain, `/oauth/authorize`,
 `/login`, `/auth/login`, `/auth/signup` and `/auth/callback`: `unsafe-none`, so an OAuth app's
 window keeps its handle on its sign-in popup; browsers apply COOP on redirects too).

@@ -152,6 +152,8 @@ Pages you open while online are kept on your device, so when the connection drop
 
 On a phone, swipe right from the left edge of the screen (or tap the menu button) to open the sidebar, and tap a record to open it full screen.
 
+In the installed app and in mobile browsers, a barcode cell's **Scan** reads a code with the camera (over HTTPS, while online). See [Scanning a barcode](fields.md#scanning-a-barcode).
+
 ## Next steps
 
 - [Bases, tables and records](bases-and-tables.md)

@@ -119,8 +119,8 @@ export const barcodeValueSchema = z
 /**
  * A barcode: the scanned text plus its symbology (`{ text, type }`, a `jsonb` object). Writes
  * are checked per type (EAN/UPC check digits, Code 39 characters, ...); bare text gets the type
- * a scanner would report. Text filters, search and sorting read `text`. Camera scanning comes
- * later (mobile).
+ * a scanner would report. Text filters, search and sorting read `text`. The client's editor can
+ * also scan a code with the device camera; a scan is checked like typed text.
  */
 export const barcode = defineFieldType<Record<string, never>, BarcodeValue>({
   name: 'barcode',

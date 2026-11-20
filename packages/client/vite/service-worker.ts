@@ -6,8 +6,12 @@ import { build, type Plugin } from 'vite';
 
 const clientRoot = fileURLToPath(new URL('..', import.meta.url));
 
-/** Public files that aren't part of the app shell (link previews only). */
-const NOT_PRECACHED = /^\/og-image|\.map$/;
+/**
+ * Built or public files that aren't part of the app shell: link previews, source maps, and
+ * WebAssembly (the barcode scanner's fallback decoder, fetched only when someone scans; editing,
+ * and so scanning, needs the network anyway).
+ */
+const NOT_PRECACHED = /^\/og-image|\.map$|\.wasm$/;
 
 function publicFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true, recursive: true })
