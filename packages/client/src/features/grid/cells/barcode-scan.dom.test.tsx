@@ -249,6 +249,27 @@ describe('scanning a barcode with the camera', () => {
     );
   });
 
+  it('discards a second scan back to the value from before the first', async () => {
+    fakeCamera();
+    nativeDetector(
+      fakeDetector([
+        [{ rawValue: '4006381333932', format: 'ean_13' }],
+        [{ rawValue: 'ABC-123', format: 'code_39' }],
+      ])
+    );
+    const { user, onCommit } = edit({ text: '96385074', type: 'ean8' });
+    await user.click(scanButton());
+    await waitFor(() => expect(input().value).toBe('4006381333932'));
+    await user.click(scanButton());
+    await waitFor(() => expect(input().value).toBe('ABC-123'));
+    await user.click(screen.getByRole('button', { name: 'Discard scan' }));
+    expect(input().value).toBe('96385074');
+    expect(typeSelect().value).toBe('ean8');
+    expect(screen.queryByRole('button', { name: 'Discard scan' })).toBeNull();
+    await user.keyboard('{Enter}');
+    expect(onCommit).toHaveBeenCalledWith({ value: { text: '96385074', type: 'ean8' } }, 'stay');
+  });
+
   it('uses the fallback decoder where the browser has no BarcodeDetector', async () => {
     fakeCamera();
     const detector = fakeDetector([

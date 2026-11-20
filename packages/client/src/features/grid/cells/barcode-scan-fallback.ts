@@ -1,4 +1,9 @@
-import { BarcodeDetector, type BarcodeFormat, prepareZXingModule } from 'barcode-detector/ponyfill';
+import {
+  BarcodeDetector,
+  type BarcodeFormat,
+  prepareZXingModule,
+  purgeZXingModule,
+} from 'barcode-detector/ponyfill';
 import zxingReaderWasm from 'zxing-wasm/reader/zxing_reader.wasm?url';
 import type { Detector } from './barcode-scan';
 
@@ -15,6 +20,13 @@ const overrides = {
 
 /** A detector for `formats`, once the decoder is compiled (a failure rejects: "couldn't start"). */
 export async function fallbackDetector(formats: BarcodeFormat[]): Promise<Detector> {
-  await prepareZXingModule({ overrides, fireImmediately: true });
+  try {
+    await prepareZXingModule({ overrides, fireImmediately: true });
+  } catch (error) {
+    // The library keeps a failed load (offline, say) and would hand it to every later scan:
+    // forget it, so the next Scan fetches and compiles the decoder again.
+    purgeZXingModule();
+    throw error;
+  }
   return new BarcodeDetector({ formats });
 }

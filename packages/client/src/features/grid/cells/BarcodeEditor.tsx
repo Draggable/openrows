@@ -101,7 +101,9 @@ export function BarcodeEditor({ field, value, initialText, onCommit, onCancel }:
   const cancelScanRef = useRef<HTMLButtonElement>(null);
   const scanButtonRef = useRef<HTMLButtonElement>(null);
   const scan = useBarcodeScan((read) => {
-    setScanned({ read, before: { text, type } });
+    // Scanning again over a scan keeps what was there before the first one, so Discard puts
+    // back the fields' own value rather than an earlier read.
+    setScanned({ read, before: scanned?.before ?? { text, type } });
     setText(read.text);
     setType(read.type ?? 'auto');
     inputRef.current?.focus();
