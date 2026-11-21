@@ -25,6 +25,7 @@ export const LAYOUT_LABELS: Record<InterfaceLayout, string> = {
   kanban: 'Kanban',
   calendar: 'Calendar',
   timeline: 'Timeline',
+  list: 'Hierarchical list',
 };
 
 export const LAYOUT_DESCRIPTIONS: Record<InterfaceLayout, string> = {
@@ -35,6 +36,7 @@ export const LAYOUT_DESCRIPTIONS: Record<InterfaceLayout, string> = {
   kanban: 'Records as cards in stacks, by a single select field.',
   calendar: 'Records on a month, week or day calendar, by their dates.',
   timeline: 'Records as bars between their start and end dates (a Gantt chart).',
+  list: 'Records nested under their parent record, by a link to the same table. Read-only.',
 };
 
 export const ELEMENT_LABELS: Record<InterfaceElementType, string> = {

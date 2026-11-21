@@ -10,6 +10,7 @@ import {
   interfacePageConfigSchema,
   isCalendarDateField,
   isInterfaceWritableType,
+  isSelfLinkField,
   kanbanLayoutFieldRefs,
   MAX_INTERFACES_PER_BASE,
   MAX_PAGES_PER_INTERFACE,
@@ -205,8 +206,9 @@ function refuse(errors: ProblemFieldError[]): void {
 /**
  * Refuses (422, paths under `draft`) a page config naming a table that isn't a live table of
  * this base, fields that aren't live fields of it, a filter element on a field that can't be
- * one, a button that clicks something other than a button field that runs automations, or a
- * page filter or sort that wouldn't compile as a view's.
+ * one, a button that clicks something other than a button field that runs automations, a
+ * hierarchical list's parent that isn't a link to records of the same table (or a filter element
+ * on it), or a page filter or sort that wouldn't compile as a view's.
  */
 async function checkConfig(ctx: InterfaceContext, config: InterfacePageConfig, path = 'draft') {
   const [table] = await ctx.tx
@@ -235,6 +237,12 @@ async function checkConfig(ctx: InterfaceContext, config: InterfacePageConfig, p
       if (!f) missing(`${at}.fieldId`);
       else if (filterElementOperator(f.type) === null) {
         errors.push({ path: `${at}.fieldId`, message: "This field type can't be a filter." });
+      } else if (config.layout === 'list' && el.fieldId === config.list?.parentFieldId) {
+        // Its values would name parents the page leaves out.
+        errors.push({
+          path: `${at}.fieldId`,
+          message: "A hierarchical list can't filter by its parent field.",
+        });
       }
     } else if (el.type === 'button' && el.action.type === 'runAutomation') {
       const f = byId.get(el.action.fieldId);
@@ -275,6 +283,17 @@ async function checkConfig(ctx: InterfaceContext, config: InterfacePageConfig, p
       errors.push({
         path: `${path}.calendar.dateFields.${i}.startFieldId`,
         message: 'Pick a date field.',
+      });
+    }
+  }
+  const parentId = config.list?.parentFieldId;
+  if (parentId) {
+    const f = byId.get(parentId);
+    if (!f) missing(`${path}.list.parentFieldId`);
+    else if (!isSelfLinkField(f, table.id)) {
+      errors.push({
+        path: `${path}.list.parentFieldId`,
+        message: 'Pick a link to records of this table.',
       });
     }
   }
@@ -371,11 +390,13 @@ async function dataElementProblems(
 /**
  * A new page's layout settings, from the table's fields: a kanban stacks by its first
  * single select, a calendar and a timeline place records by the first date, a form asks for the
- * first fields a viewer can fill in.
+ * first fields a viewer can fill in, a hierarchical list nests by the first link to the table's
+ * own records.
  */
 function layoutDefaults(
   layout: InterfacePageConfig['layout'],
-  fields: readonly { id: string; type: string; isPrimary: boolean }[]
+  fields: readonly { id: string; type: string; isPrimary: boolean; options?: unknown }[],
+  tableId: string
 ): Partial<InterfacePageConfig> {
   const date = fields.find((f) => isCalendarDateField(f));
   switch (layout) {
@@ -387,6 +408,10 @@ function layoutDefaults(
       return { calendar: date ? { dateFields: [{ startFieldId: date.id }] } : {} };
     case 'timeline':
       return { timeline: date ? { startFieldId: date.id } : {} };
+    case 'list': {
+      const parent = fields.find((f) => isSelfLinkField(f, tableId));
+      return { list: { parentFieldId: parent?.id ?? null } };
+    }
     case 'form': {
       const writable = [...fields]
         .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))
@@ -423,7 +448,7 @@ export async function createPage(
   const draft = interfacePageConfigSchema.parse({
     layout: input.layout,
     tableId: input.tableId,
-    ...layoutDefaults(input.layout, live),
+    ...layoutDefaults(input.layout, live, input.tableId),
   });
   await checkConfig(ctx, draft);
   const [row] = await ctx.tx

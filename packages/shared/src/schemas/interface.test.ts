@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DRAG_EDIT_LAYOUTS,
   filterElementConditions,
   filterElementOperator,
   INTERFACE_GRID_COLUMNS,
+  INTERFACE_LAYOUTS,
+  InterfacePageRecordsSchema,
   interfacePageConfigSchema,
   interfacePageDataQuerySchema,
   MAX_DATA_ELEMENTS,
@@ -114,6 +117,69 @@ describe('interface page config (#145)', () => {
     expect(problems({ layout: 'recordList', tableId: TABLE, elements: filters })).toEqual([
       'elements',
     ]);
+  });
+
+  describe('hierarchical list pages', () => {
+    it('is a layout of its own, read-only, with a parent field', () => {
+      expect(INTERFACE_LAYOUTS).toContain('list');
+      expect(DRAG_EDIT_LAYOUTS).not.toContain('list');
+      expect(
+        interfacePageConfigSchema.parse({
+          layout: 'list',
+          tableId: TABLE,
+          fields: [FIELD],
+          list: {},
+        })
+      ).toMatchObject({ layout: 'list', fields: [FIELD], list: { parentFieldId: null } });
+      expect(
+        interfacePageConfigSchema.parse({
+          layout: 'list',
+          tableId: TABLE,
+          list: { parentFieldId: FIELD },
+        }).list
+      ).toEqual({ parentFieldId: FIELD });
+    });
+
+    it('refuses a malformed parent and record elements', () => {
+      expect(problems({ layout: 'list', tableId: TABLE, list: { parentFieldId: 'nope' } })).toEqual(
+        ['list.parentFieldId']
+      );
+      expect(
+        problems({ layout: 'list', tableId: TABLE, list: { parentFieldId: FIELD, rowFields: [] } })
+      ).toEqual(['list']);
+      expect(
+        problems({
+          layout: 'list',
+          tableId: TABLE,
+          elements: [
+            { ...at, id: 'd', type: 'field', fieldId: FIELD },
+            {
+              ...at,
+              id: 'r',
+              type: 'button',
+              label: 'Go',
+              action: { type: 'runAutomation', fieldId: FIELD },
+            },
+          ],
+        })
+      ).toEqual(['elements.0.type', 'elements.1.type']);
+    });
+
+    it("carries the list's settings and each record's listed parents", () => {
+      const parsed = InterfacePageRecordsSchema.parse({
+        table: { id: TABLE, name: 'Tasks' },
+        fields: [],
+        records: [{ id: TABLE, fields: {}, links: { [FIELD]: [] } }],
+        offset: 0,
+        total: 1,
+        editable: [],
+        canSubmit: false,
+        buttons: {},
+        list: { parentFieldId: FIELD, rowFields: [] },
+      });
+      expect(parsed.list).toEqual({ parentFieldId: FIELD, rowFields: [] });
+      expect(parsed.records[0]?.links).toEqual({ [FIELD]: [] });
+    });
   });
 
   it('picks the operator a filter element uses', () => {

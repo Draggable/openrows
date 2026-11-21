@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { INTERFACE_LAYOUTS } from '@openrows/shared';
 import type { Page } from '@playwright/test';
 import { IDS, mockApi } from './fixtures/mockApi.js';
 import { mockInterfaces, type MockPage as Page_, PREFIX } from './fixtures/mockInterfaces.js';
@@ -114,6 +115,33 @@ test('a creator builds, arranges and publishes a record review page', async ({ p
     'https://openrows.io/docs'
   );
   expect(await seriousViolations(page)).toEqual([]);
+});
+
+test('the new interface dialog keeps Create page on screen at 1280×720', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await mockApi(page, { rows: 6, stage: true });
+  await mockInterfaces(page, true);
+  await page.goto(`/b/${IDS.base}/interfaces`);
+  await page.getByRole('main').getByRole('button', { name: 'New interface' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New interface' });
+  // Every layout is listed; the list scrolls, the names, table and footer don't.
+  await expect(dialog.getByRole('radio')).toHaveCount(INTERFACE_LAYOUTS.length);
+  await expect(dialog).toBeInViewport({ ratio: 1 });
+  for (const control of [
+    dialog.getByLabel('Interface name', { exact: true }),
+    dialog.getByLabel('Page name', { exact: true }),
+    dialog.getByLabel('Table', { exact: true }),
+    dialog.getByRole('button', { name: 'Cancel' }),
+    dialog.getByRole('button', { name: 'Create page' }),
+  ]) {
+    await expect(control).toBeInViewport({ ratio: 1 });
+  }
+  await dialog.getByRole('radio', { name: /Hierarchical list/ }).check();
+  await expect(dialog.getByRole('button', { name: 'Create page' })).toBeInViewport({ ratio: 1 });
+  await dialog.getByRole('button', { name: 'Cancel' }).click({ trial: true });
+  await dialog.getByRole('button', { name: 'Create page' }).click({ trial: true });
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
 });
 
 test('a viewer sees published pages only, without the designer', async ({ page }) => {

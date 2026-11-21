@@ -3,6 +3,7 @@ import {
   type InterfacePageConfig,
   isCalendarDateField,
   isInterfaceWritableType,
+  isSelfLinkField,
   MAX_INTERFACE_FORM_FIELDS,
 } from '@openrows/shared';
 import { useId } from 'react';
@@ -12,8 +13,9 @@ const selectClass =
   'h-8 w-full rounded-sm border border-border bg-surface px-2 text-body text-text hover:border-border-strong';
 
 /**
- * a kanban's stack field and card fields,
- * a calendar's and a timeline's dates, a form's fields, required ones and messages.
+ * The layout's own settings in the designer's panel: a kanban's stack field and card fields,
+ * a calendar's and a timeline's dates, a hierarchical list's parent field, a form's fields,
+ * required ones and messages.
  */
 export function LayoutSettings({
   config,
@@ -149,6 +151,34 @@ export function LayoutSettings({
           'Group by',
           true
         )}
+      </section>
+    );
+  }
+
+  if (config.layout === 'list') {
+    const parents = fields.filter((f) => isSelfLinkField(f, config.tableId));
+    return (
+      <section className="flex flex-col gap-2">
+        <h2 className="font-[550]">Hierarchical list</h2>
+        {choose(
+          parents,
+          config.list?.parentFieldId,
+          (v) =>
+            onChange({
+              ...config,
+              // The parent is structure only, never also a field beside the title.
+              fields: config.fields.filter((id) => id !== v),
+              list: { parentFieldId: v },
+            }),
+          ids.a,
+          'Parent record',
+          true
+        )}
+        <p className="text-small text-text-2">
+          {parents.length === 0
+            ? 'Add a link to records of this table to nest them under a parent.'
+            : 'Records nest under the first record this link names, when the page lists it.'}
+        </p>
       </section>
     );
   }

@@ -83,6 +83,16 @@ Who can drag: interface-only collaborators with **Can edit**, and people with ac
 
 What a drag writes: only fields the page shows on its cards, events or bars, on records its filter lists for you (**Me** included). Fields hidden from you, fields the page doesn't show (a filter's field only filters), and links, files, people and buttons are never written through a page. Each drag is checked against the published page on the server; one that's refused puts the card, event or bar back where it was. Dragging doesn't give interface-only collaborators access to the base: they still can't open its grid or its records outside the page. Records can't be created from a calendar page's days; use a form page for that. Share links to views stay read-only.
 
+### Hierarchical list pages
+
+A hierarchical list page shows a table's records nested under their parent record. Creators pick the page's table, a **Parent record** field (a link to records of the same table; a new page starts with the table's first such link) and the fields shown beside each title. A record nests under the first record its parent field names; click the arrow beside a record to collapse or expand its children.
+
+- **What it shows**: the records the page's filter lists for you (**Me** included, and the page's filter elements), each under its parent when the page lists that parent too. A record whose parent the page leaves out is shown at the top level, and nothing of that parent is sent: not its name, its values or its id.
+- **Only the fields the page shows**: the primary field, the fields chosen for the list and the fields of the page's filter elements. The parent field's values aren't sent, only which listed record is the parent: it can't be one of the list's fields or a filter element's field. Fields hidden from you are left out; without the parent field, the list is flat.
+- **Who can see it**: everyone who can open the interface, once the page is published, interface-only collaborators with **Can view** or **Can edit** included. A page that was never published, or is unpublished, stays invisible to everyone but the base's creators and owners.
+- **Read-only**: nobody edits records or moves them to another parent through this page, whatever their access. Use a record review page to edit records.
+- Interface-only collaborators still can't open the base, its grid or its records outside the page.
+
 ### Buttons and files on a page
 
 - **Buttons that run automations**: a button on a record review page clicks a button field of the selected record and starts the automations turned on for it, the same ones a click in the base starts. Someone with **Can edit** can click it on the records the page lists. With **Can view**, or when the table's edit permissions don't include them, the button is greyed out with the reason beside it. It is also greyed out when no automation is turned on for it.

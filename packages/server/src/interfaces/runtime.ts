@@ -1,5 +1,6 @@
 import {
   type ButtonOptions,
+  DRAG_EDIT_LAYOUTS,
   filterElementConditions,
   gridLayoutOf,
   type InterfaceAccess,
@@ -49,9 +50,11 @@ import { listInterfaces } from './service.js';
  * the fields the page shows, links and people as names, the page filter applied on the server
  * with `me` as the viewer. Writes go through the RecordService with the viewer's role, limited
  * to what the page offers on a record the page lists: a record review's editable field elements,
- * a kanban, calendar or timeline page's shown fields (its drags), and a form page's fields. A record review's buttons that run automations click through the page
- * too, and the files a page shows download through it, each checked against the page on every
- * request. Interface-only collaborators reach nothing else.
+ * a kanban, calendar or timeline page's shown fields (its drags), and a form page's fields. A
+ * hierarchical list is read-only: its parent link leaves only as ids of records the page lists for
+ * the viewer. A record review's buttons that run automations click through the page too, and the
+ * files a page shows download through it, each checked against the page on every request.
+ * Interface-only collaborators reach nothing else.
  */
 
 export interface PageContext {
@@ -120,8 +123,9 @@ interface PageShape {
 
 /**
  * What a page shows of its table: a record list's primary field and columns, a record review's
- * and its field elements, a view-like layout's (as the view would: `sharedViewShape`), a form's
- * fields; and every layout the fields of its filter elements (their choices).
+ * and its field elements, a view-like layout's (as the view would: `sharedViewShape`; a
+ * hierarchical list's primary field and the page's `fields`, its parent link as structure only),
+ * a form's fields; and every layout the fields of its filter elements (their choices).
  */
 export function pageShape(
   config: InterfacePageConfig,
@@ -131,14 +135,22 @@ export function pageShape(
   const filters = config.elements.flatMap((el) => (el.type === 'filter' ? [el.fieldId] : []));
   const unique = (ids: string[]) => [...new Set(ids.filter((id) => live.has(id)))];
   if (VIEW_LIKE_LAYOUTS.includes(config.layout)) {
-    const layout = config.layout as 'kanban' | 'calendar' | 'timeline';
+    const layout = config.layout as 'kanban' | 'calendar' | 'timeline' | 'list';
+    // A list's row fields are the page's own (never the view's default of the first three). Its
+    // parent field leaves only as structure: never as a row field or a filter's field, whose
+    // values would name a parent the page leaves out.
+    const parentId = layout === 'list' ? (config.list?.parentFieldId ?? null) : null;
+    const settings =
+      layout === 'list'
+        ? { parentFieldId: parentId, rowFields: config.fields.filter((id) => id !== parentId) }
+        : (config[layout] ?? {});
     const shape = sharedViewShape(
-      { type: layout, config: { [layout]: config[layout] ?? {} } },
+      { type: layout, config: { [layout]: settings } },
       fields,
       config.tableId
     );
     return {
-      shown: unique([...shape.fieldIds, ...filters]),
+      shown: unique([...shape.fieldIds, ...filters]).filter((id) => id !== parentId),
       links: shape.links,
       shape,
       lists: true,
@@ -196,7 +208,7 @@ function writableFields(
         .filter(editable)
     );
   }
-  if (VIEW_LIKE_LAYOUTS.includes(config.layout) && roleAllows(who.role, 'record:update')) {
+  if (DRAG_EDIT_LAYOUTS.includes(config.layout) && roleAllows(who.role, 'record:update')) {
     return new Set(shown.filter(editable));
   }
   if (config.layout === 'form' && roleAllows(who.role, 'record:create')) {
@@ -208,7 +220,7 @@ function writableFields(
 /** Layouts whose records the viewer may edit through the page. */
 const EDITING_LAYOUTS: readonly InterfacePageConfig['layout'][] = [
   'recordReview',
-  ...VIEW_LIKE_LAYOUTS,
+  ...DRAG_EDIT_LAYOUTS,
 ];
 
 const toMeta = (f: FieldInfo) => ({
@@ -336,6 +348,23 @@ export async function pageRecords(
     ...(page.shape.shape?.kanban ? { kanban: page.shape.shape.kanban } : {}),
     ...(page.shape.shape?.calendar ? { calendar: page.shape.shape.calendar } : {}),
     ...(page.shape.shape?.timeline ? { timeline: page.shape.shape.timeline } : {}),
+    ...(page.shape.shape?.list ? { list: shownList(page.shape.shape.list, page) } : {}),
+  };
+}
+
+/**
+ * A hierarchical list's settings as its viewer gets them: the parent field only when its
+ * structure leaves for them, the row fields they may see.
+ */
+function shownList(
+  list: NonNullable<SharedViewShape['list']>,
+  page: CompiledPage
+): NonNullable<SharedViewShape['list']> {
+  const parent = list.parentFieldId ?? null;
+  const shown = new Set(page.shared.fields.map((f) => f.row.id));
+  return {
+    parentFieldId: parent && page.shared.links.some((f) => f.row.id === parent) ? parent : null,
+    rowFields: (list.rowFields ?? []).filter((id) => shown.has(id)),
   };
 }
 

@@ -1,4 +1,5 @@
 import {
+  DRAG_EDIT_LAYOUTS,
   type FieldMeta,
   INTERFACE_RECORDS_PAGE_MAX,
   type InterfacePageConfig,
@@ -24,7 +25,7 @@ import { Canvas, type DesignerProps, type ElementContext, type PageButtons } fro
 import { dataFilters, type FilterValues } from './model';
 import { type PageSource, useDashboardData } from './useDashboardData';
 
-/** The most records a kanban, calendar or timeline page loads (as a shared view does). */
+/** The most records a kanban, calendar, timeline or list page loads (as a shared view does). */
 const LAYOUT_MAX_RECORDS = 1000;
 
 /**
@@ -32,8 +33,9 @@ const LAYOUT_MAX_RECORDS = 1000;
  * the page shows, filtered on the server for this viewer (`me` is them), so it works the same for
  * interface-only collaborators, who can't read the base. Record lists and reviews, forms, the
  * view-like layouts (kanban, calendar, timeline: the share links' layouts, with drags that write
- * through the page's record route when the server lists fields this viewer may edit) and
- * dashboards.
+ * through the page's record route when the server lists fields this viewer may edit; the
+ * hierarchical list: the list view's read-only tree, nested by the parents the server sends as
+ * ids of records the page lists) and dashboards.
  */
 export function PageRuntime({
   config,
@@ -68,7 +70,8 @@ export function PageRuntime({
   // A view-like page's drags write through the published page's record route, only the fields
   // the server lists for this viewer; never in the designer or on a draft.
   const layoutEdits = useMemo((): LayoutEdits | null => {
-    if (!viewLike || designer || source.draft || !editable || editable.length === 0) return null;
+    if (!DRAG_EDIT_LAYOUTS.includes(config.layout) || designer || source.draft) return null;
+    if (!editable || editable.length === 0) return null;
     return {
       fields: new Set(editable),
       save: async (recordId, patch) => {
@@ -85,7 +88,7 @@ export function PageRuntime({
       },
     };
   }, [
-    viewLike,
+    config.layout,
     designer,
     editable,
     qc,
@@ -170,6 +173,7 @@ export function PageRuntime({
       ...(data.kanban ? { kanban: data.kanban } : {}),
       ...(data.calendar ? { calendar: data.calendar } : {}),
       ...(data.timeline ? { timeline: data.timeline } : {}),
+      ...(data.list ? { list: data.list } : {}),
       expiresAt: null,
     };
     const layoutSource: LayoutRecordsSource = (window) =>

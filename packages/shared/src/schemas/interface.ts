@@ -12,7 +12,12 @@ import {
   sortSchema,
 } from '../query/index.js';
 import { SharedFieldSchema, SharedRecordSchema } from './share.js';
-import { calendarLayoutSchema, kanbanLayoutSchema, timelineLayoutSchema } from './view.js';
+import {
+  calendarLayoutSchema,
+  kanbanLayoutSchema,
+  listLayoutSchema,
+  timelineLayoutSchema,
+} from './view.js';
 import { InvitationSchema } from './workspace.js';
 
 /**
@@ -32,6 +37,11 @@ import { InvitationSchema } from './workspace.js';
  * through the page's record route, writing only the fields the page shows). Every page's records
  * are read through that route, projected to the fields the page shows, with the page filter
  * applied on the server: interface-only collaborators see nothing else of the base.
+ *
+ * Hierarchical list (`list`): the page's records nested under their parent, named by a link to
+ * records of the same table (`list.parentFieldId`), with the list's fields beside each title. The
+ * parent link leaves only as ids of records the page itself lists for the viewer, never its
+ * values; a record whose parent the page doesn't list is a root. The tree is read-only.
  */
 
 export const INTERFACE_LAYOUTS = [
@@ -42,11 +52,23 @@ export const INTERFACE_LAYOUTS = [
   'kanban',
   'calendar',
   'timeline',
+  'list',
 ] as const;
 export type InterfaceLayout = (typeof INTERFACE_LAYOUTS)[number];
 
 /** Layouts drawn like a view of the same type, from the page's records. */
-export const VIEW_LIKE_LAYOUTS: readonly InterfaceLayout[] = ['kanban', 'calendar', 'timeline'];
+export const VIEW_LIKE_LAYOUTS: readonly InterfaceLayout[] = [
+  'kanban',
+  'calendar',
+  'timeline',
+  'list',
+];
+
+/**
+ * View-like layouts whose drags write records through the page (a stack, dates); a hierarchical
+ * list is read-only, since its structure is a link, which a page never writes.
+ */
+export const DRAG_EDIT_LAYOUTS: readonly InterfaceLayout[] = ['kanban', 'calendar', 'timeline'];
 
 export const INTERFACE_ELEMENT_TYPES = [
   'text',
@@ -106,6 +128,16 @@ export function isInterfaceWritableType(type: string): boolean {
     type !== 'button'
   );
 }
+
+/**
+ * A hierarchical list page's settings: the link to records of the same table that names each
+ * record's parent (its first linked record; checked against the table when saved), or none for a
+ * flat list. The fields beside each title are the page's `fields`.
+ */
+export const interfaceListSchema = z
+  .object({ parentFieldId: z.uuid().nullable().default(null) })
+  .strict();
+export type InterfaceListSettings = z.infer<typeof interfaceListSchema>;
 
 /** A form page: the fields it asks for, in order, and what happens on submit. */
 export const interfaceFormSchema = z
@@ -282,13 +314,18 @@ export const interfacePageConfigSchema = z
     /** Page-level filter: every record the page lists meets it ("me" is the viewer). */
     filter: filterGroupSchema.optional(),
     sorts: z.array(sortSchema).max(MAX_SORTS).default([]),
-    /** The list's columns (record review: the primary field and these, under it). */
+    /**
+     * The list's columns (record review: the primary field and these, under it; hierarchical
+     * list: the fields beside each title).
+     */
     fields: z.array(z.uuid()).max(MAX_INTERFACE_LIST_FIELDS).default([]),
     elements: z.array(interfaceElementSchema).max(MAX_ELEMENTS_PER_PAGE).default([]),
     /** The view-like layouts' settings, as the views of the same type keep them. */
     kanban: kanbanLayoutSchema.optional(),
     calendar: calendarLayoutSchema.optional(),
     timeline: timelineLayoutSchema.optional(),
+    /** A hierarchical list page's parent field. */
+    list: interfaceListSchema.optional(),
     /** A form page's fields and messages. */
     form: interfaceFormSchema.optional(),
   })
@@ -455,6 +492,11 @@ export const InterfacePageRecordsSchema = z.object({
   kanban: kanbanLayoutSchema.optional(),
   calendar: calendarLayoutSchema.optional(),
   timeline: timelineLayoutSchema.optional(),
+  /**
+   * A hierarchical list page's: the parent field whose structure each record's `links` carries
+   * (null when there is none, or it is hidden from the viewer) and the fields beside each title.
+   */
+  list: listLayoutSchema.optional(),
 });
 
 const cells = z
