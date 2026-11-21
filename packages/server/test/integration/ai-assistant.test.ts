@@ -42,6 +42,11 @@ const field = (name: string, type: AssistantFieldType, extra: Record<string, unk
   choices: null,
   formula: null,
   linkedTable: null,
+  linkField: null,
+  linkedField: null,
+  aggregation: null,
+  button: null,
+  ai: null,
   ...extra,
 });
 
@@ -62,7 +67,14 @@ function proposal(formula: string): AssistantPlan {
         ],
       },
       { op: 'createField', table: 'Orders', field: field('Total', 'formula', { formula }) },
-      { op: 'createView', table: 'Orders', name: 'Board', type: 'kanban', field: 'Status' },
+      {
+        op: 'createView',
+        table: 'Orders',
+        name: 'Board',
+        type: 'kanban',
+        field: 'Status',
+        endField: null,
+      },
       {
         op: 'createAutomation',
         table: 'Orders',
@@ -70,6 +82,98 @@ function proposal(formula: string): AssistantPlan {
         trigger: 'recordUpdated',
         watchFields: ['Qty'],
         actions: [{ type: 'updateRecord', cells: [{ field: 'Notes', value: 'Big order' }] }],
+      },
+    ],
+  };
+}
+
+type Operation = AssistantPlan['operations'][number];
+const addField = (table: string, spec: ReturnType<typeof field>): Operation => ({
+  op: 'createField',
+  table,
+  field: spec,
+});
+
+/**
+ * Customers linked to Orders with a lookup, a rollup, a count, two buttons and two AI fields;
+ * Orders' dates and a lookup through the inverse link; Tasks nested by a parent; a timeline
+ * and a list view.
+ */
+function richerProposal(): AssistantPlan {
+  return {
+    summary: 'Adds customers with order figures, a timeline of orders and a task tree.',
+    baseName: null,
+    operations: [
+      {
+        op: 'createTable',
+        name: 'Customers',
+        description: null,
+        fields: [
+          field('Company', 'singleLineText'),
+          field('Orders', 'link', { linkedTable: 'Orders' }),
+        ],
+      },
+      addField(
+        'Customers',
+        field('Quantities', 'lookup', { linkField: 'Orders', linkedField: 'Qty' })
+      ),
+      addField(
+        'Customers',
+        field('Spent', 'rollup', { linkField: 'Orders', linkedField: 'Price', aggregation: 'SUM' })
+      ),
+      addField('Customers', field('Order count', 'count', { linkField: 'Orders' })),
+      addField(
+        'Customers',
+        field('Website', 'button', {
+          button: { label: 'Visit', action: 'openUrl' },
+          formula: '"https://example.com/" & {Company}',
+        })
+      ),
+      addField(
+        'Customers',
+        field('Follow up', 'button', { button: { label: 'Follow up', action: 'runAutomation' } })
+      ),
+      addField(
+        'Customers',
+        field('Summary', 'ai', { ai: { prompt: 'Summarize {Company}.', output: 'summary' } })
+      ),
+      addField(
+        'Customers',
+        field('Size', 'ai', {
+          ai: { prompt: 'How big is {Company}?', output: 'singleSelect' },
+          choices: ['Small', 'Large'],
+        })
+      ),
+      addField('Orders', field('Ordered', 'date')),
+      addField('Orders', field('Shipped', 'date')),
+      addField(
+        'Orders',
+        field('Customer name', 'lookup', { linkField: 'Customers', linkedField: 'Company' })
+      ),
+      {
+        op: 'createTable',
+        name: 'Tasks',
+        description: null,
+        fields: [
+          field('Title', 'singleLineText'),
+          field('Parent', 'link', { linkedTable: 'Tasks' }),
+        ],
+      },
+      {
+        op: 'createView',
+        table: 'Orders',
+        name: 'Schedule',
+        type: 'timeline',
+        field: 'Ordered',
+        endField: 'Shipped',
+      },
+      {
+        op: 'createView',
+        table: 'Tasks',
+        name: 'Tree',
+        type: 'list',
+        field: 'Parent',
+        endField: null,
       },
     ],
   };
@@ -306,6 +410,7 @@ describe('AI assistant', () => {
               name: 'Pipeline',
               type: 'kanban',
               field: 'Stage',
+              endField: null,
             },
           ],
         })
@@ -330,5 +435,170 @@ describe('AI assistant', () => {
     ]);
     const base = await ok<{ name: string }>(request('GET', `/api/bases/${created.baseId}`));
     expect(base.name).toBe('CRM');
+  });
+
+  it('tells the model about the newer field and view types', async () => {
+    await ok(request('POST', `/api/bases/${baseId}/assistant/plan`, { prompt: 'Track customers' }));
+    const system = messagesOf(fake.requests[0] as FakeRequest);
+    for (const type of ['lookup', 'rollup', 'count', 'button', 'ai']) {
+      expect(system).toContain(`- ${type}: `);
+    }
+    expect(system).toContain('timeline needs field');
+    expect(system).toContain('list needs field');
+    expect(system).toContain('runAutomation');
+  });
+
+  it('plans and applies lookups, rollups, counts, buttons, AI fields, timelines and lists', async () => {
+    fake.respond = () => completion(JSON.stringify(richerProposal()));
+    const proposed = await ok<AssistantPlanResult>(
+      request('POST', `/api/bases/${baseId}/assistant/plan`, { prompt: 'Customer figures' })
+    );
+    expect(proposed.problems).toEqual([]);
+    expect(proposed.attempts).toBe(1);
+    // Planning wrote nothing.
+    expect((await tables()).map((x) => x.name)).toEqual(['Orders']);
+    fake.requests.length = 0;
+
+    const applied = await ok<AssistantApplyResult>(
+      request('POST', `/api/bases/${baseId}/assistant/apply`, { plan: proposed.plan })
+    );
+    expect(applied).toMatchObject({ tables: 2, fields: 14, views: 2, automations: 0 });
+    const all = await tables();
+    const customers = all.find((x) => x.name === 'Customers');
+    const tasks = all.find((x) => x.name === 'Tasks');
+    const customerFields = await fieldsOf(customers?.id ?? '');
+    const orderFields = await fieldsOf(orders.id);
+    const taskFields = await fieldsOf(tasks?.id ?? '');
+    const byName = (list: FieldMeta[], name: string) => {
+      const f = list.find((x) => x.name === name);
+      if (!f) throw new Error(`no field ${name}`);
+      return f;
+    };
+    const link = byName(customerFields, 'Orders');
+    expect(byName(customerFields, 'Quantities')).toMatchObject({
+      type: 'lookup',
+      options: { recordLinkFieldId: link.id, fieldIdInLinkedTable: byName(orderFields, 'Qty').id },
+    });
+    expect(byName(customerFields, 'Spent')).toMatchObject({
+      type: 'rollup',
+      options: {
+        recordLinkFieldId: link.id,
+        fieldIdInLinkedTable: byName(orderFields, 'Price').id,
+        function: 'SUM',
+      },
+    });
+    expect(byName(customerFields, 'Order count')).toMatchObject({
+      type: 'count',
+      options: { recordLinkFieldId: link.id },
+    });
+    expect(byName(customerFields, 'Website')).toMatchObject({
+      type: 'button',
+      options: { label: 'Visit', action: 'openUrl', isValid: true },
+    });
+    const followUp = byName(customerFields, 'Follow up');
+    expect(followUp).toMatchObject({
+      type: 'button',
+      options: { label: 'Follow up', action: 'runAutomation' },
+    });
+    expect((followUp.options as { formula?: string }).formula ?? '').toBe('');
+    const company = byName(customerFields, 'Company');
+    const summary = byName(customerFields, 'Summary');
+    expect(summary).toMatchObject({
+      type: 'ai',
+      options: { output: 'summary', referencedFieldIds: [company.id] },
+    });
+    const size = byName(customerFields, 'Size').options as { choices: { name: string }[] };
+    expect(size.choices.map((c) => c.name)).toEqual(['Small', 'Large']);
+    // Through the inverse link the Customers link added to Orders.
+    const inverse = byName(orderFields, 'Customers');
+    expect(byName(orderFields, 'Customer name')).toMatchObject({
+      type: 'lookup',
+      options: { recordLinkFieldId: inverse.id, fieldIdInLinkedTable: company.id },
+    });
+
+    const viewsOf = async (tableId: string) =>
+      (await ok<{ views: ViewMeta[] }>(request('GET', `/api/tables/${tableId}/views`))).views;
+    const schedule = (await viewsOf(orders.id)).find((v) => v.name === 'Schedule');
+    expect(schedule).toMatchObject({
+      type: 'timeline',
+      config: {
+        timeline: {
+          startFieldId: byName(orderFields, 'Ordered').id,
+          endFieldId: byName(orderFields, 'Shipped').id,
+        },
+      },
+    });
+    const tree = (await viewsOf(tasks?.id ?? '')).find((v) => v.name === 'Tree');
+    expect(tree).toMatchObject({
+      type: 'list',
+      config: { list: { parentFieldId: byName(taskFields, 'Parent').id } },
+    });
+    // Applying asked the provider nothing; AI answers are the worker's, one field at a time.
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it('leaves invalid newer operations as problems and applies nothing of a plan with them', async () => {
+    const valid = richerProposal().operations[0] as Operation;
+    const invalid: Operation[] = [
+      // A loop through two formulas.
+      addField('Orders', field('A', 'formula', { formula: '{B} + 1' })),
+      addField('Orders', field('B', 'formula', { formula: '{A} + 1' })),
+      // A lookup through a link that doesn't exist.
+      addField('Orders', field('Lost', 'lookup', { linkField: 'Supplier', linkedField: 'Name' })),
+      // A timeline on a number, a list on a select.
+      {
+        op: 'createView',
+        table: 'Orders',
+        name: 'Bad timeline',
+        type: 'timeline',
+        field: 'Qty',
+        endField: null,
+      },
+      {
+        op: 'createView',
+        table: 'Orders',
+        name: 'Bad list',
+        type: 'list',
+        field: 'Status',
+        endField: null,
+      },
+      // A primary field that can't be one.
+      {
+        op: 'createTable',
+        name: 'Counts',
+        description: null,
+        fields: [field('Total', 'count', { linkField: 'Orders' })],
+      },
+    ];
+    const bad: AssistantPlan = { summary: 's', baseName: null, operations: [valid, ...invalid] };
+    fake.respond = () => completion(JSON.stringify(bad));
+    const proposed = await ok<AssistantPlanResult>(
+      request('POST', `/api/bases/${baseId}/assistant/plan`, { prompt: 'Break things' })
+    );
+    // The loop is a formula problem: the model got one more round.
+    expect(proposed.attempts).toBe(2);
+    const flagged = new Set(proposed.problems.map((p) => p.operation));
+    expect([...flagged].sort()).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(proposed.problems.find((p) => p.operation === 1)?.message).toContain(
+      'circular reference'
+    );
+
+    // Sent as it is (every operation ticked), the plan is refused whole.
+    const res = await request('POST', `/api/bases/${baseId}/assistant/apply`, { plan: bad });
+    expect(res.status).toBe(422);
+    expect((await tables()).map((x) => x.name)).toEqual(['Orders']);
+    const before = (await fieldsOf(orders.id)).map((f) => f.name);
+    for (const op of invalid) {
+      const one = await request('POST', `/api/bases/${baseId}/assistant/apply`, {
+        plan: { ...bad, operations: [valid, op] },
+      });
+      expect(one.status).toBe(422);
+    }
+    expect((await tables()).map((x) => x.name)).toEqual(['Orders']);
+    expect((await fieldsOf(orders.id)).map((f) => f.name)).toEqual(before);
+    const { views } = await ok<{ views: ViewMeta[] }>(
+      request('GET', `/api/tables/${orders.id}/views`)
+    );
+    expect(views.map((v) => v.name)).not.toContain('Bad timeline');
   });
 });

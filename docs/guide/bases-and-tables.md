@@ -33,7 +33,18 @@ The copy has every table, field (links, lookups, rollups and formulas point at t
 
 ### The AI assistant
 
-When your workspace has an AI provider (Settings → AI, or the server's own), creators and owners see **Assistant** in a base's top bar. Describe what you want, like "add a Total formula to Orders and a kanban view by status", and **Draft plan**: the assistant proposes new tables, fields (formulas included), views and automations, and lists each one with its fields and settings. Every formula it suggests is checked; one that doesn't work is shown with the problem and left unticked. Untick anything you don't want and click **Apply**: nothing changes in the base until then, and the changes are made with your own permissions, all together or not at all. Automations it creates start turned off.
+When your workspace has an AI provider (Settings → AI, or the server's own), creators and owners see **Assistant** in a base's top bar. Describe what you want, like "add a Total formula to Orders and a kanban view by status", and **Draft plan**: the assistant proposes new tables, fields, views and automations, and lists each one with its fields and settings. Untick anything you don't want and click **Apply**: nothing changes in the base until then, and the changes are made with your own permissions, all together or not at all. Automations it creates start turned off.
+
+Besides the basic field types, the assistant can propose:
+
+- **Formulas**, written with field names.
+- **Lookups**, **rollups** (with their aggregation, like SUM or ARRAYJOIN) and **counts** through a link field of the same table. See [Lookups, rollups and counts](fields.md#lookups-rollups-and-counts).
+- **Buttons** that open a URL given by a formula, or that run the automations a click triggers.
+- **AI fields**: a prompt over fields of the same table and the kind of answer (text, a single select with its options, a number or a summary). Each record's answer is generated later and fills only that field.
+
+Views can be grids, kanbans, calendars, galleries, forms, **timelines** (a start date field and, optionally, an end date field) and **lists** (nested by a link to records of the same table). See [Views](views.md).
+
+Every operation is checked against the base before you see it. One that couldn't be made is shown with the problem and left unticked: a formula that doesn't work, a lookup or rollup without a fitting link field or linked field, an aggregation that doesn't apply to the field's values (SUM of text, for example), a field that would read itself in a loop, a button or AI field that is missing its action, URL or prompt, an AI prompt that reads another AI field, a timeline or list view on a missing field or one of the wrong type, or a primary field of a type that can't be one. When you apply, the plan is checked again against the base as it is then; if anything no longer fits, nothing is applied.
 
 The assistant sees the names and types of the base's tables and fields, not your records. Tick **Include a few records from each table** to send up to three records per table along with the request, which helps it pick formats and options.
 

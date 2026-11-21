@@ -34,14 +34,44 @@ const VIEW_LABELS: Record<string, string> = {
   calendar: 'Calendar',
   gallery: 'Gallery',
   form: 'Form',
+  timeline: 'Timeline',
+  list: 'List',
 };
 
 function fieldLine(f: AssistantFieldSpec): string {
   const parts = [`${f.name}: ${typeLabel(f.type)}`];
+  if (f.type === 'lookup' || f.type === 'rollup' || f.type === 'count') {
+    const what = f.type === 'count' ? 'records' : `"${f.linkedField ?? '?'}"`;
+    parts.push(
+      `(${f.type === 'rollup' ? `${f.aggregation ?? '?'} of ` : ''}${what} through ${f.linkField ?? '?'})`
+    );
+  }
+  if (f.type === 'button' && f.button) {
+    parts.push(
+      `"${f.button.label}" (${f.button.action === 'openUrl' ? 'opens a URL' : 'runs automations'})`
+    );
+  }
+  if (f.type === 'ai' && f.ai) parts.push(`(answers ${f.ai.output}): ${f.ai.prompt}`);
   if (f.choices?.length) parts.push(`(${f.choices.join(', ')})`);
   if (f.linkedTable) parts.push(`→ ${f.linkedTable}`);
-  if (f.formula) parts.push(`= ${f.formula}`);
+  if (f.formula && (f.type !== 'button' || f.button?.action === 'openUrl')) {
+    parts.push(`= ${f.formula}`);
+  }
   return parts.join(' ');
+}
+
+function viewDetails(op: Extract<AssistantOperation, { op: 'createView' }>): string[] {
+  if (!op.field) return [];
+  switch (op.type) {
+    case 'kanban':
+      return [`Stacked by ${op.field}`];
+    case 'timeline':
+      return [op.endField ? `From ${op.field} to ${op.endField}` : `Dated by ${op.field}`];
+    case 'list':
+      return [`Nested by ${op.field}`];
+    default:
+      return [`Dated by ${op.field}`];
+  }
 }
 
 function describe(op: AssistantOperation): Omit<OperationRow, 'index' | 'problems'> {
@@ -62,9 +92,7 @@ function describe(op: AssistantOperation): Omit<OperationRow, 'index' | 'problem
       return {
         kind: 'view',
         title: `${VIEW_LABELS[op.type] ?? op.type} view ${op.name} in ${op.table}`,
-        details: op.field
-          ? [op.type === 'kanban' ? `Stacked by ${op.field}` : `Dated by ${op.field}`]
-          : [],
+        details: viewDetails(op),
       };
     case 'createAutomation':
       return {
