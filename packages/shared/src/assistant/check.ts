@@ -120,6 +120,8 @@ const isFormulaLike = (type: string) => type === 'formula' || type === 'button';
 
 /** The names of the same table a planned field reads (formula, prompt, link field). */
 function sameTableReads(spec: AssistantFieldSpec): string[] {
+  // A button that runs automations has no formula: one the model set anyway isn't applied.
+  if (spec.type === 'button' && spec.button?.action !== 'openUrl') return [];
   if (isFormulaLike(spec.type)) return formulaReferences(spec.formula ?? '');
   if (spec.type === 'ai') {
     return parseAiPrompt(spec.ai?.prompt ?? '').flatMap((p) => ('token' in p ? [p.token] : []));
@@ -195,10 +197,37 @@ function planLoops(plan: AssistantPlan, base: AssistantBaseInfo): Map<string, st
  * a link of their table (or a field of the linked table to read), rollup aggregations that
  * don't apply to the field's values, buttons and AI fields missing what they need, views on a
  * field of the wrong type, primary fields of a type that can't be one. Operations are checked
- * in order, as they'd be applied. An empty list: the server's services should accept every
+ * in order, as they'd be applied. An operation with a problem is left out of what's applied,
+ * so an operation that needs it (a formula over a field it creates, a view of a table it
+ * creates) gets a problem too. An empty list: the server's services should accept every
  * operation.
  */
 export function checkPlan(plan: AssistantPlan, base: AssistantBaseInfo): AssistantProblem[] {
+  const problems = checkOperations(plan, base);
+  // Check again without the operations that have problems, as the plan that would be applied
+  // without them, until no other operation turns out to need one of them.
+  for (;;) {
+    const bad = new Set(problems.map((p) => p.operation));
+    const kept = plan.operations.flatMap((_, i) => (bad.has(i) ? [] : [i]));
+    if (kept.length === plan.operations.length) return problems;
+    const rest = checkOperations(
+      { ...plan, operations: kept.map((i) => plan.operations[i] as AssistantOperation) },
+      base
+    );
+    if (rest.length === 0) return problems.sort((a, b) => a.operation - b.operation);
+    for (const p of rest) {
+      problems.push({
+        ...p,
+        operation: kept[p.operation] as number,
+        // Not the formula's own fault: no point asking the model to fix it.
+        kind: 'reference',
+        message: `${p.message} It needs a change above that can't be made.`,
+      });
+    }
+  }
+}
+
+function checkOperations(plan: AssistantPlan, base: AssistantBaseInfo): AssistantProblem[] {
   const tables = new Tables(base);
   const loops = planLoops(plan, base);
   const problems: AssistantProblem[] = [];

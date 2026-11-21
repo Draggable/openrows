@@ -435,6 +435,59 @@ describe('assistant plans: lookups, rollups, counts, buttons, AI fields, timelin
     });
   });
 
+  it('reports operations that need one with a problem, which is left out', () => {
+    const p = plan([
+      // SUM of text: left out, and so is the formula over it.
+      onCustomers(rollup('Total', 'Orders', 'Name', 'SUM')),
+      onCustomers(field('Double', 'formula', { formula: '{Total} * 2' })),
+      // A table with a field that can't be made: left out with its view and its fields' readers.
+      {
+        op: 'createTable',
+        name: 'Suppliers',
+        description: null,
+        fields: [
+          field('Name', 'singleLineText'),
+          field('Lost', 'lookup', { linkField: 'Nope', linkedField: 'Name' }),
+          field('Since', 'date'),
+        ],
+      },
+      { ...view('calendar', 'Since'), table: 'Suppliers' },
+      onOrders(field('Supplier', 'link', { linkedTable: 'Suppliers' })),
+      // Two steps down: needs Supplier, which needs Suppliers.
+      onOrders(field('Supplier count', 'count', { linkField: 'Supplier' })),
+      // Fine on its own.
+      onOrders(field('Fine', 'formula', { formula: '{Qty} * 2' })),
+    ]);
+    const problems = checkPlan(p, linked);
+    expect(problems.map((x) => [x.operation, x.kind])).toEqual([
+      [0, 'type'],
+      [1, 'reference'],
+      [2, 'reference'],
+      [3, 'reference'],
+      [4, 'reference'],
+      [5, 'reference'],
+    ]);
+    expect(problems[1]?.message).toContain("It needs a change above that can't be made.");
+    // What's left applies as it is.
+    const kept = new Set(problems.map((x) => x.operation));
+    const rest = { ...p, operations: p.operations.filter((_, i) => !kept.has(i)) };
+    expect(checkPlan(rest, linked)).toEqual([]);
+    // A formula that only fails because what it reads is left out isn't sent back to the model.
+    expect(problems.filter((x) => x.kind === 'formula')).toEqual([]);
+  });
+
+  it("doesn't read the formula of a button that runs automations", () => {
+    const p = plan([
+      onOrders(
+        field('Go', 'button', {
+          button: { label: 'Go', action: 'runAutomation' },
+          formula: '{Go}',
+        })
+      ),
+    ]);
+    expect(checkPlan(p, linked)).toEqual([]);
+  });
+
   it('reports timeline and list views on missing fields or fields of the wrong type', () => {
     const p = plan([
       view('timeline', null),

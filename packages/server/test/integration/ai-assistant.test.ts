@@ -601,4 +601,62 @@ describe('AI assistant', () => {
     );
     expect(views.map((v) => v.name)).not.toContain('Bad timeline');
   });
+  it('leaves out what needs a left-out operation, so the ticked rest applies', async () => {
+    const operations: Operation[] = [
+      addField('Orders', field('Self', 'link', { linkedTable: 'Orders' })),
+      // SUM of text can't be made, nor the formula over it.
+      addField(
+        'Orders',
+        field('Name sum', 'rollup', {
+          linkField: 'Self',
+          linkedField: 'Name',
+          aggregation: 'SUM',
+        })
+      ),
+      addField('Orders', field('Twice', 'formula', { formula: '{Name sum} * 2' })),
+      // A table with a lookup that can't be made, and a view of it.
+      {
+        op: 'createTable',
+        name: 'Suppliers',
+        description: null,
+        fields: [
+          field('Name', 'singleLineText'),
+          field('Lost', 'lookup', { linkField: 'Nope', linkedField: 'Name' }),
+          field('Since', 'date'),
+        ],
+      },
+      {
+        op: 'createView',
+        table: 'Suppliers',
+        name: 'Dates',
+        type: 'calendar',
+        field: 'Since',
+        endField: null,
+      },
+      addField('Orders', field('Double', 'formula', { formula: '{Qty} * 2' })),
+    ];
+    const proposedPlan: AssistantPlan = { summary: 's', baseName: null, operations };
+    fake.respond = () => completion(JSON.stringify(proposedPlan));
+    const proposed = await ok<AssistantPlanResult>(
+      request('POST', `/api/bases/${baseId}/assistant/plan`, { prompt: 'Figures' })
+    );
+    // Nothing for the model to fix in a formula: one round.
+    expect(proposed.attempts).toBe(1);
+    expect([...new Set(proposed.problems.map((p) => p.operation))]).toEqual([1, 2, 3, 4]);
+
+    // The operations ticked at first (those without a problem) apply.
+    const flagged = new Set(proposed.problems.map((p) => p.operation));
+    const ticked = {
+      ...proposed.plan,
+      operations: proposed.plan.operations.filter((_, i) => !flagged.has(i)),
+    };
+    const applied = await ok<AssistantApplyResult>(
+      request('POST', `/api/bases/${baseId}/assistant/apply`, { plan: ticked })
+    );
+    expect(applied).toMatchObject({ tables: 0, fields: 2, views: 0 });
+    expect((await tables()).map((x) => x.name)).toEqual(['Orders']);
+    const names = (await fieldsOf(orders.id)).map((f) => f.name);
+    expect(names).toEqual(expect.arrayContaining(['Self', 'Double']));
+    expect(names).not.toContain('Twice');
+  });
 });
