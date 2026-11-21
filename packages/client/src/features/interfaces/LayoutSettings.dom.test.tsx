@@ -6,6 +6,7 @@ import {
 } from '@openrows/shared';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { ListFields } from './InterfacesPage';
 import { LayoutSettings } from './LayoutSettings';
 import { elementTypesFor, LAYOUT_DESCRIPTIONS, LAYOUT_LABELS } from './model';
 
@@ -53,6 +54,28 @@ describe('hierarchical list pages in the designer', () => {
     expect(interfacePageConfigSchema.safeParse(next).success).toBe(true);
     fireEvent.change(select, { target: { value: '' } });
     expect(onChange).toHaveBeenLastCalledWith({ ...config, list: { parentFieldId: null } });
+  });
+
+  it('keeps the parent field out of the fields beside each title', () => {
+    const config: InterfacePageConfig = interfacePageConfigSchema.parse({
+      layout: 'list',
+      tableId: TABLE,
+      fields: [notes.id, parent.id],
+      list: { parentFieldId: null },
+    });
+    const onChange = vi.fn();
+    const { unmount } = render(
+      <LayoutSettings config={config} fields={fields} onChange={onChange} />
+    );
+    fireEvent.change(screen.getByLabelText('Parent record'), { target: { value: parent.id } });
+    const next = onChange.mock.calls[0]?.[0] as InterfacePageConfig;
+    expect(next).toEqual({ ...config, fields: [notes.id], list: { parentFieldId: parent.id } });
+    unmount();
+    render(<ListFields config={next} fields={fields} onChange={vi.fn()} />);
+    const group = screen.getByRole('group', { name: 'Fields in the list' });
+    expect(within(group).queryByLabelText('Parent')).toBeNull();
+    expect(within(group).getByLabelText('Details')).toBeTruthy();
+    expect(within(group).getByLabelText('Project')).toBeTruthy();
   });
 
   it('says how to nest when the table has no link to itself', () => {

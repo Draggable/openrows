@@ -1023,7 +1023,7 @@ function DesignerPanel({
   );
 }
 
-function ListFields({
+export function ListFields({
   config,
   fields,
   onChange,
@@ -1033,7 +1033,12 @@ function ListFields({
   onChange: (config: InterfacePageConfig) => void;
 }) {
   const shown = new Set(config.fields);
-  const others = useMemo(() => fields.filter((f) => !f.isPrimary), [fields]);
+  // A hierarchical list's parent field is its structure, never a field beside the title.
+  const parentId = config.layout === 'list' ? config.list?.parentFieldId : null;
+  const others = useMemo(
+    () => fields.filter((f) => !f.isPrimary && f.id !== parentId),
+    [fields, parentId]
+  );
   return (
     <fieldset className="flex flex-col gap-1">
       <legend className="mb-1 font-[550]">Fields in the list</legend>

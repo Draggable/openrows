@@ -163,7 +163,13 @@ export function LayoutSettings({
         {choose(
           parents,
           config.list?.parentFieldId,
-          (v) => onChange({ ...config, list: { parentFieldId: v } }),
+          (v) =>
+            onChange({
+              ...config,
+              // The parent is structure only, never also a field beside the title.
+              fields: config.fields.filter((id) => id !== v),
+              list: { parentFieldId: v },
+            }),
           ids.a,
           'Parent record',
           true

@@ -136,10 +136,13 @@ export function pageShape(
   const unique = (ids: string[]) => [...new Set(ids.filter((id) => live.has(id)))];
   if (VIEW_LIKE_LAYOUTS.includes(config.layout)) {
     const layout = config.layout as 'kanban' | 'calendar' | 'timeline' | 'list';
-    // A list's row fields are the page's own (never the view's default of the first three).
+    // A list's row fields are the page's own (never the view's default of the first three). Its
+    // parent field leaves only as structure: never as a row field or a filter's field, whose
+    // values would name a parent the page leaves out.
+    const parentId = layout === 'list' ? (config.list?.parentFieldId ?? null) : null;
     const settings =
       layout === 'list'
-        ? { parentFieldId: config.list?.parentFieldId ?? null, rowFields: config.fields }
+        ? { parentFieldId: parentId, rowFields: config.fields.filter((id) => id !== parentId) }
         : (config[layout] ?? {});
     const shape = sharedViewShape(
       { type: layout, config: { [layout]: settings } },
@@ -147,7 +150,7 @@ export function pageShape(
       config.tableId
     );
     return {
-      shown: unique([...shape.fieldIds, ...filters]),
+      shown: unique([...shape.fieldIds, ...filters]).filter((id) => id !== parentId),
       links: shape.links,
       shape,
       lists: true,

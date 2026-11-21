@@ -233,6 +233,14 @@ describe('interface hierarchical list pages', () => {
       },
       list: { parentFieldId: parent.id },
     });
+    // The parent picked as a row field too: still sent only as structure.
+    pages['parentAsField'] = await page('Parent as a field', {
+      ...common,
+      layout: 'list',
+      filter: mine,
+      fields: [notes.id, parent.id],
+      list: { parentFieldId: parent.id },
+    });
     pages['unpublished'] = await page(
       'Unpublished',
       { ...common, layout: 'list', fields: [notes.id], list: { parentFieldId: parent.id } },
@@ -267,6 +275,37 @@ describe('interface hierarchical list pages', () => {
       // The tree is read-only.
       expect(tree.editable).toEqual([]);
     }
+  });
+
+  it('never sends the parent field as a value, even when picked as a row field', async () => {
+    for (const who of [guestId, viewerId, memberId]) {
+      const tree = await pageRecords(who, 'parentAsField');
+      expect(tree.list).toEqual({ parentFieldId: parent.id, rowFields: [notes.id] });
+      expect(sorted(tree.fields.map((f) => f.id))).toEqual(sorted([name.id, notes.id]));
+      for (const r of tree.records) {
+        expect(sorted(Object.keys(r.fields))).toEqual(sorted([name.id, notes.id]));
+      }
+      expect(parents(tree)[ids.taskB1]).toEqual([]);
+      const text = JSON.stringify(tree);
+      for (const leak of [ids.epicB, 'Epic B']) expect(text).not.toContain(leak);
+    }
+  });
+
+  it("refuses a filter element on the list's parent field", async () => {
+    const res = await request(ownerId, 'PATCH', pagePath(pages['unpublished']?.id), {
+      draft: {
+        layout: 'list',
+        tableId: table.id,
+        fields: [notes.id],
+        list: { parentFieldId: parent.id },
+        elements: [
+          { id: 'p1', type: 'filter', fieldId: parent.id, label: '', x: 0, y: 0, w: 4, h: 1 },
+        ],
+      },
+    });
+    expect(res.status).toBe(422);
+    const problem = (await res.json()) as { errors?: { path: string }[] };
+    expect(problem.errors?.map((e) => e.path)).toEqual(['draft.elements.0.fieldId']);
   });
 
   it("applies the viewer's filter elements to the structure too", async () => {

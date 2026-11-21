@@ -207,8 +207,8 @@ function refuse(errors: ProblemFieldError[]): void {
  * Refuses (422, paths under `draft`) a page config naming a table that isn't a live table of
  * this base, fields that aren't live fields of it, a filter element on a field that can't be
  * one, a button that clicks something other than a button field that runs automations, a
- * hierarchical list's parent that isn't a link to records of the same table, or a page filter or
- * sort that wouldn't compile as a view's.
+ * hierarchical list's parent that isn't a link to records of the same table (or a filter element
+ * on it), or a page filter or sort that wouldn't compile as a view's.
  */
 async function checkConfig(ctx: InterfaceContext, config: InterfacePageConfig, path = 'draft') {
   const [table] = await ctx.tx
@@ -237,6 +237,12 @@ async function checkConfig(ctx: InterfaceContext, config: InterfacePageConfig, p
       if (!f) missing(`${at}.fieldId`);
       else if (filterElementOperator(f.type) === null) {
         errors.push({ path: `${at}.fieldId`, message: "This field type can't be a filter." });
+      } else if (config.layout === 'list' && el.fieldId === config.list?.parentFieldId) {
+        // Its values would name parents the page leaves out.
+        errors.push({
+          path: `${at}.fieldId`,
+          message: "A hierarchical list can't filter by its parent field.",
+        });
       }
     } else if (el.type === 'button' && el.action.type === 'runAutomation') {
       const f = byId.get(el.action.fieldId);
