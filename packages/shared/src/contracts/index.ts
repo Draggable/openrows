@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AssistantAnswerSchema, assistantAskRequestSchema } from '../assistant/ask.js';
 import {
   AssistantApplyResultSchema,
   AssistantPlanResultSchema,
@@ -699,6 +700,16 @@ export const contracts = {
       tag: 'bases',
       body: assistantPlanRequestSchema,
       response: AssistantPlanResultSchema,
+      status: 200,
+    }),
+    assistantAsk: e({
+      method: 'POST',
+      path: '/api/bases/:baseId/assistant/ask',
+      summary:
+        'Ask the AI assistant a question about the base (creators): what a field, view or automation does, or a summary of records. The model gets what the caller can see, and records they may read only with includeRecords. Answers in text; nothing is changed or applied',
+      tag: 'bases',
+      body: assistantAskRequestSchema,
+      response: AssistantAnswerSchema,
       status: 200,
     }),
     assistantApply: e({

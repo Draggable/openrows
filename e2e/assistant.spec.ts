@@ -5,8 +5,9 @@ import { expect, test } from './helpers/test.js';
 
 // The AI assistant against the mocked API: the base's "Assistant" drafts a plan, shows it
 // as a list of additions (an operation with a problem unticked) and applies nothing until the
-// user confirms, then only the ticked operations; Home's "Describe it" creates a new base the
-// same way. Neither shows without an AI provider. The server's side is ai-assistant.test.ts.
+// user confirms, then only the ticked operations; its "Ask a question" answers in text about the
+// open view and applies nothing; Home's "Describe it" creates a new base the same way. None of
+// them shows without an AI provider. The server's side is ai-assistant.test.ts.
 
 const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -77,7 +78,15 @@ const describePlan = {
 };
 
 async function mockAssistant(page: Page, available = true) {
-  const calls = { plans: [] as unknown[], applies: [] as unknown[] };
+  const calls = { plans: [] as unknown[], applies: [] as unknown[], asks: [] as unknown[] };
+  await page.route(`**/api/bases/${IDS.base}/assistant/ask`, (route) => {
+    calls.asks.push(route.request().postDataJSON());
+    const body = route.request().postDataJSON() as { includeRecords: boolean };
+    return json(route, {
+      answer: 'Estimate is the hours a task should take.',
+      records: body.includeRecords ? 3 : 0,
+    });
+  });
   await page.route(`**/api/workspaces/${IDS.workspace}/ai`, (route) =>
     json(route, { workspaceId: IDS.workspace, available, source: available ? 'instance' : null })
   );
@@ -172,6 +181,47 @@ test('the base assistant applies nothing until the plan is confirmed', async ({ 
   await expect(dialog).toBeHidden();
   await expect(page.getByText('Applied 1 change')).toBeVisible();
   expect(calls.applies).toEqual([{ plan: { ...basePlan, operations: [basePlan.operations[0]] } }]);
+});
+
+test('the base assistant answers a question about the open view without a plan', async ({
+  page,
+}) => {
+  await mockApi(page, { rows: 3 });
+  const calls = await mockAssistant(page);
+  await page.goto(GRID_URL);
+  await page.getByRole('button', { name: 'Assistant' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Assistant' });
+  await dialog.getByRole('radio', { name: 'Ask a question' }).check();
+  const records = dialog.getByRole('checkbox', { name: 'Include records from this view' });
+  await expect(records).not.toBeChecked();
+  await dialog.getByLabel('What do you want to know?').fill('What does Estimate mean?');
+  await dialog.getByRole('button', { name: 'Ask', exact: true }).click();
+
+  const answer = dialog.getByRole('region', { name: 'Answer' });
+  await expect(answer.getByText('Estimate is the hours a task should take.')).toBeVisible();
+  await expect(answer.getByText('Nothing in the base was changed.')).toBeVisible();
+  await expect(dialog.getByRole('region', { name: 'Proposed changes' })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: /^Apply/ })).toHaveCount(0);
+  expect(calls.asks).toEqual([
+    {
+      question: 'What does Estimate mean?',
+      includeRecords: false,
+      tableId: IDS.table,
+      viewId: IDS.view,
+    },
+  ]);
+
+  const axe = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+  expect(axe.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? ''))).toEqual(
+    []
+  );
+
+  await records.check();
+  await dialog.getByRole('button', { name: 'Ask', exact: true }).click();
+  await expect(answer.getByText(/Based on 3 records you can read/)).toBeVisible();
+  expect(calls.asks.at(-1)).toMatchObject({ includeRecords: true });
+  expect(calls.plans).toEqual([]);
+  expect(calls.applies).toEqual([]);
 });
 
 test('Home "Describe it" drafts a new base and creates it on confirm', async ({ page }) => {

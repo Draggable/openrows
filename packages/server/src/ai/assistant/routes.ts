@@ -1,18 +1,21 @@
 import { contracts } from '@openrows/shared';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { RouteRegistry } from '../../authz/routes.js';
 import type { AutomationDeps } from '../../automations/service.js';
 import { createBase } from '../../bases/service.js';
+import { loadGraph } from '../../data/computed/engine.js';
 import { bases } from '../../db/index.js';
 import { AppError } from '../../lib/errors.js';
 import { type RateLimiter, retryAfter, tightestBucket } from '../../ratelimit/limiter.js';
+import { allFieldsVisible, type FieldVisibility } from '../../realtime/projection.js';
 import { type AiProvider, AiProviderError } from '../provider.js';
 import type { AiService } from '../service.js';
 import { applyPlan } from './apply.js';
+import { answerQuestion, askContextOf, unreadableFields } from './ask.js';
 import { generatePlan } from './plan.js';
 import { describedBase, sampleRecords } from './schema.js';
 
-/** Plans per user: a burst of 10, then one every 6 seconds. */
+/** Plans and questions per user: a burst of 10, then one every 6 seconds. */
 const PLAN_RATE = { perSecond: 1 / 6, burst: 10 };
 
 function providerError(err: unknown): never {
@@ -30,14 +33,24 @@ function providerError(err: unknown): never {
  * sessions only. The plan routes never write; the apply routes take the confirmed plan back,
  * check it against the base again and run it through the usual services in one transaction.
  * - `POST /api/bases/:baseId/assistant/plan` and `.../apply`: `base:ai_assistant`.
+ * - `POST /api/bases/:baseId/assistant/ask`: a question about the base, answered in text
+ *   (`base:ai_assistant`). The model reads only what the asker may see (ask.ts); the request's
+ *   transaction is read-only, there is no plan in the answer and nothing to apply.
  * - `POST /api/workspaces/:workspaceId/assistant/plan` and `.../apply`: "Describe it", a new
  *   base (`base:create`).
  */
 export function assistantRoutes(
   routes: RouteRegistry,
-  deps: { ai: AiService; limiter: RateLimiter; automations: AutomationDeps }
+  deps: {
+    ai: AiService;
+    limiter: RateLimiter;
+    automations: AutomationDeps;
+    /** Field-level visibility: hidden fields never reach the model. */
+    visibility?: FieldVisibility | undefined;
+  }
 ) {
   const { ai, limiter } = deps;
+  const visibility = deps.visibility ?? allFieldsVisible;
 
   async function provider(
     c: { header: (name: string, value: string) => void },
@@ -71,10 +84,12 @@ export function assistantRoutes(
       const { tx, resource, principal } = c.var;
       const model = await provider(c, tx, resource.workspaceId, principal.user.id);
       const { base, tables } = await describedBase(tx, resource.id, principal.user.id);
+      const viewer = { userId: principal.user.id, role: resource.role };
       const records = body.includeRecords
         ? await sampleRecords(
             { tx, workspaceId: resource.workspaceId, userId: principal.user.id },
-            tables
+            tables,
+            unreadableFields(viewer, visibility, tables, (await loadGraph(tx, resource.id)).rows)
           )
         : undefined;
       try {
@@ -94,6 +109,47 @@ export function assistantRoutes(
             includeRecords: body.includeRecords,
           },
           'ai assistant: plan proposed'
+        );
+        return result;
+      } catch (err) {
+        providerError(err);
+      }
+    }
+  );
+
+  routes.endpoint(
+    contracts.bases.assistantAsk,
+    { resource: 'base', action: 'base:ai_assistant', token: null },
+    async (c, { body }) => {
+      const { tx, resource, principal } = c.var;
+      const model = await provider(c, tx, resource.workspaceId, principal.user.id);
+      // Asking only reads: from here on the request's transaction refuses any write.
+      await tx.execute(sql`SET TRANSACTION READ ONLY`);
+      const context = await askContextOf(
+        {
+          tx,
+          workspaceId: resource.workspaceId,
+          userId: principal.user.id,
+          role: resource.role,
+          visibility,
+        },
+        resource.id,
+        body
+      );
+      try {
+        const result = await answerQuestion(model, {
+          context: context.text,
+          question: body.question,
+          records: context.records,
+        });
+        c.var.logger.info(
+          {
+            baseId: resource.id,
+            includeRecords: body.includeRecords,
+            records: result.records,
+            scoped: body.viewId ? 'view' : body.tableId ? 'table' : 'base',
+          },
+          'ai assistant: question answered'
         );
         return result;
       } catch (err) {

@@ -18,14 +18,14 @@ import { liveViews } from '../../views/service.js';
 import type { DescribedBase } from './plan.js';
 
 /** What the model reads of a base: enough to plan, capped so a big base still fits a request. */
-const MAX_TABLES = 60;
-const MAX_FIELDS = 150;
-const MAX_VIEWS = 30;
+export const MAX_TABLES = 60;
+export const MAX_FIELDS = 150;
+export const MAX_VIEWS = 30;
 const MAX_CHOICES_SHOWN = 20;
-const MAX_SAMPLE_TABLES = 15;
+export const MAX_SAMPLE_TABLES = 15;
 const MAX_CELL_CHARS = 120;
 
-function config(row: FieldRow): Record<string, unknown> {
+export function config(row: FieldRow): Record<string, unknown> {
   return typeof row.config === 'object' && row.config !== null
     ? (row.config as Record<string, unknown>)
     : {};
@@ -39,7 +39,7 @@ function resultTypeOf(row: FieldRow): FormulaType | undefined {
 }
 
 /** The fields of the base by id, and what the checker needs beyond a field's type. */
-interface BaseFields {
+export interface BaseFields {
   byId: Map<string, FieldRow>;
   tableNames: Map<string, string>;
   /** AI fields and the fields computed from them. */
@@ -82,7 +82,7 @@ function computedDetail(row: FieldRow, base: BaseFields): string | undefined {
   return undefined;
 }
 
-function detailOf(row: FieldRow, base: BaseFields): string | undefined {
+export function detailOf(row: FieldRow, base: BaseFields): string | undefined {
   const parts = [ownDetail(row, base), computedDetail(row, base)];
   if (row.type !== 'ai' && base.fromAi.has(row.id)) parts.push('reads an AI field');
   const detail = parts.filter(Boolean).join('; ');
@@ -106,7 +106,7 @@ function ownDetail(row: FieldRow, base: BaseFields): string | undefined {
   return resultType ? `result ${resultType}` : undefined;
 }
 
-function sorted(rows: FieldRow[]): FieldRow[] {
+export function sorted(rows: FieldRow[]): FieldRow[] {
   return [...rows].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
 }
 
@@ -153,7 +153,7 @@ export async function describedBase(
   return { base: { tables: described }, tables };
 }
 
-function cellText(row: FieldRow, value: unknown): string {
+export function cellText(row: FieldRow, value: unknown): string {
   if (value === null || value === undefined || value === '') return '';
   let text: string;
   if (isFieldTypeName(row.type)) {
@@ -170,15 +170,19 @@ function cellText(row: FieldRow, value: unknown): string {
 
 /**
  * A few records of each table, only when the user opted in: read as the user, through the
- * RecordService, with the fields they read. Lines of `Field: value`.
+ * RecordService, with the fields they may read. Lines of `Field: value`.
  */
 export async function sampleRecords(
   ctx: { tx: Transaction; workspaceId: string; userId: string },
-  tables: TableRow[]
+  tables: TableRow[],
+  /** Fields the user may not read (FieldVisibility and what reads them): left out. */
+  unreadable: ReadonlySet<string> = new Set()
 ): Promise<string> {
   const parts: string[] = [];
   for (const table of tables.slice(0, MAX_SAMPLE_TABLES)) {
-    const fields = sorted(await liveFields(ctx.tx, table.id)).slice(0, MAX_FIELDS);
+    const fields = sorted(await liveFields(ctx.tx, table.id))
+      .filter((f) => !unreadable.has(f.id))
+      .slice(0, MAX_FIELDS);
     const { records } = await listRecords({ ...ctx, table }, { limit: ASSISTANT_SAMPLE_RECORDS });
     if (records.length === 0) continue;
     const lines = records.map((r) =>

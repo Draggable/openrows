@@ -50,9 +50,17 @@ The assistant never writes secrets into a plan: a webhook trigger's URL is made 
 
 Every operation is checked against the base before you see it. One that couldn't be made is shown with the problem and left unticked: a formula that doesn't work, a lookup or rollup without a fitting link field or linked field, an aggregation that doesn't apply to the field's values (SUM of text, for example), a field that would read itself in a loop, a button or AI field that is missing its action, URL or prompt, an AI prompt that reads another AI field, a timeline or list view on a missing field or one of the wrong type, a primary field of a type that can't be one, or an automation that names a missing table, field, form view or button, a view that isn't a form, a schedule the automations engine wouldn't accept (such as one more frequent than every 5 minutes), a condition whose operator or value doesn't suit its field (a date condition takes a date such as 2026-03-31, today, tomorrow or yesterday, or a range such as pastWeek), an update of a step that isn't a find, an HTTP URL that the server's outbound rules don't allow, or a header that looks like a credential. An operation that needs one of those, like a formula over a rollup that can't be made or a view of a table that can't be, is left unticked too. When you apply, the plan is checked again against the base as it is then; if anything no longer fits, nothing is applied.
 
-The assistant sees the names and types of the base's tables and fields, not your records. Tick **Include a few records from each table** to send up to three records per table along with the request, which helps it pick formats and options.
+The assistant sees the names and types of the base's tables and fields, not your records. Tick **Include a few records from each table** to send up to three records per table, with the fields you can read, along with the request, which helps it pick formats and options.
 
 On Home, **Describe it** does the same for a new base: say what you want to track, check the plan and the base's name, then **Create base**.
+
+#### Ask a question about the base
+
+In the Assistant, choose **Ask a question** to ask about the open base instead of changing it: what a field, formula, view or automation does, or a summary of the records in the open view. The answer is text. Asking never changes the base: there is no plan to apply, no records, fields, views or automations are written, and no automation or button runs. To make a change, switch back to **Change the base** and draft a plan.
+
+Answers only use what you can already see. The assistant reads the tables and the fields you can read (with their descriptions and formulas), the views you can see (your own personal views, not other people's), and the base's automations, which creators and owners manage. A field hidden from you is left out, and so is any field computed from it. Records are only sent when you tick **Include records from this view**: up to 25 records of the open view, through its filter and without the fields it hides, with the fields you can read. Records the view's filter leaves out are not sent. Field and record values are sent to the AI provider as data for the answer, never as instructions.
+
+Automations are described by their trigger and steps, with table and field names; secret headers, webhook URLs, script code and message text are not sent.
 
 ## Tables
 

@@ -274,7 +274,13 @@ export function BasePage({
             <SyncBar table={table.data} base={base.data} role={base.data?.role} />
           )}
           {canAssist && (
-            <BaseAssistantDialog baseId={baseId} open={assisting} onOpenChange={setAssisting} />
+            <BaseAssistantDialog
+              baseId={baseId}
+              tableId={tableId}
+              viewId={viewId}
+              open={assisting}
+              onOpenChange={setAssisting}
+            />
           )}
           {canShare && base.data && (
             <ShareBaseDialog

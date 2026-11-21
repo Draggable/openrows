@@ -433,7 +433,7 @@ export function createApp({
   // AI fields: their generation state, regenerate and stop; the worker answers.
   aiFieldRoutes(routes, { ai: aiService });
   // The AI assistant: change plans for a base or a new one, applied on confirm.
-  assistantRoutes(routes, { ai: aiService, limiter, automations: automationDeps });
+  assistantRoutes(routes, { ai: aiService, limiter, automations: automationDeps, visibility });
   // Whole-base and account data exports.
   exportRoutes(routes, { db, store: files });
   // Share links: managed by creators, read by anyone holding a token (and the
