@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { extensionCatalogListingSchema } from '../extensions/catalog.js';
+import { EXTENSION_CATALOG_ID, extensionCatalogListingSchema } from '../extensions/catalog.js';
 import {
+  EXTENSION_SCOPES,
   EXTENSION_SIZES,
   extensionBundleSchema,
   extensionManifestSchema,
@@ -15,7 +16,9 @@ import { BUILT_IN_EXTENSION_KEYS } from '../extensions/samples.js';
  * Third-party bundles need `EXTENSIONS_CUSTOM_BUNDLES` to allow the installer (owners only on
  * the hosted edition).
  *
- * The extension catalog (`EXTENSIONS_CATALOG`) is browsed by those who may add extensions.
+ * The extension catalog (`EXTENSIONS_CATALOG`) is browsed by those who may add extensions, who
+ * also add its listings: `{ catalog, scopes }` names a shipped listing and the permissions the
+ * installer confirmed. A listing isn't an upload, so EXTENSIONS_CUSTOM_BUNDLES doesn't apply.
  */
 
 const at = z.iso.datetime({ offset: true });
@@ -27,6 +30,15 @@ export const installExtensionSchema = z.union([
   z.strictObject({
     manifest: extensionManifestSchema,
     bundle: extensionBundleSchema,
+  }),
+  z.strictObject({
+    /** A listing's id in the shipped catalog. */
+    catalog: z.string().min(1).max(100).regex(EXTENSION_CATALOG_ID),
+    /**
+     * The permissions the installer was shown and confirmed: the listing's scopes. The install
+     * is refused if the listing asks for anything else.
+     */
+    scopes: z.array(z.enum(EXTENSION_SCOPES)).max(EXTENSION_SCOPES.length),
   }),
 ]);
 export type InstallExtensionInput = z.input<typeof installExtensionSchema>;
