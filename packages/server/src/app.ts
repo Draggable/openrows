@@ -409,7 +409,10 @@ export function createApp({
   });
   sandboxRoutes(routes);
   // The base's extension panel and the sandbox extensions run in.
-  extensionRoutes(routes, { customBundles: config.extensionsCustomBundles });
+  extensionRoutes(routes, {
+    customBundles: config.extensionsCustomBundles,
+    catalog: config.extensionsCatalog,
+  });
   extensionSandboxRoutes(routes);
   // Interfaces: pages built on a base, published to its collaborators.
   interfaceRoutes(routes, {

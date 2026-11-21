@@ -176,6 +176,7 @@ export const queryKeys = {
   scripts: (baseId: string) => ['scripts', baseId] as const,
   /** A base's extension panel and an installation's bundle. */
   extensions: (baseId: string) => ['extensions', baseId] as const,
+  extensionCatalog: (baseId: string) => ['extensions', baseId, 'catalog'] as const,
   extensionBundle: (baseId: string, extensionId: string) =>
     ['extensions', baseId, 'bundle', extensionId] as const,
   /** A base's automations and their runs. */

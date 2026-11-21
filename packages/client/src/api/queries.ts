@@ -1640,6 +1640,15 @@ export const useExtensions = (baseId: string, enabled = true) =>
     enabled: enabled && baseId !== '',
   });
 
+/** The extension catalog's listings (shipped with the server; creators and up). */
+export const useExtensionCatalog = (baseId: string, enabled = true) =>
+  useQuery({
+    queryKey: queryKeys.extensionCatalog(baseId),
+    queryFn: () => api.extensions.catalog({ params: { baseId } }),
+    enabled: enabled && baseId !== '',
+    staleTime: 5 * 60_000,
+  });
+
 /** An installation's manifest and bundle (built-ins update with the app, so not forever). */
 export const useExtensionBundle = (baseId: string, extensionId: string) =>
   useQuery({

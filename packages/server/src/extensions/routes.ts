@@ -6,9 +6,11 @@ import {
   type CustomBundlePolicy,
   deleteExtension,
   type ExtensionContext,
+  extensionCatalog,
   getExtensionBundle,
   installExtension,
   listExtensions,
+  mayBrowseCatalog,
   mayInstallCustom,
   reorderExtensions,
   setExtensionSettings,
@@ -23,12 +25,14 @@ const SETTINGS_BODY_LIMIT = 256 * 1024;
  * A base's extension panel: anyone on the base sees it (`base:read_extensions`; the
  * extensions read and write data as the viewer, with the viewer's rights), creators install,
  * arrange and remove extensions (`base:manage_extensions`), editors change their settings
- * (`base:configure_extensions`). Third-party bundles follow EXTENSIONS_CUSTOM_BUNDLES. Sessions
- * only; resource routes on the base in the path, so other bases' and tenants' ids are 404s.
+ * (`base:configure_extensions`). Third-party bundles follow EXTENSIONS_CUSTOM_BUNDLES. Creators
+ * browse the catalog of reviewed extensions unless EXTENSIONS_CATALOG is off (then it answers
+ * `available: false`). Sessions only; resource routes on the base in the path, so other bases'
+ * and tenants' ids are 404s.
  */
 export function extensionRoutes(
   routes: RouteRegistry,
-  deps: { customBundles: CustomBundlePolicy }
+  deps: { customBundles: CustomBundlePolicy; catalog: boolean }
 ) {
   const x = contracts.extensions;
   const read = { resource: 'base', action: 'base:read_extensions', token: null } as const;
@@ -75,10 +79,14 @@ export function extensionRoutes(
       canManage: !!role && roleAllows(role, 'base:manage_extensions'),
       canConfigure: !!role && roleAllows(role, 'base:configure_extensions'),
       canInstallCustom: mayInstallCustom(deps.customBundles, role),
+      canBrowseCatalog: mayBrowseCatalog(deps.catalog, role),
     };
   };
 
   routes.endpoint(x.list, read, async (c) => listOf(c));
+
+  // The shipped catalog, the same on every base; listed to those who may add extensions.
+  routes.endpoint(x.catalog, manage, async () => extensionCatalog(deps.catalog));
 
   routes.endpoint(x.bundle, read, async (c, { params }) =>
     getExtensionBundle(c.var.tx, c.var.resource.id, params.extensionId)

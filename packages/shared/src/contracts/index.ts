@@ -92,6 +92,7 @@ import {
 } from '../schemas/comment.js';
 import {
   ExtensionBundleResponseSchema,
+  ExtensionCatalogResponseSchema,
   ExtensionInstallationSchema,
   ExtensionListSchema,
   extensionSettingsBodySchema,
@@ -1399,6 +1400,15 @@ export const contracts = {
       body: installExtensionSchema,
       response: ExtensionInstallationSchema,
       status: 201,
+    }),
+    catalog: e({
+      method: 'GET',
+      path: '/api/bases/:baseId/extensions/catalog',
+      summary:
+        'The extension catalog: listings with their publisher and permissions (creators and up)',
+      tag: 'extensions',
+      response: ExtensionCatalogResponseSchema,
+      status: 200,
     }),
     bundle: e({
       method: 'GET',

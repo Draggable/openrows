@@ -19,6 +19,42 @@ Creators and owners click **Add extension** and pick one of the built-in extensi
 - **URL preview**: previews the selected record's link from a URL field: YouTube, Vimeo and Loom
   videos and images play or show inline, other sites get an **Open link** button.
 
+## Browse the catalog
+
+The extension catalog lists reviewed extensions with what you need to judge them before you add
+one. Creators and owners open it from **Add extension** with **Browse the catalog**. Each listing
+shows:
+
+- the extension's name and version,
+- its publisher (a name, linked to the publisher's site when there is one),
+- a description,
+- the permissions it asks for (see [Permissions](#permissions)).
+
+Browsing the catalog doesn't install anything. Today the catalog lists the built-in extensions,
+published by OpenRows; add them from the built-in list in **Add extension**. Editors, commenters
+and read-only members, who can't add extensions, aren't offered the catalog.
+
+### How an extension gets onto the catalog
+
+The catalog ships with OpenRows: it is a reviewed list in the source code
+(`packages/shared/src/extensions/catalog.ts`), the same on every base of an instance, and the
+server never downloads listings. A new extension is added to it by a pull request to the
+OpenRows repository, reviewed like any other change: its code, the permissions its manifest asks
+for, and the publisher it names. There is no sign-up for publishers and no submission form in
+the app. A listing's publisher is the person or organisation who maintains the extension.
+
+To run an extension that isn't in the catalog, upload it as [your own
+extension](#your-own-extensions).
+
+### Turn the catalog off
+
+The catalog is on by default. A server's administrator turns it off with `EXTENSIONS_CATALOG=off`;
+**Add extension** then has no catalog, and the catalog API answers `available: false` with no
+listings. Built-in extensions and uploads aren't affected (uploads follow
+`EXTENSIONS_CUSTOM_BUNDLES`, below).
+
+## Manage extensions
+
 Each extension's menu (**⋯**) lists what it may do, and has **Reload**. Creators also move
 extensions up and down, make them small, medium or large, and remove them. A base has at most 20.
 

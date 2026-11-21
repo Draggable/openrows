@@ -24,7 +24,13 @@ async function open(page: Page, { extensionsOpen = false } = {}) {
   );
   await page.route(`**/api/bases/${IDS.base}/extensions**`, (route) =>
     route.fulfill(
-      json({ extensions: [], canManage: true, canConfigure: true, canInstallCustom: true })
+      json({
+        extensions: [],
+        canManage: true,
+        canConfigure: true,
+        canInstallCustom: true,
+        canBrowseCatalog: true,
+      })
     )
   );
   if (extensionsOpen) {

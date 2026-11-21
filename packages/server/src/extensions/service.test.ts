@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../config.js';
 import { extensionContentSecurityPolicy } from './sandbox.js';
-import { mayInstallCustom } from './service.js';
+import { extensionCatalog, mayBrowseCatalog, mayInstallCustom } from './service.js';
 
 describe('mayInstallCustom', () => {
   it('follows EXTENSIONS_CUSTOM_BUNDLES on top of base:manage_extensions', () => {
@@ -26,6 +26,42 @@ describe('mayInstallCustom', () => {
     expect(() => loadConfig({ NODE_ENV: 'test', EXTENSIONS_CUSTOM_BUNDLES: 'everyone' })).toThrow(
       /EXTENSIONS_CUSTOM_BUNDLES/
     );
+  });
+});
+
+describe('the extension catalog', () => {
+  it('is on by default and off with EXTENSIONS_CATALOG=off, on either edition', () => {
+    expect(loadConfig({ NODE_ENV: 'test' }).extensionsCatalog).toBe(true);
+    expect(loadConfig({ NODE_ENV: 'test', EDITION: 'cloud' }).extensionsCatalog).toBe(true);
+    expect(loadConfig({ NODE_ENV: 'test', EXTENSIONS_CATALOG: 'off' }).extensionsCatalog).toBe(
+      false
+    );
+    expect(
+      loadConfig({
+        NODE_ENV: 'test',
+        EXTENSIONS_CATALOG: 'off',
+        EXTENSIONS_CUSTOM_BUNDLES: 'owners',
+      })
+    ).toMatchObject({ extensionsCatalog: false, extensionsCustomBundles: 'owners' });
+    expect(() => loadConfig({ NODE_ENV: 'test', EXTENSIONS_CATALOG: 'yes' })).toThrow(
+      /EXTENSIONS_CATALOG/
+    );
+  });
+
+  it('is browsed by those who may add extensions, only while it is on', () => {
+    expect(mayBrowseCatalog(true, 'owner')).toBe(true);
+    expect(mayBrowseCatalog(true, 'creator')).toBe(true);
+    expect(mayBrowseCatalog(true, 'editor')).toBe(false);
+    expect(mayBrowseCatalog(true, 'read_only')).toBe(false);
+    expect(mayBrowseCatalog(true, null)).toBe(false);
+    expect(mayBrowseCatalog(false, 'owner')).toBe(false);
+  });
+
+  it('answers the shipped listings, or none when off', () => {
+    const on = extensionCatalog(true);
+    expect(on.available).toBe(true);
+    expect(on.listings.map((l) => l.name)).toEqual(['Chart', 'Print view', 'URL preview']);
+    expect(extensionCatalog(false)).toEqual({ available: false, listings: [] });
   });
 });
 

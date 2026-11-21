@@ -1,7 +1,9 @@
 import {
   builtInExtension,
+  EXTENSION_CATALOG,
   EXTENSION_LIMITS,
   type ExtensionBundleResponse,
+  type ExtensionCatalogResponse,
   type ExtensionInstallation,
   type ExtensionManifest,
   type ExtensionSize,
@@ -43,6 +45,20 @@ export function mayInstallCustom(policy: CustomBundlePolicy, role: UserRole | nu
   if (policy === 'off') return false;
   if (policy === 'owners') return role === 'owner';
   return true;
+}
+
+/** May someone with `role` browse the catalog (`catalog`: EXTENSIONS_CATALOG is on)? */
+export function mayBrowseCatalog(catalog: boolean, role: UserRole | null): boolean {
+  return catalog && !!role && roleAllows(role, 'base:manage_extensions');
+}
+
+/**
+ * The extension catalog: the reviewed listings shipped with the app (shared's
+ * EXTENSION_CATALOG), the same on every base; nothing is fetched. Off: no listings.
+ */
+export function extensionCatalog(catalog: boolean): ExtensionCatalogResponse {
+  if (!catalog) return { available: false, listings: [] };
+  return { available: true, listings: [...EXTENSION_CATALOG] };
 }
 
 /** A built-in's manifest is always shared's (it updates with the app). */

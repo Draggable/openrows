@@ -1,3 +1,4 @@
+export * from './catalog.js';
 export * from './manifest.js';
 export * from './protocol.js';
 export {
