@@ -30,6 +30,7 @@ import { fieldType, type TableRow } from '../fields/service.js';
 import type { Jobs } from '../jobs/send.js';
 import { AppError } from '../lib/errors.js';
 import type { FieldVisibility } from '../realtime/projection.js';
+import { canEditCells } from '../records/permissions.js';
 import {
   createRecords,
   type FieldInfo,
@@ -47,8 +48,8 @@ import { listInterfaces } from './service.js';
  * through the base's API. Its records come projected like a share link's (`sharedRecords`): only
  * the fields the page shows, links and people as names, the page filter applied on the server
  * with `me` as the viewer. Writes go through the RecordService with the viewer's role, limited
- * to what the page offers: a record review's editable field elements on a record the page lists,
- * and a form page's fields. A record review's buttons that run automations click through the page
+ * to what the page offers on a record the page lists: a record review's editable field elements,
+ * a kanban, calendar or timeline page's shown fields (its drags), and a form page's fields. A record review's buttons that run automations click through the page
  * too, and the files a page shows download through it, each checked against the page on every
  * request. Interface-only collaborators reach nothing else.
  */
@@ -164,30 +165,51 @@ export function pageShape(
   };
 }
 
-/** The fields the viewer may write through the page: editable field elements, or the form's. */
+/**
+ * The fields the viewer may write through the page: a record review's editable field elements, a
+ * kanban, calendar or timeline page's shown fields (what its drags write: a stack, dates), or a
+ * form's fields. Only fields of a type a page may write, not hidden from the viewer; on the pages
+ * that edit records, only for those who may edit them (their role, the table's and the field's
+ * edit permissions).
+ */
 function writableFields(
   config: InterfacePageConfig,
+  table: TableRow,
   fields: readonly FieldInfo[],
-  role: UserRole,
-  hidden: ReadonlySet<string>
+  who: { role: UserRole; userId: string },
+  hidden: ReadonlySet<string>,
+  shown: readonly string[] = []
 ): Set<string> {
   const byId = new Map(fields.map((f) => [f.row.id, f]));
   const ok = (id: string) => {
     const f = byId.get(id);
     return !!f && !hidden.has(id) && isInterfaceWritableType(fieldType(f.row));
   };
-  if (config.layout === 'recordReview' && roleAllows(role, 'record:update')) {
+  const editable = (id: string) => {
+    const f = byId.get(id);
+    return !!f && ok(id) && canEditCells(table, f.row, who);
+  };
+  if (config.layout === 'recordReview' && roleAllows(who.role, 'record:update')) {
     return new Set(
       config.elements
         .flatMap((el) => (el.type === 'field' && el.editable ? [el.fieldId] : []))
-        .filter(ok)
+        .filter(editable)
     );
   }
-  if (config.layout === 'form' && roleAllows(role, 'record:create')) {
+  if (VIEW_LIKE_LAYOUTS.includes(config.layout) && roleAllows(who.role, 'record:update')) {
+    return new Set(shown.filter(editable));
+  }
+  if (config.layout === 'form' && roleAllows(who.role, 'record:create')) {
     return new Set((config.form?.fields ?? []).map((f) => f.fieldId).filter(ok));
   }
   return new Set<string>();
 }
+
+/** Layouts whose records the viewer may edit through the page. */
+const EDITING_LAYOUTS: readonly InterfacePageConfig['layout'][] = [
+  'recordReview',
+  ...VIEW_LIKE_LAYOUTS,
+];
 
 const toMeta = (f: FieldInfo) => ({
   id: f.row.id,
@@ -203,6 +225,18 @@ interface CompiledPage {
   hidden: ReadonlySet<string>;
   shape: PageShape;
   shared: SharedViewQuery;
+}
+
+/** What the viewer may write through a compiled page (its shown fields less hidden ones). */
+function pageWritable(ctx: PageContext, config: InterfacePageConfig, page: CompiledPage) {
+  return writableFields(
+    config,
+    page.table,
+    page.fields,
+    { role: ctx.role, userId: ctx.userId },
+    page.hidden,
+    page.shared.fields.map((f) => f.row.id)
+  );
 }
 
 /**
@@ -283,7 +317,7 @@ export async function pageRecords(
   const answer = page.shape.lists
     ? await sharedRecords(read, page.shared, q)
     : { records: [], offset: q.offset, total: 0 };
-  const writable = writableFields(config, page.fields, ctx.role, page.hidden);
+  const writable = pageWritable(ctx, config, page);
   const buttons = await buttonStates(ctx, config, page);
   return {
     table: { id: page.table.id, name: page.table.name },
@@ -291,7 +325,7 @@ export async function pageRecords(
       .filter((f) => page.shared.fields.some((v) => v.row.id === f.row.id))
       .map(toMeta),
     ...answer,
-    editable: config.layout === 'recordReview' ? [...writable] : [],
+    editable: EDITING_LAYOUTS.includes(config.layout) ? [...writable] : [],
     canSubmit: config.layout === 'form' && roleAllows(ctx.role, 'record:create'),
     buttons: Object.fromEntries(buttons),
     ...(page.shape.shape?.kanban ? { kanban: page.shape.shape.kanban } : {}),
@@ -420,9 +454,10 @@ function refuseFields(ids: string[], what: string): void {
 }
 
 /**
- * Edits a record through a record review page: only its editable field elements' fields, only a
- * record the page lists (its filter, `me` as the viewer), then the RecordService's own checks
- * (role, table and field permissions, values).
+ * Edits a record through a page: a record review's editable field elements, or a kanban, calendar
+ * or timeline page's shown fields (a card dragged to another stack, an event or bar moved or
+ * resized), only on a record the page lists (its filter, `me` as the viewer), then the
+ * RecordService's own checks (role, table and field permissions, values).
  */
 export async function updatePageRecord(
   ctx: PageContext & { entitlements: Entitlements },
@@ -430,11 +465,14 @@ export async function updatePageRecord(
   recordId: string,
   cells: Record<string, unknown>
 ): Promise<void> {
-  if (config.layout !== 'recordReview') {
+  if (!EDITING_LAYOUTS.includes(config.layout)) {
     throw new AppError('FORBIDDEN', { detail: "This page doesn't edit records." });
   }
+  if (!roleAllows(ctx.role, 'record:update')) {
+    throw new AppError('FORBIDDEN', { detail: "You can view this page but can't edit records." });
+  }
   const page = await compilePage(ctx, config, {});
-  const writable = writableFields(config, page.fields, ctx.role, page.hidden);
+  const writable = pageWritable(ctx, config, page);
   refuseFields(
     Object.keys(cells).filter((id) => !writable.has(id)),
     "This page doesn't let you edit these fields."
@@ -470,7 +508,13 @@ export async function submitPageForm(
   const table = await pageTable(ctx, config);
   const fields = await tableFields(ctx.tx, table);
   const hidden = ctx.visibility.hiddenFields({ userId: ctx.userId, role: ctx.role }, table.id);
-  const writable = writableFields(config, fields, ctx.role, hidden);
+  const writable = writableFields(
+    config,
+    table,
+    fields,
+    { role: ctx.role, userId: ctx.userId },
+    hidden
+  );
   if (!roleAllows(ctx.role, 'record:create')) {
     throw new AppError('FORBIDDEN', { detail: "You can't submit this form." });
   }

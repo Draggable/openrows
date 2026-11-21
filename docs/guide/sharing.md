@@ -67,9 +67,21 @@ To give someone access to one base without adding them to the whole workspace, o
 To share an interface without its base, open the interface's page (**Interfaces** in the base's top bar) and click **Share** (creators and owners). Invite people by email with **Can view** or **Can edit**. They see the interface's published pages at their own address, and under **Interfaces shared with you** on Home, but never the base, its grid, its other interfaces or the fields a page doesn't show.
 
 - **Can view**: read the pages and download the files they show.
-- **Can edit**: also change the fields a record review page marks as editable (on the records the page lists), submit its form pages and click its buttons that run automations.
+- **Can edit**: also change the fields a record review page marks as editable (on the records the page lists), drag cards, events and bars on its kanban, calendar and timeline pages, submit its form pages and click its buttons that run automations.
 - A page filter on a user field or **Created by** set to **Me** shows each viewer their own records, interface-only collaborators included. They can be assigned in the base's user fields.
 - People with access to the base see its interfaces already, so they aren't invited to one.
+
+### Kanban, calendar and timeline pages
+
+These pages draw a table's records the way the views of the same type do, and allow the same edits by dragging:
+
+- **Kanban**: drag a card to another stack to change its stack field. Alt+Left/Right moves the focused card to the next stack. A board stacked by a user field can't be rearranged on a page.
+- **Calendar**: drag an event to another day, or drag the end of a range to change its length. Alt+arrow keys move the focused event by a day or a week; Alt+Shift+Left/Right changes its end.
+- **Timeline**: drag a bar to move it, or drag either edge to change its dates. Alt+Left/Right moves the focused bar; Alt+Shift+Left/Right changes its end.
+
+Who can drag: interface-only collaborators with **Can edit**, and people with access to the base who can edit its records (Editor and up). **Can view**, commenters and read-only members see the same page without dragging. The table's and fields' edit permissions apply as they do in the base.
+
+What a drag writes: only fields the page shows, on records its filter lists for you (**Me** included). Fields hidden from you, fields the page doesn't show, and links, files, people and buttons are never written through a page. Each drag is checked against the published page on the server; one that's refused puts the card, event or bar back where it was. Dragging doesn't give interface-only collaborators access to the base: they still can't open its grid or its records outside the page. Records can't be created from a calendar page's days; use a form page for that. Share links to views stay read-only.
 
 ### Buttons and files on a page
 
