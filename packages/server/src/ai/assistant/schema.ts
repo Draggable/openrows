@@ -1,11 +1,15 @@
 import {
   ASSISTANT_SAMPLE_RECORDS,
   type AssistantFieldInfo,
+  computedSourceOf,
   FORMULA_TYPES,
   type FormulaType,
+  fieldFormulaType,
   getFieldType,
   isFieldTypeName,
+  TEXT_ROLLUP_FUNCTIONS,
 } from '@openrows/shared';
+import { loadGraph } from '../../data/computed/engine.js';
 import type { Transaction } from '../../db/index.js';
 import { type FieldRow, liveFields, type TableRow } from '../../fields/service.js';
 import { listRecords } from '../../records/service.js';
@@ -32,7 +36,58 @@ function resultTypeOf(row: FieldRow): FormulaType | undefined {
     : undefined;
 }
 
-function detailOf(row: FieldRow, tableNames: Map<string, string>): string | undefined {
+/** The fields of the base by id, and what the checker needs beyond a field's type. */
+interface BaseFields {
+  byId: Map<string, FieldRow>;
+  tableNames: Map<string, string>;
+  /** AI fields and the fields computed from them. */
+  fromAi: Set<string>;
+}
+
+/** Whether a field's values are numbers, for the rollups that read numbers. */
+function numericOf(row: FieldRow, base: BaseFields, depth = 0): boolean {
+  const c = config(row);
+  if (row.type === 'rollup') return !TEXT_ROLLUP_FUNCTIONS.includes(String(c['function'] ?? 'SUM'));
+  if (row.type === 'ai') return c['output'] === 'number';
+  if (row.type === 'lookup') {
+    const sourceId = computedSourceOf(row.type, c)?.sourceFieldId;
+    const source = sourceId ? base.byId.get(sourceId) : undefined;
+    return source !== undefined && depth < 5 && numericOf(source, base, depth + 1);
+  }
+  const resultType = resultTypeOf(row);
+  return fieldFormulaType({ type: row.type, ...(resultType ? { resultType } : {}) }) === 'number';
+}
+
+function linkedTableOf(row: FieldRow, base: BaseFields): string | undefined {
+  return row.type === 'link'
+    ? base.tableNames.get(String(config(row)['linkedTableId'] ?? ''))
+    : undefined;
+}
+
+function computedDetail(row: FieldRow, base: BaseFields): string | undefined {
+  const c = config(row);
+  const src = computedSourceOf(row.type, c);
+  if (src) {
+    const link = src.linkFieldId ? base.byId.get(src.linkFieldId)?.name : undefined;
+    const source = src.sourceFieldId ? base.byId.get(src.sourceFieldId)?.name : undefined;
+    if (!link) return undefined;
+    if (row.type === 'count') return `counts the records of "${link}"`;
+    const of = source ? `"${source}" through "${link}"` : `through "${link}"`;
+    return row.type === 'lookup' ? `looks up ${of}` : `${String(c['function'] ?? 'SUM')} of ${of}`;
+  }
+  if (row.type === 'button') return `button, ${String(c['action'] ?? 'openUrl')}`;
+  if (row.type === 'ai') return `AI answer, output ${String(c['output'] ?? 'text')}`;
+  return undefined;
+}
+
+function detailOf(row: FieldRow, base: BaseFields): string | undefined {
+  const parts = [ownDetail(row, base), computedDetail(row, base)];
+  if (row.type !== 'ai' && base.fromAi.has(row.id)) parts.push('reads an AI field');
+  const detail = parts.filter(Boolean).join('; ');
+  return detail || undefined;
+}
+
+function ownDetail(row: FieldRow, base: BaseFields): string | undefined {
   const c = config(row);
   if (row.type === 'singleSelect' || row.type === 'multipleSelect') {
     const choices = Array.isArray(c['choices']) ? (c['choices'] as { name?: unknown }[]) : [];
@@ -42,7 +97,7 @@ function detailOf(row: FieldRow, tableNames: Map<string, string>): string | unde
     return shown.length ? `options ${shown.join(', ')}` : undefined;
   }
   if (row.type === 'link') {
-    const target = tableNames.get(String(c['linkedTableId'] ?? ''));
+    const target = linkedTableOf(row, base);
     return target ? `links to "${target}"` : undefined;
   }
   const resultType = resultTypeOf(row);
@@ -59,7 +114,13 @@ export async function describedBase(
   baseId: string
 ): Promise<{ base: DescribedBase; tables: TableRow[] }> {
   const tables = (await liveTables(tx, baseId)).slice(0, MAX_TABLES);
-  const names = new Map(tables.map((t) => [t.id, t.name]));
+  const g = await loadGraph(tx, baseId);
+  const aiIds = [...g.rows.values()].filter((r) => r.type === 'ai').map((r) => r.id);
+  const known: BaseFields = {
+    byId: g.rows,
+    tableNames: new Map(tables.map((t) => [t.id, t.name])),
+    fromAi: new Set([...aiIds, ...g.graph.downstream(aiIds)]),
+  };
   const described: DescribedBase['tables'] = [];
   for (const table of tables) {
     const fields = sorted(await liveFields(tx, table.id)).slice(0, MAX_FIELDS);
@@ -69,8 +130,12 @@ export async function describedBase(
         const info: AssistantFieldInfo = { name: f.name, type: f.type };
         const resultType = resultTypeOf(f);
         if (resultType) info.resultType = resultType;
-        const detail = detailOf(f, names);
+        const detail = detailOf(f, known);
         if (detail) info.detail = detail;
+        const linkedTable = linkedTableOf(f, known);
+        if (linkedTable) info.linkedTable = linkedTable;
+        if (['lookup', 'rollup', 'ai'].includes(f.type)) info.numeric = numericOf(f, known);
+        if (known.fromAi.has(f.id)) info.fromAi = true;
         return info;
       }),
     });

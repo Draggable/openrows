@@ -9,6 +9,11 @@ const field = (name: string, type: string, extra: Record<string, unknown> = {}) 
   choices: null,
   formula: null,
   linkedTable: null,
+  linkField: null,
+  linkedField: null,
+  aggregation: null,
+  button: null,
+  ai: null,
   ...extra,
 });
 
@@ -30,7 +35,14 @@ const plan: AssistantPlan = {
       table: 'Orders',
       field: field('Total', 'formula', { formula: '{Qty} * {Price}' }),
     },
-    { op: 'createView', table: 'Orders', name: 'Board', type: 'kanban', field: 'Status' },
+    {
+      op: 'createView',
+      table: 'Orders',
+      name: 'Board',
+      type: 'kanban',
+      field: 'Status',
+      endField: null,
+    },
     {
       op: 'createAutomation',
       table: 'Orders',
@@ -77,5 +89,83 @@ describe('assistant model', () => {
     ]);
     expect(changeCount(1)).toBe('1 change');
     expect(changeCount(3)).toBe('3 changes');
+  });
+
+  it('describes lookups, rollups, counts, buttons, AI fields, timelines and lists', () => {
+    const onCustomers = (f: ReturnType<typeof field>) => ({
+      op: 'createField' as const,
+      table: 'Customers',
+      field: f,
+    });
+    const rows = planRows(
+      {
+        summary: 's',
+        baseName: null,
+        operations: [
+          onCustomers(
+            field('Qtys', 'lookup', { type: 'lookup', linkField: 'Orders', linkedField: 'Qty' })
+          ),
+          onCustomers(
+            field('Spent', 'rollup', {
+              type: 'rollup',
+              linkField: 'Orders',
+              linkedField: 'Price',
+              aggregation: 'SUM',
+            })
+          ),
+          onCustomers(field('Order count', 'count', { type: 'count', linkField: 'Orders' })),
+          onCustomers(
+            field('Site', 'button', {
+              type: 'button',
+              button: { label: 'Open', action: 'openUrl' },
+              formula: '"https://example.com"',
+            })
+          ),
+          onCustomers(
+            field('Notify', 'button', {
+              type: 'button',
+              button: { label: 'Notify', action: 'runAutomation' },
+            })
+          ),
+          onCustomers(
+            field('Summary', 'ai', {
+              type: 'ai',
+              ai: { prompt: 'Summarize {Company}', output: 'summary' },
+            })
+          ),
+          {
+            op: 'createView',
+            table: 'Orders',
+            name: 'Plan',
+            type: 'timeline',
+            field: 'Ordered',
+            endField: 'Shipped',
+          },
+          {
+            op: 'createView',
+            table: 'Tasks',
+            name: 'Tree',
+            type: 'list',
+            field: 'Parent',
+            endField: null,
+          },
+        ],
+      },
+      []
+    );
+    expect(rows.map((r) => r.details[0])).toEqual([
+      'Qtys: Lookup ("Qty" through Orders)',
+      'Spent: Rollup (SUM of "Price" through Orders)',
+      'Order count: Count (records through Orders)',
+      'Site: Button "Open" (opens a URL) = "https://example.com"',
+      'Notify: Button "Notify" (runs automations)',
+      'Summary: AI (answers summary): Summarize {Company}',
+      'From Ordered to Shipped',
+      'Nested by Parent',
+    ]);
+    expect(rows.slice(6).map((r) => r.title)).toEqual([
+      'Timeline view Plan in Orders',
+      'List view Tree in Tasks',
+    ]);
   });
 });

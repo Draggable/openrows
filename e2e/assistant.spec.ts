@@ -18,6 +18,11 @@ const field = (name: string, type: string, extra: Record<string, unknown> = {}) 
   choices: null,
   formula: null,
   linkedTable: null,
+  linkField: null,
+  linkedField: null,
+  aggregation: null,
+  button: null,
+  ai: null,
   ...extra,
 });
 
@@ -39,7 +44,35 @@ const basePlan = {
       table: 'Tasks',
       field: field('Total', 'formula', { formula: '{Estimate} * {Rate}' }),
     },
-    { op: 'createView', table: 'Tasks', name: 'Board', type: 'kanban', field: 'Status' },
+    {
+      op: 'createView',
+      table: 'Tasks',
+      name: 'Board',
+      type: 'kanban',
+      field: 'Status',
+      endField: null,
+    },
+  ],
+};
+
+const describePlan = {
+  summary: 'A small CRM.',
+  baseName: 'Agency CRM',
+  operations: [
+    {
+      op: 'createTable',
+      name: 'Contacts',
+      description: null,
+      fields: [field('Name', 'singleLineText'), field('Email', 'email')],
+    },
+    {
+      op: 'createView',
+      table: 'Contacts',
+      name: 'Everyone',
+      type: 'gallery',
+      field: null,
+      endField: null,
+    },
   ],
 };
 
@@ -77,19 +110,7 @@ async function mockAssistant(page: Page, available = true) {
   await page.route(`**/api/workspaces/${IDS.workspace}/assistant/plan`, (route) => {
     calls.plans.push(route.request().postDataJSON());
     return json(route, {
-      plan: {
-        summary: 'A small CRM.',
-        baseName: 'Agency CRM',
-        operations: [
-          {
-            op: 'createTable',
-            name: 'Contacts',
-            description: null,
-            fields: [field('Name', 'singleLineText'), field('Email', 'email')],
-          },
-          { op: 'createView', table: 'Contacts', name: 'Everyone', type: 'gallery', field: null },
-        ],
-      },
+      plan: describePlan,
       problems: [],
       attempts: 1,
     });
@@ -175,8 +196,7 @@ test('Home "Describe it" drafts a new base and creates it on confirm', async ({ 
   await dialog.getByLabel('Base name').fill('Clients');
   await dialog.getByRole('button', { name: 'Create base with 2 changes' }).click();
   await expect(page).toHaveURL(new RegExp(`/b/${IDS.base}`));
-  expect(calls.applies).toHaveLength(1);
-  expect(calls.applies[0]).toMatchObject({ name: 'Clients', plan: { baseName: 'Agency CRM' } });
+  expect(calls.applies).toEqual([{ name: 'Clients', plan: describePlan }]);
 });
 
 test('without an AI provider there is no assistant', async ({ page }) => {

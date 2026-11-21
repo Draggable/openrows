@@ -8,7 +8,9 @@ import {
   type CreateFieldInput,
   checkPlan,
   createAutomationSchema,
+  linkOptionsSchema,
   nextChoiceColor,
+  type UpdateViewInput,
 } from '@openrows/shared';
 import { uuidv7 } from 'uuidv7';
 import { type AutomationDeps, createAutomation } from '../../automations/service.js';
@@ -38,14 +40,27 @@ function choices(names: readonly string[]) {
 
 class Names {
   readonly #tables = new Map<string, TableRow>();
+  readonly #byId = new Map<string, TableRow>();
   constructor(
     private readonly ctx: SchemaContext,
     rows: TableRow[]
   ) {
-    for (const t of rows) this.#tables.set(lower(t.name), t);
+    for (const t of rows) this.add(t);
   }
   add(row: TableRow) {
     this.#tables.set(lower(row.name), row);
+    this.#byId.set(row.id, row);
+  }
+  /** The table a link field links to. */
+  linked(link: FieldRow): TableRow {
+    const id = linkOptionsSchema.safeParse(link.config ?? {}).data?.linkedTableId;
+    const row = id ? this.#byId.get(id) : undefined;
+    if (!row) {
+      throw new AppError('VALIDATION_FAILED', {
+        detail: `"${link.name}" links to no table of this base.`,
+      });
+    }
+    return row;
   }
   table(name: string): TableRow {
     const row = this.#tables.get(lower(name));
@@ -66,7 +81,16 @@ class Names {
   }
 }
 
-function fieldInput(spec: AssistantFieldSpec, names: Names): CreateFieldInput {
+/**
+ * A planned field as the field service's input: names resolved to ids (the linked table, a
+ * lookup's link and looked-up field), choices with colours. AI prompts keep their `{Field name}`
+ * references, which the field service stores by id.
+ */
+async function fieldInput(
+  spec: AssistantFieldSpec,
+  table: TableRow,
+  names: Names
+): Promise<CreateFieldInput> {
   const input: CreateFieldInput = { name: spec.name, type: spec.type };
   if (spec.description) input.description = spec.description;
   if (spec.type === 'singleSelect' || spec.type === 'multipleSelect') {
@@ -75,8 +99,57 @@ function fieldInput(spec: AssistantFieldSpec, names: Names): CreateFieldInput {
     input.options = { formula: spec.formula ?? '' };
   } else if (spec.type === 'link' && spec.linkedTable) {
     input.options = { linkedTableId: names.table(spec.linkedTable).id };
+  } else if (spec.type === 'lookup' || spec.type === 'rollup' || spec.type === 'count') {
+    const link = await names.field(table, spec.linkField ?? '');
+    const options: Record<string, unknown> = { recordLinkFieldId: link.id };
+    if (spec.type !== 'count') {
+      const source = await names.field(names.linked(link), spec.linkedField ?? '');
+      options['fieldIdInLinkedTable'] = source.id;
+    }
+    if (spec.type === 'rollup' && spec.aggregation) options['function'] = spec.aggregation;
+    input.options = options;
+  } else if (spec.type === 'button' && spec.button) {
+    input.options = {
+      label: spec.button.label,
+      action: spec.button.action,
+      // Only a button that opens a URL has a formula; one that runs automations has none.
+      ...(spec.button.action === 'openUrl' ? { formula: spec.formula ?? '' } : {}),
+    };
+  } else if (spec.type === 'ai' && spec.ai) {
+    input.options = {
+      prompt: spec.ai.prompt,
+      output: spec.ai.output,
+      ...(spec.ai.output === 'singleSelect' ? { choices: choices(spec.choices ?? []) } : {}),
+    };
   }
   return input;
+}
+
+/** A planned view's layout, by field ids: what the view service checks and saves. */
+async function viewLayout(
+  op: Extract<AssistantPlan['operations'][number], { op: 'createView' }>,
+  table: TableRow,
+  names: Names
+): Promise<UpdateViewInput | null> {
+  if (!op.field) return null;
+  const fieldId = (await names.field(table, op.field)).id;
+  switch (op.type) {
+    case 'kanban':
+      return { kanban: { stackFieldId: fieldId } };
+    case 'calendar':
+      return { calendar: { dateFields: [{ startFieldId: fieldId }] } };
+    case 'timeline':
+      return {
+        timeline: {
+          startFieldId: fieldId,
+          endFieldId: op.endField ? (await names.field(table, op.endField)).id : null,
+        },
+      };
+    case 'list':
+      return { list: { parentFieldId: fieldId } };
+    default:
+      return null;
+  }
 }
 
 async function cells(
@@ -110,8 +183,9 @@ async function action(
 
 /**
  * Applies a change plan the user confirmed, in the request's transaction: every operation
- * goes through the service the matching API route uses (tables, fields with their formula and
- * link checks, views, automations, created switched off), as the user. The plan is checked
+ * goes through the service the matching API route uses (tables, fields with their formula,
+ * link, lookup, rollup, count, button and AI checks, views with their layout checks,
+ * automations, created switched off), as the user. The plan is checked
  * against the base as it is now first; any problem refuses the whole plan (422), and a service's
  * refusal rolls everything back.
  */
@@ -159,31 +233,23 @@ export async function applyPlan(
       result.firstTableId ??= table.id;
       const primaryRow = await names.field(table, primary.name);
       if (primary.type !== 'singleLineText' || primary.description) {
-        const { name: _name, ...change } = fieldInput(primary, names);
+        const { name: _name, ...change } = await fieldInput(primary, table, names);
         await updateField(ctx, primaryRow, change);
       }
       result.fields++;
       for (const spec of rest) {
-        await createField(ctx, table, fieldInput(spec, names));
+        await createField(ctx, table, await fieldInput(spec, table, names));
         result.fields++;
       }
     } else if (op.op === 'createField') {
-      await createField(ctx, names.table(op.table), fieldInput(op.field, names));
+      const table = names.table(op.table);
+      await createField(ctx, table, await fieldInput(op.field, table, names));
       result.fields++;
     } else if (op.op === 'createView') {
       const table = names.table(op.table);
       const view = await createView(ctx, table, { name: op.name, type: op.type });
-      if (op.field && (op.type === 'kanban' || op.type === 'calendar')) {
-        const fieldId = (await names.field(table, op.field)).id;
-        await updateView(
-          ctx,
-          await loadView(tx, view.id),
-          op.type === 'kanban'
-            ? { kanban: { stackFieldId: fieldId } }
-            : { calendar: { dateFields: [{ startFieldId: fieldId }] } },
-          { canLock: true }
-        );
-      }
+      const layout = await viewLayout(op, table, names);
+      if (layout) await updateView(ctx, await loadView(tx, view.id), layout, { canLock: true });
       result.views++;
     } else {
       const table = names.table(op.table);
