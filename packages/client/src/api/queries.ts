@@ -1955,6 +1955,18 @@ export function useAssistantPlan(baseId: string) {
   });
 }
 
+/** A question about the base: answered in text, nothing changes (no cache to refresh). */
+export function useAssistantAsk(baseId: string) {
+  return useMutation({
+    mutationFn: (body: {
+      question: string;
+      includeRecords: boolean;
+      tableId?: string;
+      viewId?: string;
+    }) => api.bases.assistantAsk({ params: { baseId }, body }),
+  });
+}
+
 export function useApplyAssistantPlan(baseId: string) {
   const qc = useQueryClient();
   return useMutation({

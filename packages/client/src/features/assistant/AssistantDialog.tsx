@@ -1,12 +1,18 @@
-import type { AssistantApplyResult, AssistantPlan, AssistantPlanResult } from '@openrows/shared';
-import { ASSISTANT_PROMPT_MAX } from '@openrows/shared';
+import type {
+  AssistantAnswer,
+  AssistantApplyResult,
+  AssistantPlan,
+  AssistantPlanResult,
+} from '@openrows/shared';
+import { ASSISTANT_ASK_RECORDS, ASSISTANT_PROMPT_MAX } from '@openrows/shared';
 import { useNavigate } from '@tanstack/react-router';
-import { CircleAlertIcon, SparklesIcon } from 'lucide-react';
+import { CircleAlertIcon, MessageCircleQuestionIcon, SparklesIcon } from 'lucide-react';
 import { useId, useState } from 'react';
 import { ApiError } from '../../api/client';
 import {
   useApplyAssistantBasePlan,
   useApplyAssistantPlan,
+  useAssistantAsk,
   useAssistantBasePlan,
   useAssistantPlan,
 } from '../../api/queries';
@@ -41,13 +47,19 @@ interface PanelProps {
   apply: (plan: AssistantPlan, name: string) => Promise<AssistantApplyResult>;
   applying: boolean;
   onApplied: (result: AssistantApplyResult) => void;
+  /** The base's questions (none for a new base): answered in text, nothing changes. */
+  ask?: (question: string, includeRecords: boolean) => Promise<AssistantAnswer>;
+  asking?: boolean;
 }
+
+type Mode = 'plan' | 'ask';
 
 /**
  * The AI assistant: the user describes a change, the assistant drafts a plan from the
  * base's schema (records only when the box is ticked), and the plan shows as a list of
  * additions, each ticked unless it has a problem. Nothing changes until "Apply"; closing or
- * "Discard" drops the plan.
+ * "Discard" drops the plan. On a base, "Ask a question" answers in text instead, from what the
+ * user can see (records of the open view only when the box is ticked): there is nothing to apply.
  */
 function AssistantPanel(props: PanelProps) {
   const { open, onOpenChange, newBase } = props;
@@ -57,6 +69,9 @@ function AssistantPanel(props: PanelProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [name, setName] = useState('');
   const [error, setError] = useState<string[] | null>(null);
+  const [mode, setMode] = useState<Mode>('plan');
+  const [answer, setAnswer] = useState<AssistantAnswer | null>(null);
+  const asking = mode === 'ask' && props.ask !== undefined;
   const promptId = useId();
   const recordsHint = useId();
   const nameId = useId();
@@ -64,8 +79,26 @@ function AssistantPanel(props: PanelProps) {
   const reset = () => {
     setResult(null);
     setSelected(new Set());
+    setAnswer(null);
     setError(null);
   };
+  const switchTo = (next: Mode) => {
+    if (next === mode) return;
+    reset();
+    setIncludeRecords(false);
+    setMode(next);
+  };
+  const askQuestion = async () => {
+    if (!props.ask || !prompt.trim() || props.asking) return;
+    reset();
+    try {
+      setAnswer(await props.ask(prompt.trim(), includeRecords));
+    } catch (err) {
+      setError(errorText(err, "The assistant couldn't answer."));
+    }
+  };
+  const submit = () => void (asking ? askQuestion() : draft());
+  const busy = asking ? props.asking === true : props.planning;
   const draft = async () => {
     if (!prompt.trim() || props.planning) return;
     reset();
@@ -118,18 +151,50 @@ function AssistantPanel(props: PanelProps) {
           <DialogDescription>
             {newBase
               ? 'Say what you want to track. The assistant drafts the tables, fields and views; nothing is created until you apply the plan.'
-              : "Ask for tables, fields, formulas, views or automations. The assistant drafts a plan from this base's tables and fields; nothing changes until you apply it."}
+              : asking
+                ? 'Ask what a field, view or automation does, or for a summary of records. The answer only uses what you can already see, and asking never changes the base.'
+                : "Ask for tables, fields, formulas, views or automations. The assistant drafts a plan from this base's tables and fields; nothing changes until you apply it."}
           </DialogDescription>
         </DialogHeader>
+        {props.ask && (
+          <fieldset className="flex gap-1">
+            <legend className="sr-only">What the assistant does</legend>
+            {(
+              [
+                ['plan', 'Change the base'],
+                ['ask', 'Ask a question'],
+              ] as const
+            ).map(([value, label]) => (
+              <label
+                key={value}
+                className="flex cursor-pointer items-center gap-2 rounded-sm border border-border px-2.5 py-1 has-[:checked]:border-primary has-[:checked]:bg-hover"
+              >
+                <input
+                  type="radio"
+                  name="assistant-mode"
+                  value={value}
+                  checked={mode === value}
+                  onChange={() => switchTo(value)}
+                  className="accent-primary"
+                />
+                {label}
+              </label>
+            ))}
+          </fieldset>
+        )}
         <form
           className="grid gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            void draft();
+            submit();
           }}
         >
           <label htmlFor={promptId} className="font-medium">
-            {newBase ? 'What do you want to track?' : 'What should change?'}
+            {newBase
+              ? 'What do you want to track?'
+              : asking
+                ? 'What do you want to know?'
+                : 'What should change?'}
           </label>
           <textarea
             id={promptId}
@@ -139,13 +204,15 @@ function AssistantPanel(props: PanelProps) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                void draft();
+                submit();
               }
             }}
             placeholder={
               newBase
                 ? 'A CRM for a small agency: companies, contacts and deals by stage'
-                : 'Add a Total formula to Orders and a kanban view by status'
+                : asking
+                  ? 'What does the Total field do? Which orders are still open?'
+                  : 'Add a Total formula to Orders and a kanban view by status'
             }
             className="min-h-20 w-full rounded-sm border border-border bg-surface px-2.5 py-1.5 text-body text-text placeholder:text-text-3 hover:border-border-strong"
           />
@@ -158,20 +225,32 @@ function AssistantPanel(props: PanelProps) {
                 aria-describedby={recordsHint}
                 className="accent-primary"
               />
-              Include a few records from each table
+              {asking ? 'Include records from this view' : 'Include a few records from each table'}
             </label>
           )}
           {!newBase && (
             <p id={recordsHint} className="text-small text-text-2">
-              {includeRecords
-                ? 'Up to 3 records per table go to the AI provider with the request.'
-                : 'Off: the AI provider sees table and field names only, no records.'}
+              {asking
+                ? includeRecords
+                  ? `Up to ${ASSISTANT_ASK_RECORDS} records of this view, with the fields you can see, go to the AI provider with the question.`
+                  : 'Off: the AI provider sees the tables, fields, views and automations you can see, no records.'
+                : includeRecords
+                  ? 'Up to 3 records per table go to the AI provider with the request.'
+                  : 'Off: the AI provider sees table and field names only, no records.'}
             </p>
           )}
           <div className="flex justify-end">
-            <Button type="submit" disabled={!prompt.trim() || props.planning}>
-              {props.planning ? <Spinner /> : <SparklesIcon />}
-              {props.planning ? 'Drafting…' : result ? 'Draft again' : 'Draft plan'}
+            <Button type="submit" disabled={!prompt.trim() || busy}>
+              {busy ? <Spinner /> : asking ? <MessageCircleQuestionIcon /> : <SparklesIcon />}
+              {asking
+                ? busy
+                  ? 'Asking…'
+                  : 'Ask'
+                : busy
+                  ? 'Drafting…'
+                  : result
+                    ? 'Draft again'
+                    : 'Draft plan'}
             </Button>
           </div>
         </form>
@@ -187,7 +266,21 @@ function AssistantPanel(props: PanelProps) {
           </div>
         )}
 
-        {result && (
+        {asking && answer && (
+          <section aria-label="Answer" className="flex min-h-0 flex-col gap-2">
+            <p className="min-h-0 overflow-y-auto whitespace-pre-wrap rounded-md border border-border px-3 py-2">
+              {answer.answer || 'The assistant had no answer. Try asking differently.'}
+            </p>
+            <p className="text-small text-text-2">
+              {answer.records > 0
+                ? `Based on ${answer.records} record${answer.records === 1 ? '' : 's'} you can read. `
+                : ''}
+              Nothing in the base was changed.
+            </p>
+          </section>
+        )}
+
+        {!asking && result && (
           <section aria-label="Proposed changes" className="flex min-h-0 flex-col gap-3">
             <p className="text-text-2">{result.plan.summary}</p>
             {newBase && (
@@ -261,19 +354,27 @@ function AssistantPanel(props: PanelProps) {
   );
 }
 
-/** The base's assistant (creators, AI on): the top bar's "Assistant". */
+/**
+ * The base's assistant (creators, AI on): the top bar's "Assistant". Questions are about the
+ * open table and view (`tableId`, `viewId`): their records, when included.
+ */
 export function BaseAssistantDialog({
   baseId,
+  tableId,
+  viewId,
   open,
   onOpenChange,
 }: {
   baseId: string;
+  tableId?: string;
+  viewId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const navigate = useNavigate();
   const plan = useAssistantPlan(baseId);
   const apply = useApplyAssistantPlan(baseId);
+  const ask = useAssistantAsk(baseId);
   return (
     <AssistantPanel
       open={open}
@@ -283,6 +384,15 @@ export function BaseAssistantDialog({
       planning={plan.isPending}
       apply={(p) => apply.mutateAsync(p)}
       applying={apply.isPending}
+      ask={(question, includeRecords) =>
+        ask.mutateAsync({
+          question,
+          includeRecords,
+          ...(tableId ? { tableId } : {}),
+          ...(tableId && viewId ? { viewId } : {}),
+        })
+      }
+      asking={ask.isPending}
       onApplied={(r) => {
         if (r.firstTableId) {
           void navigate({

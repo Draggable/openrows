@@ -773,14 +773,17 @@ const CASES: Record<string, Case> = {
   }),
   'DELETE /api/workspaces/:workspaceId/ai/settings': roles(200, ['owner']),
   'POST /api/workspaces/:workspaceId/ai/settings/test': roles(409, ['owner']),
-  // The AI assistant: creators, sessions only. No provider in the matrix's app: a plan is
-  // a 409 after authorization (ai-assistant.test.ts asks a fake one); an empty plan applies.
+  // The AI assistant: creators, sessions only. No provider in the matrix's app: a plan or a
+  // question is a 409 after authorization (ai-assistant.test.ts asks a fake one); an empty plan
+  // applies.
   'POST /api/workspaces/:workspaceId/assistant/plan': roles(409, CREATORS, { prompt: 'A CRM' }),
   'POST /api/workspaces/:workspaceId/assistant/apply': roles(201, CREATORS, {
     name: 'Described',
     plan: { summary: '', baseName: 'Described', operations: [] },
   }),
   'POST /api/bases/:baseId/assistant/plan': roles(409, CREATORS, { prompt: 'Add a field' }),
+  // A question: also a 409 after authorization without a provider; it never writes.
+  'POST /api/bases/:baseId/assistant/ask': roles(409, CREATORS, { question: 'What is in here?' }),
   'POST /api/bases/:baseId/assistant/apply': roles(200, CREATORS, {
     plan: { summary: '', baseName: null, operations: [] },
   }),

@@ -294,7 +294,11 @@ packages/
                              checked with shared's checkPlan, one more round for formulas that
                              don't type-check), formula.ts (generateFormula), schema.ts (what the
                              model reads: the schema, records only on opt-in), apply.ts (the
-                             confirmed plan through the services, one transaction), routes.ts
+                             confirmed plan through the services, one transaction), ask.ts
+                             (questions about the open base: what the asker may read (hidden
+                             fields and what reads them left out, their views, automations for
+                             creators, records of the open view on opt-in), a text answer in a
+                             read-only transaction, never a plan), routes.ts
                              (/api/bases/:baseId/assistant/*, /api/workspaces/:id/assistant/*),
                              evals.ts + eval-cli.ts (the formula evals of evals/formula/*.jsonl,
                              `npm run eval:ai`);
