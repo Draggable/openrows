@@ -4,6 +4,7 @@ import {
   EXTENSION_SCOPE_LABELS,
   EXTENSION_SIZE_HEIGHTS,
   EXTENSION_SIZES,
+  type ExtensionCatalogListing,
   type ExtensionCursor,
   type ExtensionInstallation,
   type ExtensionScope,
@@ -13,7 +14,9 @@ import {
 import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   ArrowDownIcon,
+  ArrowLeftIcon,
   ArrowUpIcon,
+  BookOpenIcon,
   EllipsisIcon,
   PlusIcon,
   PuzzleIcon,
@@ -34,6 +37,7 @@ import { api } from '../../api/client';
 import {
   tableQueries,
   useExtensionBundle,
+  useExtensionCatalog,
   useExtensionMutations,
   useExtensions,
   viewQueries,
@@ -263,6 +267,7 @@ export function ExtensionsPanel({
           open={adding}
           onOpenChange={setAdding}
           canInstallCustom={list.data?.canInstallCustom === true}
+          canBrowseCatalog={list.data?.canBrowseCatalog === true}
         />
       )}
     </aside>
@@ -460,22 +465,95 @@ function ScopeList({ scopes }: { scopes: readonly ExtensionScope[] }) {
   );
 }
 
+/**
+ * The extension catalog, browse only: each listing's name, version, publisher, description
+ * and the permissions it asks for.
+ */
+function CatalogBrowser({ baseId, onBack }: { baseId: string; onBack: () => void }) {
+  const catalog = useExtensionCatalog(baseId);
+  return (
+    <div className="grid min-h-0 gap-3 overflow-y-auto">
+      <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+        <ArrowLeftIcon />
+        Back
+      </Button>
+      {catalog.isPending ? (
+        <Skeleton className="h-40" />
+      ) : catalog.isError ? (
+        <p role="alert" className="text-text-2">
+          Couldn't load the catalog.
+        </p>
+      ) : !catalog.data.available ? (
+        <p className="text-text-2">The extension catalog is turned off on this server.</p>
+      ) : catalog.data.listings.length === 0 ? (
+        <p className="text-text-2">The catalog has no extensions yet.</p>
+      ) : (
+        <ul className="grid gap-2" aria-label="Catalog listings">
+          {catalog.data.listings.map((listing) => (
+            <CatalogListing key={listing.id} listing={listing} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CatalogListing({ listing }: { listing: ExtensionCatalogListing }) {
+  return (
+    <li
+      className="grid gap-1 rounded-md border border-border bg-surface p-3"
+      data-testid="catalog-listing"
+    >
+      <h3 className="font-[550]">
+        {listing.name} <span className="font-normal text-text-2">{listing.version}</span>
+      </h3>
+      <p className="text-text-2">
+        Published by{' '}
+        {listing.publisher.url ? (
+          <a
+            href={listing.publisher.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            {listing.publisher.name}
+          </a>
+        ) : (
+          listing.publisher.name
+        )}
+      </p>
+      {listing.description && <p>{listing.description}</p>}
+      <p className="text-text-2">Asks to:</p>
+      <ScopeList scopes={listing.scopes} />
+      {listing.source.kind === 'built-in' && (
+        <p className="text-[12px] text-text-2">Built in: add it from the built-in extensions.</p>
+      )}
+    </li>
+  );
+}
+
 function AddExtensionDialog({
   baseId,
   open,
   onOpenChange,
   canInstallCustom,
+  canBrowseCatalog,
 }: {
   baseId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   canInstallCustom: boolean;
+  canBrowseCatalog: boolean;
 }) {
   const { install } = useExtensionMutations(baseId);
   const [upload, setUpload] = useState<ReturnType<typeof parsePackage> | null>(null);
+  const [browsing, setBrowsing] = useState(false);
   const fileId = useId();
   useEffect(() => {
-    if (!open) setUpload(null);
+    if (!open) {
+      setUpload(null);
+      setBrowsing(false);
+    }
   }, [open]);
 
   const done = (name: string) => {
@@ -488,94 +566,118 @@ function AddExtensionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>Add an extension</DialogTitle>
+          <DialogTitle>{browsing ? 'Extension catalog' : 'Add an extension'}</DialogTitle>
           <DialogDescription>
-            Extensions run sandboxed, with your access, and only with the permissions they list.
+            {browsing
+              ? 'Reviewed extensions, with who publishes them and the permissions they ask for.'
+              : 'Extensions run sandboxed, with your access, and only with the permissions they list.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-0 gap-3 overflow-y-auto">
-          <ul className="grid gap-2" aria-label="Built-in extensions">
-            {BUILT_IN_EXTENSIONS.map((ext) => (
-              <li
-                key={ext.key}
-                className="grid gap-1 rounded-md border border-border bg-surface p-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-[550]">{ext.manifest.name}</h3>
-                  <Button
-                    size="sm"
-                    disabled={install.isPending}
-                    aria-label={`Add ${ext.manifest.name}`}
-                    onClick={() =>
-                      install.mutate(
-                        { builtIn: ext.key },
-                        { onSuccess: () => done(ext.manifest.name), onError }
-                      )
-                    }
-                  >
-                    Add
-                  </Button>
-                </div>
-                <p className="text-text-2">{ext.manifest.description}</p>
-                <ScopeList scopes={ext.manifest.scopes} />
-              </li>
-            ))}
-          </ul>
-          {canInstallCustom && (
-            <div className="grid gap-2 rounded-md border border-border p-3">
-              <h3 className="font-[550]">Your own extension</h3>
-              <p className="text-text-2">
-                Upload a package (a JSON file with a manifest and a bundle, built with
-                @openrows/blocks). Its code runs in the sandbox, with your access.
-              </p>
-              <label htmlFor={fileId} className="flex w-fit cursor-pointer items-center gap-2">
-                <UploadIcon className="size-4" aria-hidden="true" />
-                <span className="underline">Choose a package file</span>
-              </label>
-              <input
-                id={fileId}
-                type="file"
-                accept="application/json,.json"
-                className="text-[12px]"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  if (file.size > EXTENSION_LIMITS.maxBundleChars * 2) {
-                    setUpload({ ok: false, error: 'That file is too large (2 MB at most).' });
-                    return;
-                  }
-                  setUpload(parsePackage(await file.text()));
-                }}
-              />
-              {upload && !upload.ok && (
-                <p role="alert" className="text-danger">
-                  {upload.error}
+        {browsing && canBrowseCatalog ? (
+          <CatalogBrowser baseId={baseId} onBack={() => setBrowsing(false)} />
+        ) : (
+          <div className="grid min-h-0 gap-3 overflow-y-auto">
+            <ul className="grid gap-2" aria-label="Built-in extensions">
+              {BUILT_IN_EXTENSIONS.map((ext) => (
+                <li
+                  key={ext.key}
+                  className="grid gap-1 rounded-md border border-border bg-surface p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-[550]">{ext.manifest.name}</h3>
+                    <Button
+                      size="sm"
+                      disabled={install.isPending}
+                      aria-label={`Add ${ext.manifest.name}`}
+                      onClick={() =>
+                        install.mutate(
+                          { builtIn: ext.key },
+                          { onSuccess: () => done(ext.manifest.name), onError }
+                        )
+                      }
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-text-2">{ext.manifest.description}</p>
+                  <ScopeList scopes={ext.manifest.scopes} />
+                </li>
+              ))}
+            </ul>
+            {canBrowseCatalog && (
+              <div className="grid gap-2 rounded-md border border-border p-3">
+                <h3 className="font-[550]">Extension catalog</h3>
+                <p className="text-text-2">
+                  Browse reviewed extensions: who publishes each one and the permissions it asks
+                  for.
                 </p>
-              )}
-              {upload?.ok && (
-                <div className="grid gap-2">
-                  <p>
-                    <span className="font-[550]">{upload.manifest.name}</span>{' '}
-                    <span className="text-text-2">{upload.manifest.version}</span> asks to:
-                  </p>
-                  <ScopeList scopes={upload.manifest.scopes} />
-                  <Button
-                    className="w-fit"
-                    disabled={install.isPending}
-                    onClick={() =>
-                      install.mutate(
-                        { manifest: upload.manifest, bundle: upload.bundle },
-                        { onSuccess: () => done(upload.manifest.name), onError }
-                      )
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-fit"
+                  onClick={() => setBrowsing(true)}
+                >
+                  <BookOpenIcon />
+                  Browse the catalog
+                </Button>
+              </div>
+            )}
+            {canInstallCustom && (
+              <div className="grid gap-2 rounded-md border border-border p-3">
+                <h3 className="font-[550]">Your own extension</h3>
+                <p className="text-text-2">
+                  Upload a package (a JSON file with a manifest and a bundle, built with
+                  @openrows/blocks). Its code runs in the sandbox, with your access.
+                </p>
+                <label htmlFor={fileId} className="flex w-fit cursor-pointer items-center gap-2">
+                  <UploadIcon className="size-4" aria-hidden="true" />
+                  <span className="underline">Choose a package file</span>
+                </label>
+                <input
+                  id={fileId}
+                  type="file"
+                  accept="application/json,.json"
+                  className="text-[12px]"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > EXTENSION_LIMITS.maxBundleChars * 2) {
+                      setUpload({ ok: false, error: 'That file is too large (2 MB at most).' });
+                      return;
                     }
-                  >
-                    Install {upload.manifest.name}
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                    setUpload(parsePackage(await file.text()));
+                  }}
+                />
+                {upload && !upload.ok && (
+                  <p role="alert" className="text-danger">
+                    {upload.error}
+                  </p>
+                )}
+                {upload?.ok && (
+                  <div className="grid gap-2">
+                    <p>
+                      <span className="font-[550]">{upload.manifest.name}</span>{' '}
+                      <span className="text-text-2">{upload.manifest.version}</span> asks to:
+                    </p>
+                    <ScopeList scopes={upload.manifest.scopes} />
+                    <Button
+                      className="w-fit"
+                      disabled={install.isPending}
+                      onClick={() =>
+                        install.mutate(
+                          { manifest: upload.manifest, bundle: upload.bundle },
+                          { onSuccess: () => done(upload.manifest.name), onError }
+                        )
+                      }
+                    >
+                      Install {upload.manifest.name}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

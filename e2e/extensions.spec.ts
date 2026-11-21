@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { BUILT_IN_EXTENSIONS } from '@openrows/shared';
+import { BUILT_IN_EXTENSIONS, EXTENSION_CATALOG, EXTENSION_SCOPE_LABELS } from '@openrows/shared';
 import type { Page } from '@playwright/test';
 import { GRID_URL, IDS, mockApi } from './fixtures/mockApi.js';
 import { expect, test } from './helpers/test.js';
@@ -8,7 +8,8 @@ import { expect, test } from './helpers/test.js';
 // sandbox document (GET /sandbox/extension, with its own CSP). The three built-in extensions
 // run end to end in the base's panel (chart, print view, URL preview); an extension gets only
 // the scopes its manifest declares, and can't reach the app's DOM, cookies, storage or network;
-// creators arrange and remove them; read-only members see them but can't add any.
+// creators arrange and remove them; read-only members see them but can't add any. Creators
+// browse the catalog (publisher and permissions per listing) unless the server turns it off.
 
 type Installed = {
   id: string;
@@ -29,9 +30,15 @@ type Installed = {
 /** The base's extensions, kept in memory, with the list's permission flags. */
 async function mockExtensions(
   page: Page,
-  flags: { canManage?: boolean; canConfigure?: boolean; canInstallCustom?: boolean } = {}
+  flags: {
+    canManage?: boolean;
+    canConfigure?: boolean;
+    canInstallCustom?: boolean;
+    canBrowseCatalog?: boolean;
+  } = {}
 ) {
   const installed: Installed[] = [];
+  const catalogReads: string[] = [];
   const settingsWrites: Record<string, unknown>[] = [];
   let n = 0;
   const shape = (e: Installed, position: number) => ({
@@ -52,6 +59,7 @@ async function mockExtensions(
     canManage: flags.canManage ?? true,
     canConfigure: flags.canConfigure ?? true,
     canInstallCustom: flags.canInstallCustom ?? true,
+    canBrowseCatalog: flags.canBrowseCatalog ?? true,
   });
   await page.route(`**/api/bases/${IDS.base}/extensions**`, async (route) => {
     const req = route.request();
@@ -62,6 +70,11 @@ async function mockExtensions(
     const reply = (data: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
     if (!id && req.method() === 'GET') return reply(list());
+    if (id === 'catalog' && req.method() === 'GET') {
+      catalogReads.push(req.url());
+      const available = flags.canBrowseCatalog ?? true;
+      return available ? reply({ available, listings: EXTENSION_CATALOG }) : reply({}, 403);
+    }
     if (!id && req.method() === 'POST') {
       n += 1;
       const builtIn = BUILT_IN_EXTENSIONS.find((e) => e.key === body.builtIn);
@@ -102,7 +115,7 @@ async function mockExtensions(
     }
     return reply(shape(e, at));
   });
-  return { installed, settingsWrites };
+  return { installed, settingsWrites, catalogReads };
 }
 
 const panel = (page: Page) => page.getByRole('complementary', { name: 'Extensions' });
@@ -235,6 +248,7 @@ test('creators arrange and remove extensions; read-only members only see them', 
     canManage: false,
     canConfigure: false,
     canInstallCustom: false,
+    canBrowseCatalog: false,
   });
   ro.installed.push({ ...installed[0], id: '0b000000-0000-4000-8000-0000000000ff' } as Installed);
   await page.reload();
@@ -337,4 +351,66 @@ test('an extension gets only its manifest’s scopes and stays in its sandbox', 
   // The blocked requests are the sandbox's CSP at work, reported by the browser; nothing else.
   const own = cspViolations.splice(0);
   for (const v of own) expect(v).toMatch(/connect-src|script-src|blob:null|Refused/);
+});
+
+test('creators browse the extension catalog: publisher and permissions per listing', async ({
+  page,
+}) => {
+  await mockApi(page, { rows: 2 });
+  const { installed, catalogReads } = await mockExtensions(page);
+  await page.goto(GRID_URL);
+  await openPanel(page);
+  await panel(page).getByRole('button', { name: 'Add extension' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add an extension' });
+  // The catalog is read only when someone browses it.
+  expect(catalogReads).toEqual([]);
+  await dialog.getByRole('button', { name: 'Browse the catalog' }).click();
+  const catalog = page.getByRole('dialog', { name: 'Extension catalog' });
+  const cards = catalog.getByTestId('catalog-listing');
+  await expect(cards).toHaveCount(EXTENSION_CATALOG.length);
+  for (const [i, listing] of EXTENSION_CATALOG.entries()) {
+    const card = cards.nth(i);
+    await expect(card.getByRole('heading', { level: 3 })).toHaveText(
+      `${listing.name} ${listing.version}`
+    );
+    await expect(card).toContainText(listing.description);
+    await expect(card.getByRole('link', { name: listing.publisher.name })).toHaveAttribute(
+      'href',
+      listing.publisher.url ?? ''
+    );
+    for (const scope of listing.scopes) {
+      await expect(
+        card.getByRole('listitem').filter({ hasText: EXTENSION_SCOPE_LABELS[scope] })
+      ).toBeVisible();
+    }
+    // Browse only: no install from the catalog.
+    await expect(card.getByRole('button')).toHaveCount(0);
+  }
+  expect(catalogReads).toHaveLength(1);
+
+  const results = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+
+  // Back to the built-ins, which still install as before.
+  await catalog.getByRole('button', { name: 'Back' }).click();
+  await dialog.getByRole('button', { name: 'Add Chart' }).click();
+  await expect(dialog).toBeHidden();
+  expect(installed.map((e) => e.builtIn)).toEqual(['chart']);
+});
+
+test('a server with the catalog off offers no catalog', async ({ page }) => {
+  await mockApi(page, { rows: 2 });
+  const { catalogReads } = await mockExtensions(page, { canBrowseCatalog: false });
+  await page.goto(GRID_URL);
+  await openPanel(page);
+  await panel(page).getByRole('button', { name: 'Add extension' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add an extension' });
+  await expect(dialog.getByRole('button', { name: 'Add Chart' })).toBeVisible();
+  await expect(dialog.getByText('Your own extension')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Browse the catalog' })).toHaveCount(0);
+  await expect(dialog.getByText('Extension catalog')).toHaveCount(0);
+  expect(catalogReads).toEqual([]);
 });

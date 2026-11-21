@@ -541,6 +541,8 @@ const CASES: Record<string, Case> = {
     manifest: { manifestVersion: 1, name: 'Matrix', scopes: ['records:read'] },
     bundle: { html: '<p>hi</p>', js: '' },
   }),
+  // The catalog is browsed by those who may add extensions.
+  'GET /api/bases/:baseId/extensions/catalog': roles(200, CREATORS),
   'GET /api/bases/:baseId/extensions/:extensionId/bundle': roles(200, ALL),
   'PATCH /api/bases/:baseId/extensions/:extensionId': roles(200, CREATORS, { size: 'large' }),
   'PUT /api/bases/:baseId/extensions/order': {

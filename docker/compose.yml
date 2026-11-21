@@ -108,6 +108,8 @@ services:
       # Who may install third-party extension bundles: creators, owners or off. Unset:
       # owners with EDITION=cloud, else creators.
       EXTENSIONS_CUSTOM_BUNDLES: ${EXTENSIONS_CUSTOM_BUNDLES:-}
+      # The extension catalog in a base's extension panel: on (default) or off.
+      EXTENSIONS_CATALOG: ${EXTENSIONS_CATALOG:-on}
       # System admins (ADR-002): comma-separated emails, applied at each verified sign-in.
       OPENROWS_SYSTEM_ADMINS: ${OPENROWS_SYSTEM_ADMINS:-}
       # Cloudflare Turnstile for public forms and password-protected links: both

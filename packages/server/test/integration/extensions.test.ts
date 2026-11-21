@@ -3,9 +3,11 @@ import {
   type Base,
   BUILT_IN_EXTENSIONS,
   builtInExtension,
+  EXTENSION_CATALOG,
   EXTENSION_EMBED_ORIGINS,
   EXTENSION_LIMITS,
   type ExtensionBundleResponse,
+  type ExtensionCatalogResponse,
   type ExtensionInstallation,
   type ExtensionList,
   extensionFrameScript,
@@ -21,7 +23,8 @@ import { addMember, createSession, createWorkspace } from '../helpers/factories.
  * Installed extensions: anyone on the base sees the panel, creators install, arrange and
  * remove extensions, editors change their settings. Built-ins come from shared; third-party
  * bundles follow EXTENSIONS_CUSTOM_BUNDLES (creators by default, owners on the hosted edition,
- * or off). The sandbox document is static, with a CSP that leaves the extension no origin,
+ * or off). Creators and owners browse the shipped catalog unless EXTENSIONS_CATALOG is off.
+ * The sandbox document is static, with a CSP that leaves the extension no origin,
  * storage or network beyond its manifest's `embed:frames`.
  */
 describe('extensions', () => {
@@ -34,6 +37,7 @@ describe('extensions', () => {
   let viewer: string;
   let stranger: string;
   let workspaceId: string;
+  let strangerWorkspaceId: string;
   let base: Base;
 
   const request =
@@ -71,6 +75,7 @@ describe('extensions', () => {
     viewer = await createSession(t.db, await addMember(t.db, workspaceId, 'read_only'));
     const other = await createWorkspace(t.db);
     stranger = await createSession(t.db, other.owner);
+    strangerWorkspaceId = other.workspace.id;
     base = await ok<Base>(
       json('POST', `/api/workspaces/${workspaceId}/bases`, { name: 'Ops' }),
       201
@@ -233,6 +238,60 @@ describe('extensions', () => {
     await ok(json('DELETE', `${path()}/${chart.id}`), 204);
   });
 
+  it('lists the shipped catalog to creators and owners', async () => {
+    const catalog = `${path()}/catalog`;
+    for (const as of [owner, creator]) {
+      const res = await ok<ExtensionCatalogResponse>(json('GET', catalog, undefined, as));
+      expect(res.available).toBe(true);
+      expect(res.listings).toEqual(EXTENSION_CATALOG);
+      expect(res.listings.map((l) => [l.name, l.publisher.name, l.scopes])).toEqual(
+        BUILT_IN_EXTENSIONS.map((e) => [e.manifest.name, 'OpenRows', e.manifest.scopes])
+      );
+      for (const l of res.listings) {
+        expect(l.id).toMatch(/^openrows\./);
+        expect(l.description.length).toBeGreaterThan(0);
+        expect(l.version).toMatch(/^\d+\.\d+\.\d+$/);
+      }
+    }
+    // Those who can't add extensions aren't offered it.
+    for (const as of [editor, commenter, viewer]) {
+      expect((await json('GET', catalog, undefined, as)).status).toBe(403);
+      expect(await ok<ExtensionList>(json('GET', path(), undefined, as))).toMatchObject({
+        canBrowseCatalog: false,
+      });
+    }
+    expect(await ok<ExtensionList>(json('GET', path(), undefined, creator))).toMatchObject({
+      canBrowseCatalog: true,
+    });
+    // Anonymous callers get a 401.
+    expect((await app.request(catalog)).status).toBe(401);
+    // Browsing installs nothing.
+    expect((await ok<ExtensionList>(json('GET', path()))).extensions).toEqual([]);
+  });
+
+  it('turns the catalog off with EXTENSIONS_CATALOG=off, apart from uploads', async () => {
+    const off = testApp({ db: t.appDb, env: { EXTENSIONS_CATALOG: 'off' } }).app;
+    const asOff = request(() => off);
+    expect(
+      await ok<ExtensionCatalogResponse>(asOff('GET', `${path()}/catalog`, undefined, owner))
+    ).toEqual({ available: false, listings: [] });
+    expect(await ok<ExtensionList>(asOff('GET', path(), undefined, owner))).toMatchObject({
+      canBrowseCatalog: false,
+      canInstallCustom: true,
+    });
+    // Built-ins and uploads still install.
+    const chart = await ok<ExtensionInstallation>(
+      asOff('POST', path(), { builtIn: 'chart' }, creator),
+      201
+    );
+    const mine = await ok<ExtensionInstallation>(asOff('POST', path(), custom(), creator), 201);
+    // And the access rules still hold while it is off.
+    expect((await asOff('GET', `${path()}/catalog`, undefined, editor)).status).toBe(403);
+    expect((await asOff('GET', `${path()}/catalog`, undefined, stranger)).status).toBe(404);
+    await ok(json('DELETE', `${path()}/${chart.id}`), 204);
+    await ok(json('DELETE', `${path()}/${mine.id}`), 204);
+  });
+
   it('caps a base at maxPerBase extensions', async () => {
     const other = await ok<Base>(
       json('POST', `/api/workspaces/${workspaceId}/bases`, { name: 'Full' }),
@@ -255,6 +314,20 @@ describe('extensions', () => {
   it("answers 404 for another tenant's base and extensions", async () => {
     const chart = await ok<ExtensionInstallation>(json('POST', path(), { builtIn: 'chart' }), 201);
     expect((await json('GET', path(), undefined, stranger)).status).toBe(404);
+    const strangerCatalog = await json('GET', `${path()}/catalog`, undefined, stranger);
+    expect(strangerCatalog.status).toBe(404);
+    expect(await strangerCatalog.text()).not.toContain('Chart');
+    // The stranger's own base lists the catalog to them, with nothing of this base in it.
+    const theirs = await ok<Base>(
+      json('POST', `/api/workspaces/${strangerWorkspaceId}/bases`, { name: 'Theirs' }, stranger),
+      201
+    );
+    const listed = await ok<ExtensionCatalogResponse>(
+      json('GET', `/api/bases/${theirs.id}/extensions/catalog`, undefined, stranger)
+    );
+    expect(listed.listings).toEqual(EXTENSION_CATALOG);
+    expect(JSON.stringify(listed)).not.toContain(base.id);
+    expect(JSON.stringify(listed)).not.toContain(chart.id);
     expect((await json('GET', `${path()}/${chart.id}/bundle`, undefined, stranger)).status).toBe(
       404
     );

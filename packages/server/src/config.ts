@@ -232,6 +232,12 @@ const EnvSchema = z.object({
    * EDITION=cloud (admin-gated on the hosted service), else `creators`.
    */
   EXTENSIONS_CUSTOM_BUNDLES: z.enum(['creators', 'owners', 'off']).optional(),
+  /**
+   * The extension catalog in a base's extension panel: `on` (default) lists the reviewed
+   * extensions shipped with the app to creators and owners; `off` hides it. Separate from
+   * EXTENSIONS_CUSTOM_BUNDLES, which gates uploads.
+   */
+  EXTENSIONS_CATALOG: z.enum(['on', 'off']).default('on'),
   AUTOMATION_SCRIPT_DOCKER: z.string().min(1).default('docker'),
   /** The image scripts run in: any image with `node` 22 on its PATH. Pin it by digest. */
   AUTOMATION_SCRIPT_IMAGE: z.string().min(1).default(DEFAULT_SCRIPT_IMAGE),
@@ -412,6 +418,8 @@ export interface Config {
   scripts: ScriptConfig;
   /** Who may install third-party extension bundles (EXTENSIONS_CUSTOM_BUNDLES). */
   extensionsCustomBundles: 'creators' | 'owners' | 'off';
+  /** Is the extension catalog on (EXTENSIONS_CATALOG)? */
+  extensionsCatalog: boolean;
   databaseUrl: string;
   encryptionKey: string;
   /** Undefined until configured; always set in production. */
@@ -891,6 +899,7 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     scripts: scriptsFrom(env),
     extensionsCustomBundles:
       env.EXTENSIONS_CUSTOM_BUNDLES ?? (env.EDITION === 'cloud' ? 'owners' : 'creators'),
+    extensionsCatalog: env.EXTENSIONS_CATALOG === 'on',
     databaseUrl: env.DATABASE_URL ?? DEV_DEFAULTS.DATABASE_URL,
     encryptionKey: env.ENCRYPTION_KEY ?? DEV_DEFAULTS.ENCRYPTION_KEY,
     oidc,

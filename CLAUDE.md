@@ -81,7 +81,9 @@ packages/
             (src/extensions/: manifest.ts (scopes, limits, the manifest and bundle
             schemas), protocol.ts (the frame's messages, EXTENSION_METHOD_SCOPES), runtime.ts
             (the frame's bootstrap and `window.openrows`, serialized into the sandbox document),
-            samples.ts (BUILT_IN_EXTENSIONS: chart, print view, URL preview)), interfaces (src/schemas/interface.ts: pages' layouts, filters and grid
+            samples.ts (BUILT_IN_EXTENSIONS: chart, print view, URL preview), catalog.ts
+            (EXTENSION_CATALOG: the reviewed listings, publisher and scopes, shipped in the
+            repository; the built-ins as first-party listings)), interfaces (src/schemas/interface.ts: pages' layouts, filters and grid
             elements: number and chart elements, the data route's shapes), templates (src/templates/: format.ts, the versioned `openrows.template` document
             and its Zod schema; define.ts, defineTemplate: keys to stable ids; builtin/: the 10
             built-in templates, BUILT_IN_TEMPLATES), automations (src/automations/: schedule.ts, cron and intervals in a time zone with
@@ -227,7 +229,8 @@ packages/
     src/extensions/          extensions: service.ts + routes.ts (installations under
                              /api/bases/:baseId/extensions: everyone on the base reads, creators
                              install, arrange and remove, editors change settings; third-party
-                             bundles per EXTENSIONS_CUSTOM_BUNDLES), sandbox.ts (the public, static
+                             bundles per EXTENSIONS_CUSTOM_BUNDLES; GET .../extensions/catalog for
+                             creators unless EXTENSIONS_CATALOG=off), sandbox.ts (the public, static
                              GET /sandbox/extension; `?embed=1` for `embed:frames`)
     src/syncs/               synced tables: service.ts (create: the source re-read in its
                              workspace's scope, the table with copied fields and its Sync source

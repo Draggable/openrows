@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { extensionCatalogListingSchema } from '../extensions/catalog.js';
 import {
   EXTENSION_SIZES,
   extensionBundleSchema,
@@ -13,6 +14,8 @@ import { BUILT_IN_EXTENSION_KEYS } from '../extensions/samples.js';
  * (`base:manage_extensions`), their settings changed by editors (`base:configure_extensions`).
  * Third-party bundles need `EXTENSIONS_CUSTOM_BUNDLES` to allow the installer (owners only on
  * the hosted edition).
+ *
+ * The extension catalog (`EXTENSIONS_CATALOG`) is browsed by those who may add extensions.
  */
 
 const at = z.iso.datetime({ offset: true });
@@ -66,6 +69,8 @@ export const ExtensionListSchema = z.object({
   canConfigure: z.boolean(),
   /** May the caller install a third-party bundle (the instance's policy and their role). */
   canInstallCustom: z.boolean(),
+  /** May the caller browse the extension catalog (the instance's EXTENSIONS_CATALOG and their role). */
+  canBrowseCatalog: z.boolean(),
 });
 export type ExtensionList = z.infer<typeof ExtensionListSchema>;
 
@@ -75,3 +80,13 @@ export const ExtensionBundleResponseSchema = z.object({
   bundle: z.object({ html: z.string(), css: z.string(), js: z.string() }),
 });
 export type ExtensionBundleResponse = z.infer<typeof ExtensionBundleResponseSchema>;
+
+/**
+ * `GET .../extensions/catalog`: the shipped catalog's listings. `available: false` (and no
+ * listings) when the instance turns the catalog off with `EXTENSIONS_CATALOG=off`.
+ */
+export const ExtensionCatalogResponseSchema = z.object({
+  available: z.boolean(),
+  listings: z.array(extensionCatalogListingSchema),
+});
+export type ExtensionCatalogResponse = z.infer<typeof ExtensionCatalogResponseSchema>;
