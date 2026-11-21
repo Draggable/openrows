@@ -60,7 +60,7 @@ In the Assistant, choose **Ask a question** to ask about the open base instead o
 
 Answers only use what you can already see. The assistant reads the tables and the fields you can read (with their descriptions and formulas), the views you can see (your own personal views, not other people's), and the base's automations, which creators and owners manage. A field hidden from you is left out, and so is any field computed from it. Records are only sent when you tick **Include records from this view**: up to 25 records of the open view, through its filter and without the fields it hides, with the fields you can read. Records the view's filter leaves out are not sent. Field and record values are sent to the AI provider as data for the answer, never as instructions.
 
-Automations are described by their trigger and steps, with table and field names; secret headers, webhook URLs, script code and message text are not sent.
+Automations are described by their trigger and steps, with table and field names; secret headers, webhook URLs, script code and message text (an email's subject and body, chat messages) are not sent.
 
 ## Tables
 

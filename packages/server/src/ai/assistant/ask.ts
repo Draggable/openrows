@@ -23,6 +23,7 @@ import {
 } from '@openrows/shared';
 import { eq } from 'drizzle-orm';
 import { loadGraph } from '../../data/computed/engine.js';
+import { formulaAstOf, formulaRefs } from '../../data/computed/graph.js';
 import { automations, type Transaction } from '../../db/index.js';
 import { type FieldRow, liveFields, type TableRow } from '../../fields/service.js';
 import { AppError } from '../../lib/errors.js';
@@ -83,6 +84,10 @@ function idsOf(value: unknown): string[] {
 function readsOf(row: FieldRow, primaryOf: ReadonlyMap<string, string>): string[] {
   const c = config(row);
   const reads = idsOf(c['referencedFieldIds']);
+  // A formula's (or a button's) references as the recompute engine reads them: from the
+  // formula itself, not only the stored list beside it.
+  const ast = formulaAstOf({ type: row.type, options: c });
+  if (ast) reads.push(...formulaRefs(ast).fieldIds);
   const src = computedSourceOf(row.type, c);
   if (src?.linkFieldId) reads.push(src.linkFieldId);
   if (src?.sourceFieldId) reads.push(src.sourceFieldId);
@@ -105,7 +110,14 @@ export function unreadableFields(
   rows: ReadonlyMap<string, FieldRow>
 ): Set<string> {
   const out = new Set<string>();
-  for (const t of tables) for (const id of visibility.hiddenFields(viewer, t.id)) out.add(id);
+  // Every table of the base, not only the ones described: a lookup may read any of them.
+  const tableIds = new Set([
+    ...tables.map((t) => t.id),
+    ...[...rows.values()].map((r) => r.tableId),
+  ]);
+  for (const tableId of tableIds) {
+    for (const id of visibility.hiddenFields(viewer, tableId)) out.add(id);
+  }
   if (out.size === 0) return out;
   const primaryOf = new Map<string, string>();
   for (const row of rows.values()) if (row.isPrimary) primaryOf.set(row.tableId, row.id);
@@ -141,7 +153,10 @@ function fieldNames(known: Known, ids: readonly string[]): string[] {
 /** A field's formula (or a button's URL formula) by field names, or its AI prompt. */
 function definitionOf(row: FieldRow, known: Known): string | undefined {
   const c = config(row);
-  const fieldsOfTable = [...known.fields.values()].filter((f) => f.tableId === row.tableId);
+  // Only readable names: a field the asker may not read is never named, even by id.
+  const fieldsOfTable = [...known.fields.values()].filter(
+    (f) => f.tableId === row.tableId && !known.unreadable.has(f.id)
+  );
   if ((row.type === 'formula' || row.type === 'button') && typeof c['formula'] === 'string') {
     const parsed = c['formula'] ? parseStoredFormula(c['formula']) : undefined;
     if (!parsed?.ok) return undefined;
@@ -149,7 +164,7 @@ function definitionOf(row: FieldRow, known: Known): string | undefined {
   }
   if (row.type === 'ai' && typeof c['prompt'] === 'string' && c['prompt']) {
     const prompt = renderAiPrompt(c['prompt'], (id) => {
-      const f = known.fields.get(id);
+      const f = readable(known, id);
       return f ? `{${f.name}}` : '{?}';
     });
     return `prompt ${quoted(prompt)}`;
@@ -290,9 +305,8 @@ function stepLines(a: AutomationAction, n: string, known: Known, indent: string)
       ];
     }
     case 'sendEmail':
-      return [
-        `${n} send an email to ${a.to.length} recipient${a.to.length === 1 ? '' : 's'}, subject ${quoted(a.subject)}`,
-      ];
+      // Not the subject or body: message text (its tokens may name any field) stays out.
+      return [`${n} send an email to ${a.to.length} recipient${a.to.length === 1 ? '' : 's'}`];
     case 'httpRequest':
       return [`${n} send an HTTP ${a.method} request to ${hostOf(a.url)}`];
     case 'slackMessage':

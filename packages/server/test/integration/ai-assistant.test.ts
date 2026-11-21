@@ -9,6 +9,7 @@ import type {
   TableMeta,
   ViewMeta,
 } from '@openrows/shared';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   completion,
@@ -18,7 +19,7 @@ import {
   startFakeOpenAi,
 } from '../../src/ai/__fixtures__/fake-openai.js';
 import { SESSION_COOKIE } from '../../src/auth/session-token.js';
-import { workspaceMembers } from '../../src/db/index.js';
+import { fields, workspaceMembers } from '../../src/db/index.js';
 import { testApp } from '../helpers/app.js';
 import { useTestDb } from '../helpers/db.js';
 import { createSession, createUser, createWorkspace } from '../helpers/factories.js';
@@ -1369,6 +1370,75 @@ describe('AI assistant questions', () => {
     expect(sent).not.toContain('DELTA-ORDER');
     expect(sent).toContain('ALPHA-ORDER');
     expect(sent).not.toContain('999222');
+  });
+
+  it('leaves out what reads a hidden field in another table, by formula, and email text', async () => {
+    const suppliers = await ok<TableMeta>(
+      request('POST', `/api/bases/${baseId}/tables`, { name: 'Suppliers' }),
+      201
+    );
+    const rating = await ok<FieldMeta>(
+      request('POST', `/api/tables/${suppliers.id}/fields`, { name: 'Rating', type: 'number' }),
+      201
+    );
+    const link = await ok<FieldMeta>(
+      request('POST', `/api/tables/${orders.id}/fields`, {
+        name: 'Supplier',
+        type: 'link',
+        options: { linkedTableId: suppliers.id },
+      }),
+      201
+    );
+    await ok(
+      request('POST', `/api/tables/${orders.id}/fields`, {
+        name: 'Supplier score',
+        type: 'lookup',
+        options: { recordLinkFieldId: link.id, fieldIdInLinkedTable: rating.id },
+      }),
+      201
+    );
+    await ok(
+      request('POST', `/api/bases/${baseId}/automations`, {
+        name: 'Tell ops',
+        trigger: { type: 'recordCreated', tableId: orders.id },
+        actions: [
+          {
+            type: 'sendEmail',
+            to: ['ops@example.com'],
+            subject: 'SUBJECT-TEXT {{trigger.record.fields.Cost}}',
+            body: 'BODY-TEXT',
+          },
+        ],
+      }),
+      201
+    );
+    // A formula whose stored reference list is missing still reads the hidden field.
+    const [margin] = await t.db
+      .select({ config: fields.config })
+      .from(fields)
+      .where(eq(fields.id, byName['Margin'] ?? ''));
+    await t.db
+      .update(fields)
+      .set({ config: { ...(margin?.config as object), referencedFieldIds: [] } })
+      .where(eq(fields.id, byName['Margin'] ?? ''));
+    hiddenFieldIds.add(rating.id);
+    hiddenFieldIds.add(byName['Cost'] ?? '');
+
+    await ok(ask({ question: 'Explain', includeRecords: true, tableId: orders.id }, hiding));
+    const sent = messagesOf(fake.requests[0] as FakeRequest);
+    expect(sent).toContain('Table "Suppliers"');
+    expect(sent).toContain('- Supplier (link; links to "Suppliers")');
+    expect(sent).toContain('1. send an email to 1 recipient');
+    for (const value of [
+      'Rating',
+      'Supplier score',
+      'Margin',
+      'Cost',
+      'SUBJECT-TEXT',
+      'BODY-TEXT',
+    ]) {
+      expect(sent).not.toContain(value);
+    }
   });
 
   it("leaves out other people's personal views and refuses them, other tables and other tenants", async () => {
