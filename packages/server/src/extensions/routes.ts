@@ -26,9 +26,10 @@ const SETTINGS_BODY_LIMIT = 256 * 1024;
  * extensions read and write data as the viewer, with the viewer's rights), creators install,
  * arrange and remove extensions (`base:manage_extensions`), editors change their settings
  * (`base:configure_extensions`). Third-party bundles follow EXTENSIONS_CUSTOM_BUNDLES. Creators
- * browse the catalog of reviewed extensions unless EXTENSIONS_CATALOG is off (then it answers
- * `available: false`). Sessions only; resource routes on the base in the path, so other bases'
- * and tenants' ids are 404s.
+ * browse the catalog of reviewed extensions and add its listings unless EXTENSIONS_CATALOG is
+ * off (then it answers `available: false` and catalog installs are 404s); a listing isn't an
+ * upload, so EXTENSIONS_CUSTOM_BUNDLES doesn't limit it. Sessions only; resource routes on the
+ * base in the path, so other bases' and tenants' ids are 404s.
  */
 export function extensionRoutes(
   routes: RouteRegistry,
@@ -93,9 +94,13 @@ export function extensionRoutes(
   );
 
   routes.endpoint(x.install, manage, async (c, { body }) => {
-    const installed = await installExtension(context(c), body, deps.customBundles);
+    const installed = await installExtension(context(c), body, deps);
     c.var.logger.info(
-      { extensionId: installed.id, builtIn: installed.builtIn },
+      {
+        extensionId: installed.id,
+        builtIn: installed.builtIn,
+        ...('catalog' in body ? { listing: body.catalog } : {}),
+      },
       'extension installed'
     );
     return installed;

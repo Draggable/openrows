@@ -3,10 +3,12 @@ import { EXTENSION_SCOPES, type ExtensionScope } from './manifest.js';
 import { BUILT_IN_EXTENSIONS, builtInExtension } from './samples.js';
 
 /**
- * The extension catalog: reviewed extensions listed for browsing in a base's extension panel,
- * shipped with the app (never fetched). A listing names its publisher and the permissions
- * (manifest scopes) the extension asks for. Entries are added to EXTENSION_CATALOG in this
- * repository after review; there is no submission or publishing flow in the app.
+ * The extension catalog: reviewed extensions listed in a base's extension panel, shipped with
+ * the app (never fetched). A listing names its publisher and the permissions (manifest scopes)
+ * the extension asks for. Creators and owners add a listing to a base after confirming those
+ * permissions; it then runs like any installed extension, sandboxed, with only those scopes.
+ * Entries are added to EXTENSION_CATALOG in this repository after review; there is no
+ * submission or publishing flow in the app.
  *
  * The first catalog lists the built-in extensions; their name, description, version and
  * scopes come from the built-in's manifest, so the listing can't drift from what runs.
@@ -74,6 +76,20 @@ function builtInListing(
 export const EXTENSION_CATALOG: readonly ExtensionCatalogListing[] = BUILT_IN_EXTENSIONS.map((e) =>
   builtInListing(`openrows.${e.key}`, e.key, FIRST_PARTY_PUBLISHER)
 );
+
+/** The shipped listing with `id`, or null. */
+export function extensionCatalogListing(id: string): ExtensionCatalogListing | null {
+  return EXTENSION_CATALOG.find((l) => l.id === id) ?? null;
+}
+
+/** Do two scope lists hold the same scopes (in any order)? */
+export function sameExtensionScopes(
+  a: readonly ExtensionScope[],
+  b: readonly ExtensionScope[]
+): boolean {
+  const set = new Set(a);
+  return set.size === new Set(b).size && b.every((s) => set.has(s));
+}
 
 /** The problems of a catalog (ids unique, every listing valid, built-in sources known). */
 export function extensionCatalogProblems(catalog: readonly unknown[]): string[] {

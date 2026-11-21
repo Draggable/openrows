@@ -19,7 +19,7 @@ Creators and owners click **Add extension** and pick one of the built-in extensi
 - **URL preview**: previews the selected record's link from a URL field: YouTube, Vimeo and Loom
   videos and images play or show inline, other sites get an **Open link** button.
 
-## Browse the catalog
+## Add an extension from the catalog
 
 The extension catalog lists reviewed extensions with what you need to judge them before you add
 one. Creators and owners open it from **Add extension** with **Browse the catalog**. Each listing
@@ -30,9 +30,28 @@ shows:
 - a description,
 - the permissions it asks for (see [Permissions](#permissions)).
 
-Browsing the catalog doesn't install anything. Today the catalog lists the built-in extensions,
-published by OpenRows; add them from the built-in list in **Add extension**. Editors, commenters
-and read-only members, who can't add extensions, aren't offered the catalog.
+Browsing the catalog doesn't install anything. To add a listing to the base:
+
+1. Click **Add** on the listing. OpenRows shows the permission prompt: the extension's name,
+   version and publisher, and every permission it asks for, the same prompt as for [your own
+   extension](#your-own-extensions).
+2. Read the permissions, then click **Install** to add the extension, or **Cancel** to go back to
+   the catalog without adding it.
+
+Nothing is added until you confirm. Once added, a catalog extension is like any other on the
+base: it runs in the same sandbox, with your access and only the permissions it listed, it
+appears in the panel for everyone on the base, and it counts toward the base's 20 extensions. If
+a listing's permissions change between the prompt and the install (after an update, say),
+OpenRows refuses the install and shows the catalog again, so you can review the new ones.
+
+Today the catalog lists the built-in extensions, published by OpenRows; adding one from the
+catalog adds that built-in, exactly as the built-in list in **Add extension** does. Editors,
+commenters and read-only members, who can't add extensions, aren't offered the catalog.
+
+Adding from the catalog is separate from uploading your own package: a listing is reviewed and
+ships with OpenRows, so who may upload packages (`EXTENSIONS_CUSTOM_BUNDLES`, below) doesn't
+change who may add a listing. Creators and owners add listings even where uploads are limited to
+owners or turned off.
 
 ### How an extension gets onto the catalog
 
@@ -49,9 +68,10 @@ extension](#your-own-extensions).
 ### Turn the catalog off
 
 The catalog is on by default. A server's administrator turns it off with `EXTENSIONS_CATALOG=off`;
-**Add extension** then has no catalog, and the catalog API answers `available: false` with no
-listings. Built-in extensions and uploads aren't affected (uploads follow
-`EXTENSIONS_CUSTOM_BUNDLES`, below).
+**Add extension** then has no catalog, the catalog API answers `available: false` with no
+listings, and nothing can be installed from it (the API refuses with a 404, "The extension
+catalog is turned off on this server"). Extensions already added from it stay. Built-in
+extensions and uploads aren't affected (uploads follow `EXTENSIONS_CUSTOM_BUNDLES`, below).
 
 ## Manage extensions
 
@@ -89,6 +109,7 @@ permissions) and the bundle (HTML, CSS and one JavaScript file). The package's R
 the format and the whole API.
 
 Creators upload a package in **Add extension** under **Your own extension**: OpenRows shows the
-permissions it asks for before you install it. On app.openrows.io only workspace owners install
+permissions it asks for before you install it. An uploaded package isn't reviewed: install one
+only if you trust whoever wrote it. On app.openrows.io only workspace owners install
 their own extensions. Self-hosted instances choose who may with `EXTENSIONS_CUSTOM_BUNDLES`
 (`creators`, the default; `owners`; or `off`).

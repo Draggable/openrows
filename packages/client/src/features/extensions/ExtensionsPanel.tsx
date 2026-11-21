@@ -466,11 +466,40 @@ function ScopeList({ scopes }: { scopes: readonly ExtensionScope[] }) {
 }
 
 /**
- * The extension catalog, browse only: each listing's name, version, publisher, description
- * and the permissions it asks for.
+ * The extension catalog: each listing's name, version, publisher, description and the
+ * permissions it asks for. **Add** opens the permission prompt; only its confirm sends the
+ * install. Browsing installs nothing.
  */
-function CatalogBrowser({ baseId, onBack }: { baseId: string; onBack: () => void }) {
+function CatalogBrowser({
+  baseId,
+  onBack,
+  installing,
+  onInstall,
+}: {
+  baseId: string;
+  onBack: () => void;
+  installing: boolean;
+  /** Installs the confirmed listing; `failed` runs if the install is refused. */
+  onInstall: (listing: ExtensionCatalogListing, failed: () => void) => void;
+}) {
   const catalog = useExtensionCatalog(baseId);
+  const [confirming, setConfirming] = useState<ExtensionCatalogListing | null>(null);
+  if (confirming) {
+    return (
+      <CatalogConfirm
+        listing={confirming}
+        installing={installing}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() =>
+          onInstall(confirming, () => {
+            // The listing may have changed (its permissions): show the catalog as it is now.
+            setConfirming(null);
+            void catalog.refetch();
+          })
+        }
+      />
+    );
+  }
   return (
     <div className="grid min-h-0 gap-3 overflow-y-auto">
       <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
@@ -490,7 +519,11 @@ function CatalogBrowser({ baseId, onBack }: { baseId: string; onBack: () => void
       ) : (
         <ul className="grid gap-2" aria-label="Catalog listings">
           {catalog.data.listings.map((listing) => (
-            <CatalogListing key={listing.id} listing={listing} />
+            <CatalogListing
+              key={listing.id}
+              listing={listing}
+              onAdd={() => setConfirming(listing)}
+            />
           ))}
         </ul>
       )}
@@ -498,37 +531,92 @@ function CatalogBrowser({ baseId, onBack }: { baseId: string; onBack: () => void
   );
 }
 
-function CatalogListing({ listing }: { listing: ExtensionCatalogListing }) {
+function Publisher({ publisher }: { publisher: ExtensionCatalogListing['publisher'] }) {
+  return publisher.url ? (
+    <a href={publisher.url} target="_blank" rel="noopener noreferrer" className="underline">
+      {publisher.name}
+    </a>
+  ) : (
+    publisher.name
+  );
+}
+
+function CatalogListing({
+  listing,
+  onAdd,
+}: {
+  listing: ExtensionCatalogListing;
+  onAdd: () => void;
+}) {
   return (
     <li
       className="grid gap-1 rounded-md border border-border bg-surface p-3"
       data-testid="catalog-listing"
     >
-      <h3 className="font-[550]">
-        {listing.name} <span className="font-normal text-text-2">{listing.version}</span>
-      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-[550]">
+          {listing.name} <span className="font-normal text-text-2">{listing.version}</span>
+        </h3>
+        <Button size="sm" aria-label={`Add ${listing.name}`} onClick={onAdd}>
+          Add
+        </Button>
+      </div>
       <p className="text-text-2">
-        Published by{' '}
-        {listing.publisher.url ? (
-          <a
-            href={listing.publisher.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline"
-          >
-            {listing.publisher.name}
-          </a>
-        ) : (
-          listing.publisher.name
-        )}
+        Published by <Publisher publisher={listing.publisher} />
       </p>
       {listing.description && <p>{listing.description}</p>}
       <p className="text-text-2">Asks to:</p>
       <ScopeList scopes={listing.scopes} />
-      {listing.source.kind === 'built-in' && (
-        <p className="text-[12px] text-text-2">Built in: add it from the built-in extensions.</p>
-      )}
     </li>
+  );
+}
+
+/**
+ * The permission prompt of a catalog listing, as for an uploaded package: what it asks for,
+ * then an explicit confirm. Nothing is sent before **Install**.
+ */
+function CatalogConfirm({
+  listing,
+  installing,
+  onCancel,
+  onConfirm,
+}: {
+  listing: ExtensionCatalogListing;
+  installing: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const titleId = useId();
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), []);
+  return (
+    <section
+      aria-labelledby={titleId}
+      className="grid gap-3 rounded-md border border-border bg-surface p-3"
+      data-testid="catalog-confirm"
+    >
+      <h3 id={titleId} ref={heading} tabIndex={-1} className="font-[550] outline-none">
+        Add {listing.name} to this base?
+      </h3>
+      <p>
+        <span className="font-[550]">{listing.name}</span>{' '}
+        <span className="text-text-2">{listing.version}</span>, published by{' '}
+        <Publisher publisher={listing.publisher} />, asks to:
+      </p>
+      <ScopeList scopes={listing.scopes} />
+      <p className="text-text-2">
+        It runs in the sandbox with only these permissions. Everyone on the base sees it, each with
+        their own access.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={installing} onClick={onConfirm}>
+          Install {listing.name}
+        </Button>
+        <Button variant="outline" disabled={installing} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </section>
   );
 }
 
@@ -569,12 +657,28 @@ function AddExtensionDialog({
           <DialogTitle>{browsing ? 'Extension catalog' : 'Add an extension'}</DialogTitle>
           <DialogDescription>
             {browsing
-              ? 'Reviewed extensions, with who publishes them and the permissions they ask for.'
+              ? 'Reviewed extensions, with who publishes them and the permissions they ask for. You confirm the permissions before one is added.'
               : 'Extensions run sandboxed, with your access, and only with the permissions they list.'}
           </DialogDescription>
         </DialogHeader>
         {browsing && canBrowseCatalog ? (
-          <CatalogBrowser baseId={baseId} onBack={() => setBrowsing(false)} />
+          <CatalogBrowser
+            baseId={baseId}
+            onBack={() => setBrowsing(false)}
+            installing={install.isPending}
+            onInstall={(listing, failed) =>
+              install.mutate(
+                { catalog: listing.id, scopes: listing.scopes },
+                {
+                  onSuccess: () => done(listing.name),
+                  onError: (err) => {
+                    onError(err);
+                    failed();
+                  },
+                }
+              )
+            }
+          />
         ) : (
           <div className="grid min-h-0 gap-3 overflow-y-auto">
             <ul className="grid gap-2" aria-label="Built-in extensions">
@@ -608,8 +712,8 @@ function AddExtensionDialog({
               <div className="grid gap-2 rounded-md border border-border p-3">
                 <h3 className="font-[550]">Extension catalog</h3>
                 <p className="text-text-2">
-                  Browse reviewed extensions: who publishes each one and the permissions it asks
-                  for.
+                  Browse reviewed extensions and add one: who publishes each one and the permissions
+                  it asks for.
                 </p>
                 <Button
                   variant="outline"

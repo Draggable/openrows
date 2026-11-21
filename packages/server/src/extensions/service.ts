@@ -6,11 +6,14 @@ import {
   type ExtensionCatalogResponse,
   type ExtensionInstallation,
   type ExtensionManifest,
+  type ExtensionScope,
   type ExtensionSize,
+  extensionCatalogListing,
   extensionManifestSchema,
   type InstallExtensionInput,
   installExtensionSchema,
   roleAllows,
+  sameExtensionScopes,
   type UpdateExtensionInput,
   type UserRole,
 } from '@openrows/shared';
@@ -59,6 +62,39 @@ export function mayBrowseCatalog(catalog: boolean, role: UserRole | null): boole
 export function extensionCatalog(catalog: boolean): ExtensionCatalogResponse {
   if (!catalog) return { available: false, listings: [] };
   return { available: true, listings: [...EXTENSION_CATALOG] };
+}
+
+/**
+ * What a catalog install adds: the shipped listing `id` resolved in process (nothing is
+ * fetched, nothing of it runs on the server). A built-in listing installs as that built-in, so
+ * its manifest and bundle keep coming from the app. Refused while the catalog is off (404, as
+ * if it had no listings), for an unknown listing (404), and when the permissions the installer
+ * confirmed (`scopes`) aren't the listing's, or the listing's aren't what its extension's
+ * manifest asks for (409: nothing is installed with permissions nobody confirmed).
+ */
+export function resolveCatalogInstall(
+  catalog: boolean,
+  id: string,
+  scopes: readonly ExtensionScope[]
+): { builtIn: string; manifest: ExtensionManifest } {
+  if (!catalog) {
+    throw new AppError('NOT_FOUND', {
+      detail: 'The extension catalog is turned off on this server.',
+    });
+  }
+  const listing = extensionCatalogListing(id);
+  if (!listing) throw new AppError('NOT_FOUND', { detail: 'No such listing in the catalog.' });
+  const ext = builtInExtension(listing.source.key);
+  if (!ext) throw new AppError('NOT_FOUND', { detail: 'This extension is no longer available.' });
+  if (
+    !sameExtensionScopes(listing.scopes, scopes) ||
+    !sameExtensionScopes(listing.scopes, ext.manifest.scopes)
+  ) {
+    throw new AppError('CONFLICT', {
+      detail: `${listing.name} asks for different permissions now. Review them and try again.`,
+    });
+  }
+  return { builtIn: ext.key, manifest: ext.manifest };
 }
 
 /** A built-in's manifest is always shared's (it updates with the app). */
@@ -133,10 +169,15 @@ export async function getExtensionBundle(
   };
 }
 
+/**
+ * Installs a built-in, a catalog listing or a third-party bundle. Only uploads follow
+ * EXTENSIONS_CUSTOM_BUNDLES (`customBundles`); catalog listings need the catalog on
+ * (`catalog`). Every kind counts toward the per-base cap.
+ */
 export async function installExtension(
   ctx: ExtensionContext,
   input: InstallExtensionInput,
-  policy: CustomBundlePolicy
+  policy: { customBundles: CustomBundlePolicy; catalog: boolean }
 ): Promise<ExtensionInstallation> {
   const body = installExtensionSchema.parse(input);
   let builtIn: string | null = null;
@@ -147,13 +188,16 @@ export async function installExtension(
     if (!ext) throw new AppError('NOT_FOUND', { detail: 'No such built-in extension.' });
     builtIn = ext.key;
     manifest = ext.manifest;
+  } else if ('catalog' in body) {
+    ({ builtIn, manifest } = resolveCatalogInstall(policy.catalog, body.catalog, body.scopes));
   } else {
-    if (!mayInstallCustom(policy, ctx.role)) {
+    const custom = policy.customBundles;
+    if (!mayInstallCustom(custom, ctx.role)) {
       throw new AppError('FORBIDDEN', {
         detail:
-          policy === 'off'
+          custom === 'off'
             ? 'This server only allows built-in extensions.'
-            : policy === 'owners'
+            : custom === 'owners'
               ? 'Only workspace owners can install third-party extensions here.'
               : 'Only creators and owners can install third-party extensions.',
       });

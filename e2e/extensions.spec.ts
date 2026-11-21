@@ -9,7 +9,8 @@ import { expect, test } from './helpers/test.js';
 // run end to end in the base's panel (chart, print view, URL preview); an extension gets only
 // the scopes its manifest declares, and can't reach the app's DOM, cookies, storage or network;
 // creators arrange and remove them; read-only members see them but can't add any. Creators
-// browse the catalog (publisher and permissions per listing) unless the server turns it off.
+// browse the catalog (publisher and permissions per listing) and add a listing after confirming
+// its permissions, unless the server turns the catalog off.
 
 type Installed = {
   id: string;
@@ -39,6 +40,7 @@ async function mockExtensions(
 ) {
   const installed: Installed[] = [];
   const catalogReads: string[] = [];
+  const installs: Record<string, unknown>[] = [];
   const settingsWrites: Record<string, unknown>[] = [];
   let n = 0;
   const shape = (e: Installed, position: number) => ({
@@ -76,8 +78,15 @@ async function mockExtensions(
       return available ? reply({ available, listings: EXTENSION_CATALOG }) : reply({}, 403);
     }
     if (!id && req.method() === 'POST') {
+      installs.push(body);
       n += 1;
-      const builtIn = BUILT_IN_EXTENSIONS.find((e) => e.key === body.builtIn);
+      // A catalog listing installs as its built-in, as the server does.
+      const listing = EXTENSION_CATALOG.find((l) => l.id === body.catalog);
+      if (body.catalog && (!listing || listing.scopes.join() !== body.scopes?.join())) {
+        return reply({ detail: 'No such listing in the catalog.' }, 404);
+      }
+      const key = listing ? listing.source.key : body.builtIn;
+      const builtIn = BUILT_IN_EXTENSIONS.find((e) => e.key === key);
       const manifest = builtIn ? builtIn.manifest : body.manifest;
       const e: Installed = {
         id: `0b000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
@@ -115,7 +124,7 @@ async function mockExtensions(
     }
     return reply(shape(e, at));
   });
-  return { installed, settingsWrites, catalogReads };
+  return { installed, settingsWrites, catalogReads, installs };
 }
 
 const panel = (page: Page) => page.getByRole('complementary', { name: 'Extensions' });
@@ -357,7 +366,7 @@ test('creators browse the extension catalog: publisher and permissions per listi
   page,
 }) => {
   await mockApi(page, { rows: 2 });
-  const { installed, catalogReads } = await mockExtensions(page);
+  const { installed, catalogReads, installs } = await mockExtensions(page);
   await page.goto(GRID_URL);
   await openPanel(page);
   await panel(page).getByRole('button', { name: 'Add extension' }).click();
@@ -383,8 +392,7 @@ test('creators browse the extension catalog: publisher and permissions per listi
         card.getByRole('listitem').filter({ hasText: EXTENSION_SCOPE_LABELS[scope] })
       ).toBeVisible();
     }
-    // Browse only: no install from the catalog.
-    await expect(card.getByRole('button')).toHaveCount(0);
+    await expect(card.getByRole('button', { name: `Add ${listing.name}` })).toBeVisible();
   }
   expect(catalogReads).toHaveLength(1);
 
@@ -394,11 +402,67 @@ test('creators browse the extension catalog: publisher and permissions per listi
     .analyze();
   expect(results.violations).toEqual([]);
 
-  // Back to the built-ins, which still install as before.
+  // Back to the built-ins, which still install as before. Browsing installed nothing.
   await catalog.getByRole('button', { name: 'Back' }).click();
+  expect(installs).toEqual([]);
   await dialog.getByRole('button', { name: 'Add Chart' }).click();
   await expect(dialog).toBeHidden();
   expect(installed.map((e) => e.builtIn)).toEqual(['chart']);
+  expect(installs).toEqual([{ builtIn: 'chart' }]);
+});
+
+test('creators add a catalog listing after confirming its permissions', async ({ page }) => {
+  await mockApi(page, { rows: 2 });
+  // Uploads are off on this server; the catalog isn't an upload.
+  const { installed, installs } = await mockExtensions(page, { canInstallCustom: false });
+  const listing = EXTENSION_CATALOG.find((l) => l.id === 'openrows.print-view');
+  if (!listing) throw new Error('no print view listing');
+  await page.goto(GRID_URL);
+  await openPanel(page);
+  await panel(page).getByRole('button', { name: 'Add extension' }).click();
+  await expect(page.getByRole('dialog').getByText('Your own extension')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Browse the catalog' }).click();
+  const catalog = page.getByRole('dialog', { name: 'Extension catalog' });
+
+  // Add opens the permission prompt; Cancel goes back without installing.
+  await catalog.getByRole('button', { name: `Add ${listing.name}` }).click();
+  const prompt = catalog.getByRole('region', { name: `Add ${listing.name} to this base?` });
+  await expect(prompt).toBeVisible();
+  await expect(prompt.getByRole('heading')).toBeFocused();
+  await expect(prompt).toContainText(`${listing.version}, published by ${listing.publisher.name}`);
+  await expect(prompt.getByRole('listitem')).toHaveText(
+    listing.scopes.map((s) => EXTENSION_SCOPE_LABELS[s])
+  );
+  await expect(prompt).toContainText('It runs in the sandbox with only these permissions.');
+  const results = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+  await prompt.getByRole('button', { name: 'Cancel' }).click();
+  await expect(prompt).toBeHidden();
+  await expect(catalog.getByTestId('catalog-listing')).toHaveCount(EXTENSION_CATALOG.length);
+  expect(installs).toEqual([]);
+
+  // Confirming sends the install: the listing and the permissions shown.
+  await catalog.getByRole('button', { name: `Add ${listing.name}` }).click();
+  expect(installs).toEqual([]);
+  await prompt.getByRole('button', { name: `Install ${listing.name}` }).click();
+  await expect(catalog).toBeHidden();
+  expect(installs).toEqual([{ catalog: listing.id, scopes: listing.scopes }]);
+  expect(installed.map((e) => e.builtIn)).toEqual([listing.source.key]);
+
+  // It runs in the panel like the built-in it is, in its sandboxed frame.
+  await expect(panel(page).getByRole('heading', { level: 3, name: listing.name })).toBeVisible();
+  await expect(page.locator(`iframe[title="${listing.name} extension"]`)).toHaveAttribute(
+    'sandbox',
+    'allow-scripts allow-modals'
+  );
+  await expect(
+    frame(page, listing.name).getByText('Select a record to lay it out for printing.')
+  ).toBeVisible();
+  await selectRow(page, 1);
+  await expect(frame(page, listing.name).getByRole('heading', { level: 1 })).toBeVisible();
 });
 
 test('a server with the catalog off offers no catalog', async ({ page }) => {

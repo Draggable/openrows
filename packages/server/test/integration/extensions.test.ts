@@ -12,6 +12,7 @@ import {
   type ExtensionList,
   extensionFrameScript,
 } from '@openrows/shared';
+import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_COOKIE } from '../../src/auth/session-token.js';
 import { baseExtensions } from '../../src/db/index.js';
@@ -63,6 +64,15 @@ describe('extensions', () => {
     bundle: { html: '<p>Hi</p>', css: 'p{color:red}', js: 'openrows.base;' },
   });
   const path = () => `/api/bases/${base.id}/extensions`;
+  const listing = (id = 'openrows.chart') => {
+    const l = EXTENSION_CATALOG.find((x) => x.id === id);
+    if (!l) throw new Error(`no listing ${id}`);
+    return l;
+  };
+  /** The body of a catalog install, with the listing's permissions confirmed. */
+  const fromCatalog = (id = 'openrows.chart') => ({ catalog: id, scopes: listing(id).scopes });
+  const stored = async (baseId = base.id) =>
+    t.db.select().from(baseExtensions).where(eq(baseExtensions.baseId, baseId));
 
   beforeAll(async () => {
     ({ app } = testApp({ db: t.appDb }));
@@ -292,6 +302,132 @@ describe('extensions', () => {
     await ok(json('DELETE', `${path()}/${mine.id}`), 204);
   });
 
+  it('installs a catalog listing as its built-in, for creators and owners', async () => {
+    const added: ExtensionInstallation[] = [];
+    for (const [as, id] of [
+      [creator, 'openrows.chart'],
+      [owner, 'openrows.url-preview'],
+    ] as const) {
+      const source = listing(id).source;
+      const ext = await ok<ExtensionInstallation>(json('POST', path(), fromCatalog(id), as), 201);
+      expect(ext).toMatchObject({
+        builtIn: source.key,
+        name: listing(id).name,
+        manifest: builtInExtension(source.key)?.manifest,
+        size: 'medium',
+        settings: {},
+      });
+      expect(ext.manifest.scopes).toEqual(listing(id).scopes);
+      // It runs like any built-in: the frame gets the app's bundle, in the same sandbox.
+      expect(
+        await ok<ExtensionBundleResponse>(
+          json('GET', `${path()}/${ext.id}/bundle`, undefined, viewer)
+        )
+      ).toEqual({
+        manifest: builtInExtension(source.key)?.manifest,
+        bundle: builtInExtension(source.key)?.bundle,
+      });
+      added.push(ext);
+    }
+    const seen = await ok<ExtensionList>(json('GET', path(), undefined, viewer));
+    expect(seen.extensions.map((e) => [e.id, e.builtIn, e.position])).toEqual([
+      [added[0]?.id, 'chart', 0],
+      [added[1]?.id, 'url-preview', 1],
+    ]);
+    // Stored as the built-in, with no bundle of its own.
+    const rows = await stored();
+    expect(rows.map((r) => [r.builtIn, r.bundle])).toEqual([
+      ['chart', null],
+      ['url-preview', null],
+    ]);
+    for (const ext of added) await ok(json('DELETE', `${path()}/${ext.id}`), 204);
+  });
+
+  it('installs a listing only with its own permissions confirmed', async () => {
+    const chart = listing();
+    for (const [body, status] of [
+      // Unknown listings.
+      [{ catalog: 'openrows.nope', scopes: [] }, 404],
+      [{ catalog: 'someone.chart', scopes: chart.scopes }, 404],
+      // Other permissions than the listing asks for, or none confirmed.
+      [{ catalog: chart.id, scopes: ['records:read'] }, 409],
+      [{ catalog: chart.id, scopes: [...chart.scopes, 'records:write'] }, 409],
+      [{ catalog: chart.id }, 422],
+      [{ catalog: chart.id, scopes: ['admin'] }, 422],
+      [{ ...fromCatalog(), bundle: custom().bundle }, 422],
+      [{ ...fromCatalog(), builtIn: 'chart' }, 422],
+    ] as const) {
+      expect((await json('POST', path(), body, creator)).status).toBe(status);
+    }
+    const conflict = await json('POST', path(), { catalog: chart.id, scopes: [] }, creator);
+    expect(await conflict.text()).toContain('asks for different permissions');
+    // The scopes may come in any order.
+    const ext = await ok<ExtensionInstallation>(
+      json('POST', path(), { catalog: chart.id, scopes: [...chart.scopes].reverse() }, creator),
+      201
+    );
+    expect(await stored()).toHaveLength(1);
+    await ok(json('DELETE', `${path()}/${ext.id}`), 204);
+  });
+
+  it('refuses catalog installs to those who cannot add extensions and to other tenants', async () => {
+    for (const as of [editor, commenter, viewer]) {
+      expect((await json('POST', path(), fromCatalog(), as)).status).toBe(403);
+    }
+    const anonymous = await app.request(path(), {
+      method: 'POST',
+      headers: { origin: 'http://localhost:5173', 'content-type': 'application/json' },
+      body: JSON.stringify(fromCatalog()),
+    });
+    expect(anonymous.status).toBe(401);
+    const strangers = await json('POST', path(), fromCatalog(), stranger);
+    expect(strangers.status).toBe(404);
+    expect(await strangers.text()).not.toContain('Chart');
+    expect(await stored()).toEqual([]);
+  });
+
+  it('refuses catalog installs while EXTENSIONS_CATALOG is off, and adds nothing', async () => {
+    const off = testApp({ db: t.appDb, env: { EXTENSIONS_CATALOG: 'off' } }).app;
+    const asOff = request(() => off);
+    for (const as of [owner, creator]) {
+      const res = await asOff('POST', path(), fromCatalog(), as);
+      expect(res.status).toBe(404);
+      expect(await res.text()).toContain('The extension catalog is turned off on this server.');
+    }
+    // The role check still comes first.
+    expect((await asOff('POST', path(), fromCatalog(), editor)).status).toBe(403);
+    expect((await asOff('POST', path(), fromCatalog(), stranger)).status).toBe(404);
+    expect(await stored()).toEqual([]);
+    // Built-ins still install while it is off.
+    const chart = await ok<ExtensionInstallation>(
+      asOff('POST', path(), { builtIn: 'chart' }, creator),
+      201
+    );
+    await ok(json('DELETE', `${path()}/${chart.id}`), 204);
+  });
+
+  it('installs catalog listings whatever EXTENSIONS_CUSTOM_BUNDLES says about uploads', async () => {
+    for (const [policy, as] of [
+      ['off', owner],
+      ['off', creator],
+      ['owners', creator],
+    ] as const) {
+      const app2 = testApp({ db: t.appDb, env: { EXTENSIONS_CUSTOM_BUNDLES: policy } }).app;
+      const as2 = request(() => app2);
+      // Uploads are refused...
+      expect((await as2('POST', path(), custom(), as)).status).toBe(403);
+      expect(await ok<ExtensionList>(as2('GET', path(), undefined, as))).toMatchObject({
+        canInstallCustom: false,
+        canBrowseCatalog: true,
+      });
+      // ...a reviewed listing isn't an upload.
+      const ext = await ok<ExtensionInstallation>(as2('POST', path(), fromCatalog(), as), 201);
+      expect(ext.builtIn).toBe('chart');
+      await ok(json('DELETE', `${path()}/${ext.id}`), 204);
+    }
+    expect(await stored()).toEqual([]);
+  });
+
   it('caps a base at maxPerBase extensions', async () => {
     const other = await ok<Base>(
       json('POST', `/api/workspaces/${workspaceId}/bases`, { name: 'Full' }),
@@ -309,6 +445,11 @@ describe('extensions', () => {
     );
     const res = await json('POST', `/api/bases/${other.id}/extensions`, { builtIn: 'chart' });
     expect(res.status).toBe(409);
+    // Catalog installs count toward the cap too.
+    const fromIt = await json('POST', `/api/bases/${other.id}/extensions`, fromCatalog(), creator);
+    expect(fromIt.status).toBe(409);
+    expect(await fromIt.text()).toContain(`at most ${EXTENSION_LIMITS.maxPerBase} extensions`);
+    expect(await stored(other.id)).toHaveLength(EXTENSION_LIMITS.maxPerBase);
   });
 
   it("answers 404 for another tenant's base and extensions", async () => {

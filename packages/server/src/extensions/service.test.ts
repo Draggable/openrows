@@ -1,7 +1,14 @@
+import { builtInExtension, EXTENSION_CATALOG } from '@openrows/shared';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../config.js';
+import { AppError } from '../lib/errors.js';
 import { extensionContentSecurityPolicy } from './sandbox.js';
-import { extensionCatalog, mayBrowseCatalog, mayInstallCustom } from './service.js';
+import {
+  extensionCatalog,
+  mayBrowseCatalog,
+  mayInstallCustom,
+  resolveCatalogInstall,
+} from './service.js';
 
 describe('mayInstallCustom', () => {
   it('follows EXTENSIONS_CUSTOM_BUNDLES on top of base:manage_extensions', () => {
@@ -62,6 +69,47 @@ describe('the extension catalog', () => {
     expect(on.available).toBe(true);
     expect(on.listings.map((l) => l.name)).toEqual(['Chart', 'Print view', 'URL preview']);
     expect(extensionCatalog(false)).toEqual({ available: false, listings: [] });
+  });
+});
+
+describe('resolveCatalogInstall', () => {
+  const refusal = (f: () => unknown) => {
+    try {
+      f();
+    } catch (err) {
+      if (err instanceof AppError) return [err.code, err.detail];
+      throw err;
+    }
+    throw new Error('not refused');
+  };
+
+  it('installs a built-in listing as that built-in, with the confirmed permissions', () => {
+    for (const listing of EXTENSION_CATALOG) {
+      const ext = builtInExtension(listing.source.key);
+      expect(resolveCatalogInstall(true, listing.id, [...listing.scopes].reverse())).toEqual({
+        builtIn: listing.source.key,
+        manifest: ext?.manifest,
+      });
+    }
+  });
+
+  it('is refused while the catalog is off, for unknown listings and other permissions', () => {
+    const [chart] = EXTENSION_CATALOG;
+    if (!chart) throw new Error('no listings');
+    expect(refusal(() => resolveCatalogInstall(false, chart.id, chart.scopes))).toEqual([
+      'NOT_FOUND',
+      'The extension catalog is turned off on this server.',
+    ]);
+    expect(refusal(() => resolveCatalogInstall(true, 'openrows.nope', []))).toEqual([
+      'NOT_FOUND',
+      'No such listing in the catalog.',
+    ]);
+    expect(refusal(() => resolveCatalogInstall(true, chart.id, ['records:read']))[0]).toBe(
+      'CONFLICT'
+    );
+    expect(
+      refusal(() => resolveCatalogInstall(true, chart.id, [...chart.scopes, 'records:write']))[0]
+    ).toBe('CONFLICT');
   });
 });
 

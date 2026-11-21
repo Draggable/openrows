@@ -1395,7 +1395,8 @@ export const contracts = {
     install: e({
       method: 'POST',
       path: '/api/bases/:baseId/extensions',
-      summary: 'Install a built-in extension or a third-party bundle (creators and up)',
+      summary:
+        'Install a built-in extension, a catalog listing or a third-party bundle (creators and up)',
       tag: 'extensions',
       body: installExtensionSchema,
       response: ExtensionInstallationSchema,

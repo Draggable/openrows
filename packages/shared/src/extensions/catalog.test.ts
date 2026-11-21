@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { installExtensionSchema } from '../schemas/extension.js';
 import {
   EXTENSION_CATALOG,
+  extensionCatalogListing,
   extensionCatalogListingSchema,
   extensionCatalogProblems,
   FIRST_PARTY_PUBLISHER,
+  sameExtensionScopes,
 } from './catalog.js';
 import { BUILT_IN_EXTENSIONS } from './samples.js';
 
@@ -58,5 +61,37 @@ describe('EXTENSION_CATALOG', () => {
       extensionCatalogProblems([{ ...chart, publisher: { name: 'X', url: 'http://x.test' } }])
     ).toHaveLength(1);
     expect(extensionCatalogProblems([{ ...chart, extra: true }])).toHaveLength(1);
+  });
+});
+
+describe('installing a catalog listing', () => {
+  it('finds a shipped listing by id', () => {
+    expect(extensionCatalogListing('openrows.chart')).toBe(EXTENSION_CATALOG[0]);
+    expect(extensionCatalogListing('openrows.nope')).toBeNull();
+    expect(extensionCatalogListing('')).toBeNull();
+  });
+
+  it('compares the confirmed permissions with the listing’s, in any order', () => {
+    expect(
+      sameExtensionScopes(['records:read', 'cursor:read'], ['cursor:read', 'records:read'])
+    ).toBe(true);
+    expect(sameExtensionScopes([], [])).toBe(true);
+    expect(sameExtensionScopes(['records:read'], ['records:read', 'records:write'])).toBe(false);
+    expect(sameExtensionScopes(['records:read', 'records:write'], ['records:read'])).toBe(false);
+    expect(sameExtensionScopes(['records:read'], ['records:write'])).toBe(false);
+  });
+
+  it('takes a listing id and the confirmed scopes, nothing else', () => {
+    const body = { catalog: 'openrows.chart', scopes: ['records:read', 'settings:write'] };
+    expect(installExtensionSchema.parse(body)).toEqual(body);
+    for (const bad of [
+      { catalog: 'openrows.chart' },
+      { catalog: 'Not An Id', scopes: [] },
+      { catalog: 'openrows.chart', scopes: ['admin'] },
+      { catalog: 'openrows.chart', scopes: [], builtIn: 'chart' },
+      { catalog: 'openrows.chart', scopes: [], bundle: { js: 'x' } },
+    ]) {
+      expect(installExtensionSchema.safeParse(bad).success).toBe(false);
+    }
   });
 });
