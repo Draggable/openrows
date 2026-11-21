@@ -227,15 +227,20 @@ interface CompiledPage {
   shared: SharedViewQuery;
 }
 
-/** What the viewer may write through a compiled page (its shown fields less hidden ones). */
+/**
+ * What the viewer may write through a compiled page. On a kanban, calendar or timeline page,
+ * the fields its layout draws (`shape.fieldIds`) less hidden ones: a filter element's field,
+ * projected only for its choices, is never written through the page.
+ */
 function pageWritable(ctx: PageContext, config: InterfacePageConfig, page: CompiledPage) {
+  const drawn = new Set(page.shape.shape?.fieldIds ?? []);
   return writableFields(
     config,
     page.table,
     page.fields,
     { role: ctx.role, userId: ctx.userId },
     page.hidden,
-    page.shared.fields.map((f) => f.row.id)
+    page.shared.fields.map((f) => f.row.id).filter((id) => drawn.has(id))
   );
 }
 

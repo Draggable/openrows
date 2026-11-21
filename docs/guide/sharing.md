@@ -81,7 +81,7 @@ These pages draw a table's records the way the views of the same type do, and al
 
 Who can drag: interface-only collaborators with **Can edit**, and people with access to the base who can edit its records (Editor and up). **Can view**, commenters and read-only members see the same page without dragging. The table's and fields' edit permissions apply as they do in the base.
 
-What a drag writes: only fields the page shows, on records its filter lists for you (**Me** included). Fields hidden from you, fields the page doesn't show, and links, files, people and buttons are never written through a page. Each drag is checked against the published page on the server; one that's refused puts the card, event or bar back where it was. Dragging doesn't give interface-only collaborators access to the base: they still can't open its grid or its records outside the page. Records can't be created from a calendar page's days; use a form page for that. Share links to views stay read-only.
+What a drag writes: only fields the page shows on its cards, events or bars, on records its filter lists for you (**Me** included). Fields hidden from you, fields the page doesn't show (a filter's field only filters), and links, files, people and buttons are never written through a page. Each drag is checked against the published page on the server; one that's refused puts the card, event or bar back where it was. Dragging doesn't give interface-only collaborators access to the base: they still can't open its grid or its records outside the page. Records can't be created from a calendar page's days; use a form page for that. Share links to views stay read-only.
 
 ### Buttons and files on a page
 

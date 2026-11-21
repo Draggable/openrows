@@ -10,7 +10,12 @@ import type {
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_COOKIE } from '../../src/auth/session-token.js';
-import { interfaceMembers, interfacePages, tables } from '../../src/db/index.js';
+import {
+  fields as fieldRows,
+  interfaceMembers,
+  interfacePages,
+  tables,
+} from '../../src/db/index.js';
 import type { FieldVisibility } from '../../src/realtime/projection.js';
 import { testApp } from '../helpers/app.js';
 import { useTestDb } from '../helpers/db.js';
@@ -272,6 +277,15 @@ describe('interface layout pages: drag edits through the page', () => {
       },
       kanban: { stackFieldId: stage.id, cardFields: [] },
     });
+    // A filter element on a field the board doesn't draw: its values come for the choices only.
+    pages['filtered'] = await page('Filtered', {
+      ...common,
+      layout: 'kanban',
+      elements: [
+        { id: 'f1', type: 'filter', fieldId: secret.id, label: '', x: 0, y: 0, w: 4, h: 1 },
+      ],
+      kanban: { stackFieldId: stage.id, cardFields: [] },
+    });
     pages['unpublished'] = await page(
       'Unpublished',
       { ...common, layout: 'kanban', kanban: { stackFieldId: stage.id, cardFields: [] } },
@@ -414,6 +428,39 @@ describe('interface layout pages: drag edits through the page', () => {
       );
     } finally {
       await t.db.update(tables).set({ permissions: {} }).where(eq(tables.id, table.id));
+    }
+  });
+
+  it("never writes a filter element's field the layout doesn't draw", async () => {
+    const filtered = await pageRecords(guestId, 'filtered');
+    expect(filtered.fields.map((f) => f.id)).toContain(secret.id);
+    expect(sorted(filtered.editable)).toEqual(sorted([name.id, stage.id]));
+    const before = await stored(records.laptop);
+    expect((await edit(guestId, 'filtered', records.laptop, { [secret.id]: 'x' })).status).toBe(
+      403
+    );
+    expect((await edit(memberId, 'filtered', records.laptop, { [secret.id]: 'x' })).status).toBe(
+      403
+    );
+    expect(await stored(records.laptop)).toEqual(before);
+  });
+
+  it("follows a field's edit permission", async () => {
+    await t.db
+      .update(fieldRows)
+      .set({ permissions: { edit: { level: 'creators' } } })
+      .where(eq(fieldRows.id, stage.id));
+    try {
+      const before = await stored(records.laptop);
+      for (const who of [guestId, memberId]) {
+        expect((await pageRecords(who, 'board')).editable).not.toContain(stage.id);
+        expect((await edit(who, 'board', records.laptop, { [stage.id]: 'open' })).status).toBe(403);
+      }
+      expect(await stored(records.laptop)).toEqual(before);
+      // The owner is a creator: the same drag goes through for them.
+      expect((await pageRecords(ownerId, 'board')).editable).toContain(stage.id);
+    } finally {
+      await t.db.update(fieldRows).set({ permissions: {} }).where(eq(fieldRows.id, stage.id));
     }
   });
 
