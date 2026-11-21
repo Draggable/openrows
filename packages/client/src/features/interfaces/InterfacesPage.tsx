@@ -347,7 +347,11 @@ function InterfaceNav({
   );
 }
 
-function NewPageDialog({
+/**
+ * The new-interface / new-page dialog. Its height is capped by the viewport: the layout list
+ * scrolls, so the names, the table and the footer's Create page stay on screen.
+ */
+export function NewPageDialog({
   interfaceName,
   tables,
   onClose,
@@ -373,9 +377,9 @@ function NewPageDialog({
   const table = tableId || tables[0]?.id || '';
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-[480px]">
         <form
-          className="flex flex-col gap-4"
+          className="flex min-h-0 flex-1 flex-col gap-4"
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
@@ -421,30 +425,35 @@ function NewPageDialog({
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <fieldset className="flex flex-col gap-2">
+          <fieldset className="flex min-h-[120px] flex-col">
             <legend className="mb-1.5 text-small text-text-2">Layout</legend>
-            {INTERFACE_LAYOUTS.map((l) => (
-              <label
-                key={l}
-                className={cn(
-                  'flex cursor-pointer items-start gap-2 rounded-sm border p-2',
-                  layout === l ? 'border-primary bg-selected' : 'border-border hover:bg-hover'
-                )}
-              >
-                <input
-                  type="radio"
-                  name="layout"
-                  value={l}
-                  checked={layout === l}
-                  onChange={() => setLayout(l)}
-                  className="mt-0.5 size-4 accent-[var(--accent)]"
-                />
-                <span>
-                  <span className="block font-[550] text-text">{LAYOUT_LABELS[l]}</span>
-                  <span className="block text-small text-text-2">{LAYOUT_DESCRIPTIONS[l]}</span>
-                </span>
-              </label>
-            ))}
+            <div
+              data-testid="layout-options"
+              className="-m-1 flex min-h-0 flex-col gap-2 overflow-y-auto p-1"
+            >
+              {INTERFACE_LAYOUTS.map((l) => (
+                <label
+                  key={l}
+                  className={cn(
+                    'flex cursor-pointer items-start gap-2 rounded-sm border p-2',
+                    layout === l ? 'border-primary bg-selected' : 'border-border hover:bg-hover'
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="layout"
+                    value={l}
+                    checked={layout === l}
+                    onChange={() => setLayout(l)}
+                    className="mt-0.5 size-4 accent-[var(--accent)]"
+                  />
+                  <span>
+                    <span className="block font-[550] text-text">{LAYOUT_LABELS[l]}</span>
+                    <span className="block text-small text-text-2">{LAYOUT_DESCRIPTIONS[l]}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </fieldset>
           <div className="flex flex-col gap-1.5">
             <label htmlFor={ids.table} className="text-small text-text-2">
