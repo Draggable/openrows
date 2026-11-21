@@ -785,6 +785,56 @@ describe('assistant plans: wider automation triggers and actions', () => {
     ]);
   });
 
+  it('reports date conditions whose value the query engine would refuse', () => {
+    const dated: AssistantBaseInfo = {
+      tables: [
+        {
+          name: 'Orders',
+          fields: [
+            { name: 'Name', type: 'singleLineText' },
+            { name: 'Due', type: 'date' },
+            { name: 'Shipped', type: 'dateTime' },
+          ],
+        },
+      ],
+    };
+    const ok = plan([
+      automation({
+        trigger: 'recordMatches',
+        filter: where([
+          cond('Due', 'is', 'today'),
+          cond('Due', 'isBefore', '2026-12-31'),
+          cond('Shipped', 'isOnOrAfter', 'yesterday'),
+          cond('Shipped', 'isWithin', 'pastWeek'),
+        ]),
+      }),
+      automation({
+        actions: [
+          find('Orders', where([cond('Due', 'is', '{{trigger.record.fields.Due}}')])),
+          find('Orders', where([cond('Due', 'isWithin', 'nextMonth')])),
+        ],
+      }),
+    ]);
+    expect(kinds(ok, dated)).toEqual([]);
+    const p = plan([
+      automation({ actions: [find('Orders', where([cond('Due', 'isWithin', 'next 7 days')]))] }),
+      automation({ actions: [find('Orders', where([cond('Due', 'isWithin', '2026-01-01')]))] }),
+      automation({ actions: [find('Orders', where([cond('Due', 'is', 'next tuesday')]))] }),
+      automation({ actions: [find('Orders', where([cond('Due', 'isAfter', '2026-02-30')]))] }),
+      automation({
+        trigger: 'recordMatches',
+        filter: where([cond('Shipped', 'isBefore', '12/31/2026')]),
+      }),
+    ]);
+    expect(kinds(p, dated)).toEqual([
+      [0, 'type', 'Due'],
+      [1, 'type', 'Due'],
+      [2, 'type', 'Due'],
+      [3, 'type', 'Due'],
+      [4, 'type', 'Shipped'],
+    ]);
+  });
+
   it('reports HTTP steps that are not allowed or would carry a secret', () => {
     const p = plan([
       automation({ actions: [http({ url: 'ftp://example.com/x' })] }),

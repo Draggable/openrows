@@ -1,5 +1,6 @@
 import {
   AI_FIELD_OUTPUTS,
+  ASSISTANT_DATE_RANGES,
   ASSISTANT_FIELD_TYPES,
   ASSISTANT_VIEW_TYPES,
   type AssistantBaseInfo,
@@ -106,8 +107,8 @@ export function planSystemPrompt(newBase: boolean): string {
     '  operator must suit the field type (text: is, isNot, contains, doesNotContain; numbers: =,',
     '  !=, <, <=, >, >=; dates: is, isBefore, isAfter, isOnOrBefore, isOnOrAfter, isWithin;',
     '  single select: is, isNot, isAnyOf, isNoneOf; checkbox: is; any field: isEmpty, isNotEmpty',
-    '  with value null). Values are text: a number, true or false, a date YYYY-MM-DD or today, an',
-    '  option name.',
+    '  with value null). Values are text: a number, true or false, a date YYYY-MM-DD, today,',
+    `  tomorrow or yesterday (isWithin: ${ASSISTANT_DATE_RANGES.join(', ')}), an option name.`,
     '  Never write secrets: no passwords, tokens, API keys or credentials, and no Authorization,',
     '  Cookie or key headers; the user adds secret headers in the builder. Do not propose Slack',
     '  or Discord messages, scripts, or If / Repeat groups.',

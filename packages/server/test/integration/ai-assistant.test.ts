@@ -4,6 +4,7 @@ import type {
   AssistantPlan,
   AssistantPlanResult,
   Automation,
+  AutomationRun,
   FieldMeta,
   TableMeta,
   ViewMeta,
@@ -1012,5 +1013,120 @@ describe('AI assistant', () => {
     );
     expect(applied).toMatchObject({ fields: 1, automations: 0 });
     expect(await automationsNow()).toEqual([]);
+  });
+
+  it('flags date conditions the query engine would refuse, and applies the ones it takes', async () => {
+    await ok(
+      request('POST', `/api/tables/${orders.id}/fields`, { name: 'Due', type: 'date' }),
+      201
+    );
+    const find = (operator: string, value: string): Operation =>
+      ({
+        op: 'createAutomation',
+        table: 'Orders',
+        name: `Due ${operator} ${value}`,
+        trigger: 'recordCreated',
+        watchFields: null,
+        actions: [
+          {
+            type: 'findRecords',
+            table: 'Orders',
+            filter: { conjunction: 'and', conditions: [{ field: 'Due', operator, value }] },
+            limit: null,
+          },
+        ],
+        ...automationKeys,
+      }) as Operation;
+    const dated: AssistantPlan = {
+      summary: 's',
+      baseName: null,
+      operations: [
+        find('isWithin', 'pastWeek'),
+        find('is', 'today'),
+        find('isWithin', 'next 7 days'),
+        find('isBefore', 'end of month'),
+      ],
+    };
+    fake.respond = () => completion(JSON.stringify(dated));
+    const proposed = await ok<AssistantPlanResult>(
+      request('POST', `/api/bases/${baseId}/assistant/plan`, { prompt: 'Due soon' })
+    );
+    expect(proposed.problems.map((p) => [p.operation, p.kind, p.field])).toEqual([
+      [2, 'type', 'Due'],
+      [3, 'type', 'Due'],
+    ]);
+    // What the plan flags is what the automations engine refuses...
+    for (const op of dated.operations.slice(2)) {
+      const res = await request('POST', `/api/bases/${baseId}/assistant/apply`, {
+        plan: { ...dated, operations: [op] },
+      });
+      expect(res.status).toBe(422);
+    }
+    // ...and what it leaves ticked, the engine takes.
+    const applied = await ok<AssistantApplyResult>(
+      request('POST', `/api/bases/${baseId}/assistant/apply`, {
+        plan: { ...dated, operations: dated.operations.slice(0, 2) },
+      })
+    );
+    expect(applied).toMatchObject({ automations: 2 });
+  });
+
+  it("runs a plan's HTTP steps through the automations engine's outbound rules once tested", async () => {
+    const http = (url: string) => ({
+      type: 'httpRequest' as const,
+      method: 'POST' as const,
+      url,
+      headers: [],
+      body: '{"id": "{{trigger.record.id}}"}',
+    });
+    const plan: AssistantPlan = {
+      summary: 's',
+      baseName: null,
+      operations: [
+        {
+          op: 'createAutomation',
+          table: 'Orders',
+          name: 'Notify',
+          trigger: 'recordCreated',
+          watchFields: null,
+          actions: [
+            http(`${fake.baseUrl}/chat/completions`),
+            // The host comes from a token: checked when the run fills it in.
+            http('http://{{trigger.record.fields.Name}}/chat/completions'),
+          ],
+          ...automationKeys,
+        },
+      ],
+    };
+    await ok(request('POST', `/api/bases/${baseId}/assistant/apply`, { plan }), 200);
+    const [created] = (
+      await ok<{ automations: Automation[] }>(request('GET', `/api/bases/${baseId}/automations`))
+    ).automations;
+    if (!created) throw new Error('no automation');
+    expect(created.enabled).toBe(false);
+    const record = await ok<{ id: string }>(
+      request('POST', `/api/tables/${orders.id}/records`, {
+        fields: { [orders.fields[0]?.id ?? '']: '10.1.2.3' },
+      }),
+      201
+    );
+    // Off: creating the record ran nothing.
+    expect(fake.requests).toHaveLength(0);
+    fake.respond = () => completion('{}');
+
+    const run = await ok<AutomationRun>(
+      request('POST', `/api/bases/${baseId}/automations/${created.id}/test`, {
+        recordId: record.id,
+      })
+    );
+    expect(run.status).toBe('failed');
+    expect(run.steps.map((s) => [s.type, s.status])).toEqual([
+      ['httpRequest', 'succeeded'],
+      ['httpRequest', 'failed'],
+    ]);
+    // The private address the token filled in was refused by the SSRF-safe client.
+    expect(run.steps[1]?.error).toMatch(/not allowed|private|address/i);
+    // Only the first step reached the network.
+    expect(fake.requests.map((r) => r.body)).toEqual([{ id: record.id }]);
   });
 });

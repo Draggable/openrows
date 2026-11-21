@@ -530,6 +530,28 @@ const holdsTokens = (text: string) => {
 
 const USER_TYPES: readonly string[] = ['user', 'createdBy', 'lastModifiedBy'];
 
+/** The query engine's `isWithin` ranges a plan's text value can name. */
+export const ASSISTANT_DATE_RANGES = [
+  'pastWeek',
+  'pastMonth',
+  'pastYear',
+  'nextWeek',
+  'nextMonth',
+  'nextYear',
+] as const;
+const RELATIVE_DAYS: readonly string[] = ['today', 'tomorrow', 'yesterday'];
+const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})/;
+
+/** A day as the query engine reads one: `today`/`tomorrow`/`yesterday` or a real `YYYY-MM-DD`. */
+function isFilterDay(value: string): boolean {
+  if (RELATIVE_DAYS.includes(value)) return true;
+  const m = DAY_RE.exec(value);
+  if (!m) return false;
+  const day = `${m[1]}-${m[2]}-${m[3]}`;
+  const d = new Date(`${day}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === day;
+}
+
 /** A planned filter's conditions against a table, as the query engine would take them. */
 function checkFilter(
   filter: AssistantFilter,
@@ -576,6 +598,20 @@ function checkFilter(
       add('type', `${at} takes user ids: only "me" (who the automation runs as) fits.`, field.name);
     } else if (field.type === 'checkbox' && !['true', 'false', '1', '0'].includes(value)) {
       add('type', `${at} is a checkbox: its value is true or false.`, field.name);
+    } else if (
+      isFieldTypeName(field.type) &&
+      getFieldType(field.type).sort === 'chronological' &&
+      (cond.operator === 'isWithin'
+        ? !(ASSISTANT_DATE_RANGES as readonly string[]).includes(value)
+        : !isFilterDay(value))
+    ) {
+      add(
+        'type',
+        cond.operator === 'isWithin'
+          ? `${at} "isWithin" takes one of ${ASSISTANT_DATE_RANGES.join(', ')}.`
+          : `${at} takes a date YYYY-MM-DD, today, tomorrow or yesterday: "${value}" isn't one.`,
+        field.name
+      );
     } else if (
       isFieldTypeName(field.type) &&
       !getFieldType(field.type).computed &&
