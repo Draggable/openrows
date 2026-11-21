@@ -70,7 +70,7 @@ export function assistantRoutes(
     async (c, { body }) => {
       const { tx, resource, principal } = c.var;
       const model = await provider(c, tx, resource.workspaceId, principal.user.id);
-      const { base, tables } = await describedBase(tx, resource.id);
+      const { base, tables } = await describedBase(tx, resource.id, principal.user.id);
       const records = body.includeRecords
         ? await sampleRecords(
             { tx, workspaceId: resource.workspaceId, userId: principal.user.id },
@@ -83,6 +83,7 @@ export function assistantRoutes(
           prompt: body.prompt,
           newBase: false,
           records,
+          checkUrl: deps.automations.checkUrl,
         });
         c.var.logger.info(
           {
@@ -131,6 +132,7 @@ export function assistantRoutes(
           base: { tables: [] },
           prompt: body.prompt,
           newBase: true,
+          checkUrl: deps.automations.checkUrl,
         });
         c.var.logger.info(
           {

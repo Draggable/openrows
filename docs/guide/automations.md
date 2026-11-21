@@ -9,6 +9,7 @@ Each automation belongs to one base and has one trigger ("When") and up to 25 st
 - Click **New automation**, pick a trigger, then use **Add an action…** to add steps. Move steps up or down; each step's number is what tokens use to refer to it. When you move a step, tokens are renumbered so they keep pointing at the same steps. When you delete one, tokens that refer to the steps after it are renumbered; tokens that used the deleted step need updating.
 - Click **Save**, then turn the automation on with its switch. New automations are off, and an automation needs at least one action before you can turn it on.
 - A base can have up to 50 automations.
+- The base's **Assistant** can draft automations for you too; they are created turned off, for you to review and turn on. See [The AI assistant](bases-and-tables.md#the-ai-assistant).
 - Automations are managed in the app only; they aren't part of the [REST API](../api/v1.md) or personal access tokens yet. To notify another system of changes without building an automation, see [Webhooks](../api/webhooks.md).
 
 ### Who an automation runs as

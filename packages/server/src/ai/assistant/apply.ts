@@ -1,14 +1,17 @@
 import {
   type AssistantAction,
   type AssistantApplyResult,
+  type AssistantAutomationOp,
   type AssistantFieldSpec,
+  type AssistantFilter,
   type AssistantPlan,
   type AutomationAction,
   type AutomationTrigger,
   type CreateFieldInput,
-  checkPlan,
   createAutomationSchema,
+  type FilterGroup,
   linkOptionsSchema,
+  MAX_FIND_RECORDS,
   nextChoiceColor,
   type UpdateViewInput,
 } from '@openrows/shared';
@@ -25,7 +28,8 @@ import {
 } from '../../fields/service.js';
 import { AppError } from '../../lib/errors.js';
 import { createTable, liveTables, loadTable } from '../../tables/service.js';
-import { createView, loadView, updateView } from '../../views/service.js';
+import { createView, liveViews, loadView, updateView } from '../../views/service.js';
+import { planProblems } from './plan.js';
 import { describedBase } from './schema.js';
 
 const lower = (s: string) => s.trim().toLowerCase();
@@ -162,32 +166,139 @@ async function cells(
   return out;
 }
 
-async function action(
+/** A planned filter by field ids: the view filter language the automations engine takes. */
+async function filterOf(
   names: Names,
   table: TableRow,
-  a: AssistantAction
-): Promise<AutomationAction> {
-  if (a.type === 'sendEmail')
-    return { type: 'sendEmail', to: a.to, subject: a.subject, body: a.body };
-  if (a.type === 'updateRecord') {
-    return {
-      type: 'updateRecord',
-      tableId: table.id,
-      recordId: '{{trigger.record.id}}',
-      fields: await cells(names, table, a.cells),
-    };
+  filter: AssistantFilter
+): Promise<FilterGroup> {
+  const conditions: FilterGroup['conditions'] = [];
+  for (const c of filter.conditions) {
+    const fieldId = (await names.field(table, c.field)).id;
+    const empty = c.operator === 'isEmpty' || c.operator === 'isNotEmpty' || c.value === null;
+    conditions.push({ fieldId, operator: c.operator, ...(empty ? {} : { value: c.value }) });
   }
-  const target = names.table(a.table);
-  return { type: 'createRecord', tableId: target.id, fields: await cells(names, target, a.cells) };
+  return { conjunction: filter.conjunction, conditions };
+}
+
+/** The table a findRecords step reads, by the step's number. */
+type Found = Map<number, TableRow>;
+
+async function action(
+  names: Names,
+  table: TableRow | null,
+  a: AssistantAction,
+  n: number,
+  found: Found
+): Promise<AutomationAction> {
+  switch (a.type) {
+    case 'sendEmail':
+      return { type: 'sendEmail', to: a.to, subject: a.subject, body: a.body };
+    case 'updateRecord': {
+      const target = a.step === null ? table : (found.get(a.step) ?? null);
+      if (!target) {
+        throw new AppError('VALIDATION_FAILED', { detail: `Step ${n} has no record to update.` });
+      }
+      return {
+        type: 'updateRecord',
+        tableId: target.id,
+        recordId: a.step === null ? '{{trigger.record.id}}' : `{{steps.${a.step}.records}}`,
+        fields: await cells(names, target, a.cells),
+      };
+    }
+    case 'createRecord': {
+      const target = names.table(a.table);
+      return {
+        type: 'createRecord',
+        tableId: target.id,
+        fields: await cells(names, target, a.cells),
+      };
+    }
+    case 'findRecords': {
+      const target = names.table(a.table);
+      found.set(n, target);
+      return {
+        type: 'findRecords',
+        tableId: target.id,
+        ...(a.filter ? { filter: await filterOf(names, target, a.filter) } : {}),
+        limit: a.limit ?? MAX_FIND_RECORDS,
+      };
+    }
+    case 'httpRequest': {
+      const body = a.body?.trim() ? (JSON.parse(a.body) as unknown) : undefined;
+      return {
+        type: 'httpRequest',
+        method: a.method,
+        url: a.url.trim(),
+        // Plain headers only: secret ones are the user's to add in the builder.
+        headers: a.headers.map((h) => ({ name: h.name, value: h.value, secret: false })),
+        ...(body !== undefined && a.method !== 'GET' ? { body } : {}),
+      };
+    }
+  }
+}
+
+/** A planned trigger by ids: its table, form view, button field, conditions or schedule. */
+async function triggerOf(
+  ctx: SchemaContext,
+  names: Names,
+  op: AssistantAutomationOp,
+  table: TableRow | null
+): Promise<AutomationTrigger> {
+  if (op.trigger === 'scheduled') {
+    if (!op.schedule) throw new AppError('VALIDATION_FAILED', { detail: 'No schedule.' });
+    return { type: 'scheduled', schedule: op.schedule };
+  }
+  if (op.trigger === 'webhookReceived') return { type: 'webhookReceived' };
+  if (!table) {
+    throw new AppError('VALIDATION_FAILED', { detail: `A ${op.trigger} trigger needs a table.` });
+  }
+  switch (op.trigger) {
+    case 'recordCreated':
+      return { type: 'recordCreated', tableId: table.id };
+    case 'recordUpdated':
+      return {
+        type: 'recordUpdated',
+        tableId: table.id,
+        fieldIds: op.watchFields?.length
+          ? await Promise.all(op.watchFields.map(async (n) => (await names.field(table, n)).id))
+          : null,
+      };
+    case 'recordMatches':
+      if (!op.filter) throw new AppError('VALIDATION_FAILED', { detail: 'No conditions.' });
+      return {
+        type: 'recordMatches',
+        tableId: table.id,
+        filter: await filterOf(names, table, op.filter),
+      };
+    case 'formSubmitted': {
+      const form = (await liveViews(ctx.tx, table.id, ctx.userId)).find(
+        (v) => v.type === 'form' && lower(v.name) === lower(op.formView ?? '')
+      );
+      if (!form) {
+        throw new AppError('VALIDATION_FAILED', {
+          detail: `"${table.name}" has no form view "${op.formView ?? ''}".`,
+        });
+      }
+      return { type: 'formSubmitted', tableId: table.id, viewId: form.id };
+    }
+    case 'buttonClicked':
+      return {
+        type: 'buttonClicked',
+        tableId: table.id,
+        fieldId: (await names.field(table, op.buttonField ?? '')).id,
+      };
+  }
 }
 
 /**
  * Applies a change plan the user confirmed, in the request's transaction: every operation
  * goes through the service the matching API route uses (tables, fields with their formula,
  * link, lookup, rollup, count, button and AI checks, views with their layout checks,
- * automations, created switched off), as the user. The plan is checked
- * against the base as it is now first; any problem refuses the whole plan (422), and a service's
- * refusal rolls everything back.
+ * automations with every trigger and action the plan holds, created switched off), as the
+ * user. The plan is checked against the base as it is now first (HTTP steps' URLs against the
+ * outbound rules too); any problem refuses the whole plan (422), and a service's refusal rolls
+ * everything back.
  */
 export async function applyPlan(
   ctx: SchemaContext,
@@ -196,7 +307,11 @@ export async function applyPlan(
   automationDeps: AutomationDeps
 ): Promise<AssistantApplyResult> {
   const { tx } = ctx;
-  const problems = checkPlan(plan, (await describedBase(tx, base.id)).base);
+  const problems = await planProblems(
+    plan,
+    (await describedBase(tx, base.id, ctx.userId)).base,
+    automationDeps.checkUrl
+  );
   if (problems.length > 0) {
     throw new AppError('VALIDATION_FAILED', {
       detail: "The plan doesn't fit the base as it is now.",
@@ -252,21 +367,13 @@ export async function applyPlan(
       if (layout) await updateView(ctx, await loadView(tx, view.id), layout, { canLock: true });
       result.views++;
     } else {
-      const table = names.table(op.table);
-      const trigger: AutomationTrigger =
-        op.trigger === 'recordCreated'
-          ? { type: 'recordCreated', tableId: table.id }
-          : {
-              type: 'recordUpdated',
-              tableId: table.id,
-              fieldIds: op.watchFields?.length
-                ? await Promise.all(
-                    op.watchFields.map(async (n) => (await names.field(table, n)).id)
-                  )
-                : null,
-            };
+      const table = op.table === null ? null : names.table(op.table);
+      const trigger = await triggerOf(ctx, names, op, table);
       const actions: AutomationAction[] = [];
-      for (const a of op.actions) actions.push(await action(names, table, a));
+      const found: Found = new Map();
+      for (const [i, a] of op.actions.entries()) {
+        actions.push(await action(names, table, a, i + 1, found));
+      }
       await createAutomation(
         {
           tx,

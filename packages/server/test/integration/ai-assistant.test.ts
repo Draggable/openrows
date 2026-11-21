@@ -4,6 +4,7 @@ import type {
   AssistantPlan,
   AssistantPlanResult,
   Automation,
+  AutomationRun,
   FieldMeta,
   TableMeta,
   ViewMeta,
@@ -50,6 +51,9 @@ const field = (name: string, type: AssistantFieldType, extra: Record<string, unk
   ...extra,
 });
 
+/** The trigger keys a createAutomation operation leaves null unless its trigger needs them. */
+const automationKeys = { filter: null, formView: null, buttonField: null, schedule: null };
+
 /** What the fake model proposes for "track customers": a formula with a typo first. */
 function proposal(formula: string): AssistantPlan {
   return {
@@ -81,7 +85,10 @@ function proposal(formula: string): AssistantPlan {
         name: 'Mark big orders',
         trigger: 'recordUpdated',
         watchFields: ['Qty'],
-        actions: [{ type: 'updateRecord', cells: [{ field: 'Notes', value: 'Big order' }] }],
+        actions: [
+          { type: 'updateRecord', cells: [{ field: 'Notes', value: 'Big order' }], step: null },
+        ],
+        ...automationKeys,
       },
     ],
   };
@@ -368,7 +375,9 @@ describe('AI assistant', () => {
     const plan = proposal('{Qty} * {Price}');
     const auto = plan.operations[3];
     if (auto?.op !== 'createAutomation') throw new Error('fixture');
-    auto.actions = [{ type: 'updateRecord', cells: [{ field: 'Notes', value: '{{nope}}' }] }];
+    auto.actions = [
+      { type: 'updateRecord', cells: [{ field: 'Notes', value: '{{nope}}' }], step: null },
+    ];
     const res = await request('POST', `/api/bases/${baseId}/assistant/apply`, { plan });
     expect(res.status).toBe(422);
     expect((await tables()).map((x) => x.name)).toEqual(['Orders']);
@@ -658,5 +667,466 @@ describe('AI assistant', () => {
     const names = (await fieldsOf(orders.id)).map((f) => f.name);
     expect(names).toEqual(expect.arrayContaining(['Self', 'Double']));
     expect(names).not.toContain('Twice');
+  });
+
+  it('tells the model about the wider automation triggers and actions, and that they start off', async () => {
+    await ok(
+      request('POST', `/api/tables/${orders.id}/views`, {
+        name: 'Intake',
+        type: 'form',
+      }),
+      201
+    );
+    await ok(request('POST', `/api/bases/${baseId}/assistant/plan`, { prompt: 'Automate' }));
+    const sent = messagesOf(fake.requests[0] as FakeRequest);
+    for (const word of [
+      'recordMatches',
+      'formSubmitted',
+      'buttonClicked',
+      'scheduled',
+      'webhookReceived',
+      'findRecords',
+      'httpRequest',
+      'created switched off',
+      'Never write secrets',
+    ]) {
+      expect(sent).toContain(word);
+    }
+    // The base's views, so a form trigger can name its form.
+    expect(sent).toContain('"Intake" (form)');
+  });
+
+  it('plans and applies form, button, schedule, webhook, conditions, find and HTTP automations, all off', async () => {
+    const hook = `http://127.0.0.1:${fake.port}/hooks/orders`;
+    const automation = (extra: Record<string, unknown>): Operation =>
+      ({
+        op: 'createAutomation',
+        table: 'Orders',
+        name: 'Auto',
+        trigger: 'recordCreated',
+        watchFields: null,
+        actions: [],
+        ...automationKeys,
+        ...extra,
+      }) as Operation;
+    const wider: AssistantPlan = {
+      summary: 'Adds automations; they start off.',
+      baseName: null,
+      operations: [
+        {
+          op: 'createView',
+          table: 'Orders',
+          name: 'Intake',
+          type: 'form',
+          field: null,
+          endField: null,
+        },
+        addField(
+          'Orders',
+          field('Escalate', 'button', { button: { label: 'Escalate', action: 'runAutomation' } })
+        ),
+        automation({
+          name: 'Form intake',
+          trigger: 'formSubmitted',
+          formView: 'Intake',
+          actions: [
+            {
+              type: 'updateRecord',
+              cells: [{ field: 'Notes', value: 'From the form' }],
+              step: null,
+            },
+          ],
+        }),
+        automation({
+          name: 'Weekly big orders',
+          table: null,
+          trigger: 'scheduled',
+          schedule: { kind: 'cron', expression: '0 9 * * 1', timeZone: 'Europe/Paris' },
+          actions: [
+            {
+              type: 'findRecords',
+              table: 'Orders',
+              filter: {
+                conjunction: 'and',
+                conditions: [{ field: 'Qty', operator: '>', value: '10' }],
+              },
+              limit: 20,
+            },
+            { type: 'updateRecord', cells: [{ field: 'Notes', value: 'Big' }], step: 1 },
+            {
+              type: 'httpRequest',
+              method: 'POST',
+              url: hook,
+              headers: [{ name: 'X-Source', value: 'orders' }],
+              body: '{"count": "{{steps.1.count}}"}',
+            },
+          ],
+        }),
+        automation({
+          name: 'Inbound',
+          table: null,
+          trigger: 'webhookReceived',
+          actions: [
+            {
+              type: 'createRecord',
+              table: 'Orders',
+              cells: [{ field: 'Name', value: '{{trigger.body.name}}' }],
+            },
+          ],
+        }),
+        automation({
+          name: 'Escalation',
+          trigger: 'buttonClicked',
+          buttonField: 'Escalate',
+          actions: [
+            {
+              type: 'sendEmail',
+              to: ['ops@example.com'],
+              subject: 'Escalated: {{trigger.record.fields.Name}}',
+              body: 'By {{trigger.user.name}}',
+            },
+          ],
+        }),
+        automation({
+          name: 'Huge orders',
+          trigger: 'recordMatches',
+          filter: {
+            conjunction: 'or',
+            conditions: [
+              { field: 'Qty', operator: '>=', value: '100' },
+              { field: 'Price', operator: 'isEmpty', value: null },
+            ],
+          },
+          actions: [
+            {
+              type: 'httpRequest',
+              method: 'GET',
+              url: `${hook}?id={{trigger.record.id}}`,
+              headers: [],
+              body: null,
+            },
+          ],
+        }),
+      ],
+    };
+    fake.respond = () => completion(JSON.stringify(wider));
+    const proposed = await ok<AssistantPlanResult>(
+      request('POST', `/api/bases/${baseId}/assistant/plan`, { prompt: 'Automate orders' })
+    );
+    expect(proposed.problems).toEqual([]);
+    expect(proposed.attempts).toBe(1);
+    // Planning wrote nothing.
+    expect(
+      (await ok<{ automations: Automation[] }>(request('GET', `/api/bases/${baseId}/automations`)))
+        .automations
+    ).toEqual([]);
+    fake.requests.length = 0;
+
+    const applied = await ok<AssistantApplyResult>(
+      request('POST', `/api/bases/${baseId}/assistant/apply`, { plan: proposed.plan })
+    );
+    expect(applied).toMatchObject({ tables: 0, fields: 1, views: 1, automations: 5 });
+    // Applying sent nothing anywhere: no provider call and no HTTP step ran.
+    expect(fake.requests).toHaveLength(0);
+
+    const { automations } = await ok<{ automations: Automation[] }>(
+      request('GET', `/api/bases/${baseId}/automations`)
+    );
+    expect(automations.map((a) => [a.name, a.enabled, a.nextRunAt])).toEqual([
+      ['Form intake', false, null],
+      ['Weekly big orders', false, null],
+      ['Inbound', false, null],
+      ['Escalation', false, null],
+      ['Huge orders', false, null],
+    ]);
+    const byName = (name: string) => {
+      const a = automations.find((x) => x.name === name);
+      if (!a) throw new Error(`no automation ${name}`);
+      return a;
+    };
+    const fields = await fieldsOf(orders.id);
+    const idOf = (name: string) => fields.find((f) => f.name === name)?.id;
+    const { views } = await ok<{ views: ViewMeta[] }>(
+      request('GET', `/api/tables/${orders.id}/views`)
+    );
+    const intake = views.find((v) => v.name === 'Intake');
+    expect(intake?.type).toBe('form');
+
+    expect(byName('Form intake')).toMatchObject({
+      trigger: { type: 'formSubmitted', tableId: orders.id, viewId: intake?.id },
+      actions: [
+        {
+          type: 'updateRecord',
+          tableId: orders.id,
+          recordId: '{{trigger.record.id}}',
+          fields: { [idOf('Notes') ?? '']: 'From the form' },
+        },
+      ],
+    });
+    expect(byName('Weekly big orders')).toMatchObject({
+      trigger: {
+        type: 'scheduled',
+        schedule: { kind: 'cron', expression: '0 9 * * 1', timeZone: 'Europe/Paris' },
+      },
+      actions: [
+        {
+          type: 'findRecords',
+          tableId: orders.id,
+          filter: {
+            conjunction: 'and',
+            conditions: [{ fieldId: idOf('Qty'), operator: '>', value: '10' }],
+          },
+          limit: 20,
+        },
+        {
+          type: 'updateRecord',
+          tableId: orders.id,
+          recordId: '{{steps.1.records}}',
+          fields: { [idOf('Notes') ?? '']: 'Big' },
+        },
+        {
+          type: 'httpRequest',
+          method: 'POST',
+          url: hook,
+          headers: [{ name: 'X-Source', value: 'orders', secret: false }],
+          body: { count: '{{steps.1.count}}' },
+        },
+      ],
+    });
+    const inbound = byName('Inbound');
+    expect(inbound.trigger).toEqual({ type: 'webhookReceived' });
+    // The server made the webhook URL; the plan held no secret.
+    expect(inbound.webhookUrl).toMatch(/\/hooks\/a\//);
+    expect(byName('Escalation').trigger).toEqual({
+      type: 'buttonClicked',
+      tableId: orders.id,
+      fieldId: idOf('Escalate'),
+    });
+    expect(byName('Huge orders')).toMatchObject({
+      trigger: {
+        type: 'recordMatches',
+        tableId: orders.id,
+        filter: {
+          conjunction: 'or',
+          conditions: [
+            { fieldId: idOf('Qty'), operator: '>=', value: '100' },
+            { fieldId: idOf('Price'), operator: 'isEmpty' },
+          ],
+        },
+      },
+      actions: [{ type: 'httpRequest', method: 'GET' }],
+    });
+  });
+
+  it('leaves invalid automations as problems and applies nothing of a plan with them', async () => {
+    const valid = addField('Orders', field('Extra', 'number'));
+    const automation = (extra: Record<string, unknown>): Operation =>
+      ({
+        op: 'createAutomation',
+        table: 'Orders',
+        name: 'Auto',
+        trigger: 'recordCreated',
+        watchFields: null,
+        actions: [{ type: 'sendEmail', to: ['ops@example.com'], subject: 'Hi', body: '' }],
+        ...automationKeys,
+        ...extra,
+      }) as Operation;
+    const http = (url: string, headers: { name: string; value: string }[] = []) => ({
+      type: 'httpRequest' as const,
+      method: 'POST' as const,
+      url,
+      headers,
+      body: null,
+    });
+    const invalid: Operation[] = [
+      // The table's grid view isn't a form.
+      automation({ trigger: 'formSubmitted', formView: 'Grid view' }),
+      // No such button.
+      automation({ trigger: 'buttonClicked', buttonField: 'Launch' }),
+      // Every minute: the engine refuses it.
+      automation({
+        table: null,
+        trigger: 'scheduled',
+        schedule: { kind: 'cron', expression: '* * * * *', timeZone: 'UTC' },
+      }),
+      // A find and an update naming fields the table doesn't have.
+      automation({
+        actions: [
+          {
+            type: 'findRecords',
+            table: 'Orders',
+            filter: {
+              conjunction: 'and',
+              conditions: [{ field: 'Region', operator: 'is', value: 'EU' }],
+            },
+            limit: null,
+          },
+        ],
+      }),
+      automation({
+        actions: [{ type: 'updateRecord', cells: [{ field: 'Region', value: 'EU' }], step: null }],
+      }),
+      // An address the outbound rules refuse.
+      automation({ actions: [http('http://10.1.2.3/hook')] }),
+      // A credential in a plain header.
+      automation({
+        actions: [
+          http(`http://127.0.0.1:${fake.port}/x`, [{ name: 'Authorization', value: 'Bearer abc' }]),
+        ],
+      }),
+    ];
+    const bad: AssistantPlan = { summary: 's', baseName: null, operations: [valid, ...invalid] };
+    fake.respond = () => completion(JSON.stringify(bad));
+    const proposed = await ok<AssistantPlanResult>(
+      request('POST', `/api/bases/${baseId}/assistant/plan`, { prompt: 'Break automations' })
+    );
+    expect(proposed.attempts).toBe(1);
+    expect([...new Set(proposed.problems.map((p) => p.operation))]).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(proposed.problems.find((p) => p.operation === 6)?.message).toContain("can't be used");
+    expect(proposed.problems.find((p) => p.operation === 7)?.message).toContain('secret header');
+
+    const automationsNow = async () =>
+      (await ok<{ automations: Automation[] }>(request('GET', `/api/bases/${baseId}/automations`)))
+        .automations;
+    const before = (await fieldsOf(orders.id)).map((f) => f.name);
+    // Sent as it is, the plan is refused whole; so is each invalid one next to a valid one.
+    const res = await request('POST', `/api/bases/${baseId}/assistant/apply`, { plan: bad });
+    expect(res.status).toBe(422);
+    for (const op of invalid) {
+      const one = await request('POST', `/api/bases/${baseId}/assistant/apply`, {
+        plan: { ...bad, operations: [valid, op] },
+      });
+      expect(one.status).toBe(422);
+    }
+    expect((await fieldsOf(orders.id)).map((f) => f.name)).toEqual(before);
+    expect(await automationsNow()).toEqual([]);
+
+    // The ticked rest (the operation without a problem) applies.
+    const flagged = new Set(proposed.problems.map((p) => p.operation));
+    const applied = await ok<AssistantApplyResult>(
+      request('POST', `/api/bases/${baseId}/assistant/apply`, {
+        plan: {
+          ...proposed.plan,
+          operations: proposed.plan.operations.filter((_, i) => !flagged.has(i)),
+        },
+      })
+    );
+    expect(applied).toMatchObject({ fields: 1, automations: 0 });
+    expect(await automationsNow()).toEqual([]);
+  });
+
+  it('flags date conditions the query engine would refuse, and applies the ones it takes', async () => {
+    await ok(
+      request('POST', `/api/tables/${orders.id}/fields`, { name: 'Due', type: 'date' }),
+      201
+    );
+    const find = (operator: string, value: string): Operation =>
+      ({
+        op: 'createAutomation',
+        table: 'Orders',
+        name: `Due ${operator} ${value}`,
+        trigger: 'recordCreated',
+        watchFields: null,
+        actions: [
+          {
+            type: 'findRecords',
+            table: 'Orders',
+            filter: { conjunction: 'and', conditions: [{ field: 'Due', operator, value }] },
+            limit: null,
+          },
+        ],
+        ...automationKeys,
+      }) as Operation;
+    const dated: AssistantPlan = {
+      summary: 's',
+      baseName: null,
+      operations: [
+        find('isWithin', 'pastWeek'),
+        find('is', 'today'),
+        find('isWithin', 'next 7 days'),
+        find('isBefore', 'end of month'),
+      ],
+    };
+    fake.respond = () => completion(JSON.stringify(dated));
+    const proposed = await ok<AssistantPlanResult>(
+      request('POST', `/api/bases/${baseId}/assistant/plan`, { prompt: 'Due soon' })
+    );
+    expect(proposed.problems.map((p) => [p.operation, p.kind, p.field])).toEqual([
+      [2, 'type', 'Due'],
+      [3, 'type', 'Due'],
+    ]);
+    // What the plan flags is what the automations engine refuses...
+    for (const op of dated.operations.slice(2)) {
+      const res = await request('POST', `/api/bases/${baseId}/assistant/apply`, {
+        plan: { ...dated, operations: [op] },
+      });
+      expect(res.status).toBe(422);
+    }
+    // ...and what it leaves ticked, the engine takes.
+    const applied = await ok<AssistantApplyResult>(
+      request('POST', `/api/bases/${baseId}/assistant/apply`, {
+        plan: { ...dated, operations: dated.operations.slice(0, 2) },
+      })
+    );
+    expect(applied).toMatchObject({ automations: 2 });
+  });
+
+  it("runs a plan's HTTP steps through the automations engine's outbound rules once tested", async () => {
+    const http = (url: string) => ({
+      type: 'httpRequest' as const,
+      method: 'POST' as const,
+      url,
+      headers: [],
+      body: '{"id": "{{trigger.record.id}}"}',
+    });
+    const plan: AssistantPlan = {
+      summary: 's',
+      baseName: null,
+      operations: [
+        {
+          op: 'createAutomation',
+          table: 'Orders',
+          name: 'Notify',
+          trigger: 'recordCreated',
+          watchFields: null,
+          actions: [
+            http(`${fake.baseUrl}/chat/completions`),
+            // The host comes from a token: checked when the run fills it in.
+            http('http://{{trigger.record.fields.Name}}/chat/completions'),
+          ],
+          ...automationKeys,
+        },
+      ],
+    };
+    await ok(request('POST', `/api/bases/${baseId}/assistant/apply`, { plan }), 200);
+    const [created] = (
+      await ok<{ automations: Automation[] }>(request('GET', `/api/bases/${baseId}/automations`))
+    ).automations;
+    if (!created) throw new Error('no automation');
+    expect(created.enabled).toBe(false);
+    const record = await ok<{ id: string }>(
+      request('POST', `/api/tables/${orders.id}/records`, {
+        fields: { [orders.fields[0]?.id ?? '']: '10.1.2.3' },
+      }),
+      201
+    );
+    // Off: creating the record ran nothing.
+    expect(fake.requests).toHaveLength(0);
+    fake.respond = () => completion('{}');
+
+    const run = await ok<AutomationRun>(
+      request('POST', `/api/bases/${baseId}/automations/${created.id}/test`, {
+        recordId: record.id,
+      })
+    );
+    expect(run.status).toBe('failed');
+    expect(run.steps.map((s) => [s.type, s.status])).toEqual([
+      ['httpRequest', 'succeeded'],
+      ['httpRequest', 'failed'],
+    ]);
+    // The private address the token filled in was refused by the SSRF-safe client.
+    expect(run.steps[1]?.error).toMatch(/not allowed|private|address/i);
+    // Only the first step reached the network.
+    expect(fake.requests.map((r) => r.body)).toEqual([{ id: record.id }]);
   });
 });

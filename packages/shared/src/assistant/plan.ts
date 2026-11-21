@@ -1,7 +1,15 @@
 import { z } from 'zod';
+import { SCHEDULE_UNITS } from '../automations/schedule.js';
 import { AI_FIELD_OUTPUTS, AI_PROMPT_MAX } from '../fields/ai.js';
 import { ROLLUP_FUNCTIONS } from '../fields/computed.js';
 import { BUTTON_ACTIONS, MAX_BUTTON_LABEL } from '../fields/types/button.js';
+import { FILTER_OPERATORS } from '../fields/types.js';
+import {
+  HTTP_METHODS,
+  MAX_HTTP_HEADER_VALUE,
+  MAX_HTTP_HEADERS,
+  MAX_HTTP_URL,
+} from '../schemas/automation.js';
 
 /**
  * The AI assistant's change plan: what the model proposes for a base, as structured
@@ -61,7 +69,38 @@ export const ASSISTANT_VIEW_TYPES = [
   'timeline',
   'list',
 ] as const;
-export const ASSISTANT_TRIGGERS = ['recordCreated', 'recordUpdated'] as const;
+/**
+ * Triggers the assistant proposes. Every one but `scheduled` and `webhookReceived` belongs to
+ * the automation's `table`; those two have no table (null).
+ */
+export const ASSISTANT_TRIGGERS = [
+  'recordCreated',
+  'recordUpdated',
+  'recordMatches',
+  'formSubmitted',
+  'buttonClicked',
+  'scheduled',
+  'webhookReceived',
+] as const;
+export type AssistantTrigger = (typeof ASSISTANT_TRIGGERS)[number];
+/** Triggers that set an automation off with a record (`{{trigger.record...}}`). */
+export const RECORD_TRIGGERS: readonly string[] = [
+  'recordCreated',
+  'recordUpdated',
+  'recordMatches',
+  'formSubmitted',
+  'buttonClicked',
+];
+/** Triggers of no table. */
+export const TABLELESS_TRIGGERS: readonly string[] = ['scheduled', 'webhookReceived'];
+/** Actions the assistant proposes. */
+export const ASSISTANT_ACTIONS = [
+  'sendEmail',
+  'updateRecord',
+  'createRecord',
+  'findRecords',
+  'httpRequest',
+] as const;
 
 /** A prompt's length, in characters. */
 export const ASSISTANT_PROMPT_MAX = 4000;
@@ -70,6 +109,9 @@ export const MAX_PLAN_TABLE_FIELDS = 40;
 export const MAX_PLAN_CHOICES = 30;
 export const MAX_PLAN_ACTIONS = 5;
 export const MAX_PLAN_CELLS = 20;
+/** Conditions of one planned filter (a trigger's or a find step's). */
+export const MAX_PLAN_CONDITIONS = 10;
+export const MAX_PLAN_HTTP_BODY = 5000;
 export const MAX_PLAN_NAME = 100;
 /** Sample records per table the model gets when the user opts in. */
 export const ASSISTANT_SAMPLE_RECORDS = 3;
@@ -165,6 +207,41 @@ function build(capped: boolean) {
   });
 
   const cell = z.strictObject({ field: name, value: text(2000) });
+  /**
+   * A filter by field names: the conditions of the view filter language, joined by
+   * `conjunction`. `value` is text as the user would type it (a number, `true`/`false`, a date
+   * `YYYY-MM-DD` or `today`, an option's name), null for isEmpty/isNotEmpty.
+   */
+  const filter = z.strictObject({
+    conjunction: z.enum(['and', 'or']),
+    conditions: list(
+      z.strictObject({
+        field: name,
+        operator: z.enum(FILTER_OPERATORS),
+        value: text(1000).nullable(),
+      }),
+      1,
+      MAX_PLAN_CONDITIONS
+    ),
+  });
+  /** A schedule as the automations engine takes it (checked by its own rules). */
+  const schedule = z.union([
+    z.strictObject({
+      kind: z.literal('cron'),
+      /** Five fields (minute hour day month weekday) or a macro such as `@daily`. */
+      expression: text(120),
+      /** An IANA time zone, such as `Europe/Paris`. */
+      timeZone: text(64),
+    }),
+    z.strictObject({
+      kind: z.literal('interval'),
+      every: z.int(),
+      unit: z.enum(SCHEDULE_UNITS),
+      /** The first run, a wall time in `timeZone`: `YYYY-MM-DDTHH:mm`. */
+      startAt: text(16),
+      timeZone: text(64),
+    }),
+  ]);
   const action = z.union([
     z.strictObject({
       type: z.literal('sendEmail'),
@@ -172,12 +249,41 @@ function build(capped: boolean) {
       subject: text(200),
       body: text(5000),
     }),
-    /** Changes the record that set the automation off. */
-    z.strictObject({ type: z.literal('updateRecord'), cells: list(cell, 1, MAX_PLAN_CELLS) }),
+    /**
+     * Changes the record that set the automation off, or (`step`: the number of an earlier
+     * findRecords action, from 1) the records that step found, in its table.
+     */
+    z.strictObject({
+      type: z.literal('updateRecord'),
+      cells: list(cell, 1, MAX_PLAN_CELLS),
+      step: later(capped ? z.int().min(1).max(MAX_PLAN_ACTIONS) : z.int()),
+    }),
     z.strictObject({
       type: z.literal('createRecord'),
       table: name,
       cells: list(cell, 0, MAX_PLAN_CELLS),
+    }),
+    /** Records of a table that meet the filter (null: every record), at most `limit`. */
+    z.strictObject({
+      type: z.literal('findRecords'),
+      table: name,
+      filter: filter.nullable(),
+      limit: z.int().nullable(),
+    }),
+    /**
+     * A request to a URL. Headers are plain ones only: secret headers (credentials) are
+     * added by the user in the automation's builder. `body`: JSON text, or null.
+     */
+    z.strictObject({
+      type: z.literal('httpRequest'),
+      method: z.enum(HTTP_METHODS),
+      url: text(MAX_HTTP_URL),
+      headers: list(
+        z.strictObject({ name: text(100), value: text(MAX_HTTP_HEADER_VALUE) }),
+        0,
+        MAX_HTTP_HEADERS
+      ),
+      body: text(MAX_PLAN_HTTP_BODY).nullable(),
     }),
   ]);
 
@@ -205,12 +311,21 @@ function build(capped: boolean) {
     }),
     z.strictObject({
       op: z.literal('createAutomation'),
-      table: name,
+      /** The trigger's table; null for scheduled and webhookReceived triggers. */
+      table: name.nullable(),
       name,
       trigger: z.enum(ASSISTANT_TRIGGERS),
       /** recordUpdated: run only when one of these fields changes; null: any field. */
       watchFields: list(name, 1, MAX_PLAN_CELLS).nullable(),
       actions: list(action, 1, MAX_PLAN_ACTIONS),
+      /** recordMatches: the conditions a record enters (no tokens). */
+      filter: later(filter),
+      /** formSubmitted: the name of the table's form view. */
+      formView: later(name),
+      /** buttonClicked: the name of the table's button field that runs automations. */
+      buttonField: later(name),
+      /** scheduled: when it runs. */
+      schedule: later(schedule),
     }),
   ]);
 
@@ -228,10 +343,10 @@ export const assistantPlanOutputSchema = build(false);
 export type AssistantPlan = z.infer<typeof assistantPlanSchema>;
 export type AssistantOperation = AssistantPlan['operations'][number];
 export type AssistantFieldSpec = Extract<AssistantOperation, { op: 'createField' }>['field'];
-export type AssistantAction = Extract<
-  AssistantOperation,
-  { op: 'createAutomation' }
->['actions'][number];
+export type AssistantAutomationOp = Extract<AssistantOperation, { op: 'createAutomation' }>;
+export type AssistantAction = AssistantAutomationOp['actions'][number];
+export type AssistantFilter = NonNullable<AssistantAutomationOp['filter']>;
+export type AssistantSchedule = NonNullable<AssistantAutomationOp['schedule']>;
 
 /** A reason an operation can't be applied as proposed. */
 export const AssistantProblemSchema = z.strictObject({

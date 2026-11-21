@@ -50,9 +50,27 @@ const plan: AssistantPlan = {
       trigger: 'recordUpdated',
       watchFields: ['Status'],
       actions: [{ type: 'sendEmail', to: ['ops@example.com'], subject: 'Changed', body: '' }],
+      filter: null,
+      formView: null,
+      buttonField: null,
+      schedule: null,
     },
   ],
 };
+
+const automation = (extra: Record<string, unknown>) => ({
+  op: 'createAutomation' as const,
+  table: 'Orders',
+  name: 'A',
+  trigger: 'recordCreated' as const,
+  watchFields: null,
+  actions: [],
+  filter: null,
+  formView: null,
+  buttonField: null,
+  schedule: null,
+  ...extra,
+});
 
 describe('assistant model', () => {
   it('describes each operation as a diff row', () => {
@@ -74,6 +92,68 @@ describe('assistant model', () => {
     expect(rows[3]?.details).toEqual([
       'When a record is updated in Orders (Status)',
       'Send an email to ops@example.com: Changed',
+    ]);
+  });
+
+  it('describes the wider automation triggers and actions', () => {
+    const wider = {
+      summary: 's',
+      baseName: null,
+      operations: [
+        automation({
+          trigger: 'formSubmitted',
+          formView: 'Intake',
+          actions: [
+            {
+              type: 'findRecords',
+              table: 'Orders',
+              filter: {
+                conjunction: 'and',
+                conditions: [{ field: 'Status', operator: 'is', value: 'Open' }],
+              },
+              limit: null,
+            },
+            { type: 'updateRecord', step: 1, cells: [{ field: 'Notes', value: 'Seen' }] },
+          ],
+        }),
+        automation({
+          table: null,
+          trigger: 'scheduled',
+          schedule: { kind: 'cron', expression: '0 9 * * 1', timeZone: 'UTC' },
+          actions: [
+            {
+              type: 'httpRequest',
+              method: 'POST',
+              url: 'https://example.com/hook',
+              headers: [{ name: 'X-Source', value: 'base' }],
+              body: '{}',
+            },
+          ],
+        }),
+        automation({ table: null, trigger: 'webhookReceived' }),
+        automation({ trigger: 'buttonClicked', buttonField: 'Go' }),
+        automation({
+          trigger: 'recordMatches',
+          filter: {
+            conjunction: 'or',
+            conditions: [
+              { field: 'Qty', operator: '>', value: '10' },
+              { field: 'Notes', operator: 'isEmpty', value: null },
+            ],
+          },
+        }),
+      ],
+    } as AssistantPlan;
+    expect(planRows(wider, []).map((r) => r.details)).toEqual([
+      [
+        'When the form Intake of Orders is submitted',
+        'Find records in Orders: Status is Open',
+        'Update the records step 1 found: Notes = Seen',
+      ],
+      ['On a schedule: 0 9 * * 1 (UTC)', 'Send POST https://example.com/hook (headers X-Source)'],
+      ['When a webhook is received (its URL is shown once the automation exists)'],
+      ['When the button Go in Orders is clicked'],
+      ['When a record in Orders matches: Qty > 10 or Notes isEmpty'],
     ]);
   });
 

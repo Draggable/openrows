@@ -14,11 +14,13 @@ import type { Transaction } from '../../db/index.js';
 import { type FieldRow, liveFields, type TableRow } from '../../fields/service.js';
 import { listRecords } from '../../records/service.js';
 import { liveTables } from '../../tables/service.js';
+import { liveViews } from '../../views/service.js';
 import type { DescribedBase } from './plan.js';
 
 /** What the model reads of a base: enough to plan, capped so a big base still fits a request. */
 const MAX_TABLES = 60;
 const MAX_FIELDS = 150;
+const MAX_VIEWS = 30;
 const MAX_CHOICES_SHOWN = 20;
 const MAX_SAMPLE_TABLES = 15;
 const MAX_CELL_CHARS = 120;
@@ -108,10 +110,14 @@ function sorted(rows: FieldRow[]): FieldRow[] {
   return [...rows].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
 }
 
-/** The base's tables and fields (primary first), as the plan checker and the model see them. */
+/**
+ * The base's tables, fields (primary first) and the views `userId` sees, as the plan checker
+ * and the model see them.
+ */
 export async function describedBase(
   tx: Transaction,
-  baseId: string
+  baseId: string,
+  userId: string
 ): Promise<{ base: DescribedBase; tables: TableRow[] }> {
   const tables = (await liveTables(tx, baseId)).slice(0, MAX_TABLES);
   const g = await loadGraph(tx, baseId);
@@ -136,8 +142,12 @@ export async function describedBase(
         if (linkedTable) info.linkedTable = linkedTable;
         if (['lookup', 'rollup', 'ai'].includes(f.type)) info.numeric = numericOf(f, known);
         if (known.fromAi.has(f.id)) info.fromAi = true;
+        if (f.type === 'button') info.buttonAction = String(config(f)['action'] ?? 'openUrl');
         return info;
       }),
+      views: (await liveViews(tx, table.id, userId))
+        .slice(0, MAX_VIEWS)
+        .map((v) => ({ name: v.name, type: v.type })),
     });
   }
   return { base: { tables: described }, tables };

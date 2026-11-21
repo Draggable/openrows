@@ -1,4 +1,7 @@
+import { isHttpUrl } from '../automations/discord.js';
+import { templatePaths } from '../automations/template.js';
 import { parseAiPrompt, storeAiPrompt } from '../fields/ai.js';
+import { getFieldType, isFieldTypeName } from '../fields/index.js';
 import {
   compileFormula,
   type FormulaFieldInfo,
@@ -6,8 +9,12 @@ import {
   fieldFormulaType,
   tokenize,
 } from '../formula/index.js';
+import { MAX_FIND_RECORDS, scheduleSchema } from '../schemas/automation.js';
 import {
+  type AssistantAction,
+  type AssistantAutomationOp,
   type AssistantFieldSpec,
+  type AssistantFilter,
   type AssistantOperation,
   type AssistantPlan,
   type AssistantProblem,
@@ -16,6 +23,8 @@ import {
   NON_PRIMARY_TYPES,
   NUMERIC_ROLLUP_FUNCTIONS,
   READ_ONLY_PLAN_TYPES,
+  RECORD_TRIGGERS,
+  TABLELESS_TRIGGERS,
   TEXT_ROLLUP_FUNCTIONS,
 } from './plan.js';
 
@@ -26,6 +35,12 @@ export interface AssistantBaseInfo {
 export interface AssistantTableInfo {
   name: string;
   fields: AssistantFieldInfo[];
+  /** The table's views, by name and type (a form submitted trigger names its form view). */
+  views?: AssistantViewInfo[];
+}
+export interface AssistantViewInfo {
+  name: string;
+  type: string;
 }
 export interface AssistantFieldInfo {
   name: string;
@@ -40,6 +55,8 @@ export interface AssistantFieldInfo {
   numeric?: boolean;
   /** An AI field, or a field computed from one: an AI field's prompt can't read it. */
   fromAi?: boolean;
+  /** A button field's action (`openUrl` or `runAutomation`). */
+  buttonAction?: string;
 }
 
 /** Ids for the type checker: planned fields have none yet. */
@@ -80,14 +97,18 @@ class Tables {
   readonly #tables = new Map<string, AssistantTableInfo>();
   constructor(base: AssistantBaseInfo) {
     for (const t of base.tables) {
-      this.#tables.set(lower(t.name), { name: t.name, fields: [...t.fields] });
+      this.#tables.set(lower(t.name), {
+        name: t.name,
+        fields: [...t.fields],
+        views: [...(t.views ?? [])],
+      });
     }
   }
   get(name: string) {
     return this.#tables.get(lower(name));
   }
   add(name: string) {
-    const table: AssistantTableInfo = { name, fields: [] };
+    const table: AssistantTableInfo = { name, fields: [], views: [] };
     this.#tables.set(lower(name), table);
     return table;
   }
@@ -293,6 +314,7 @@ function addField(spec: AssistantFieldSpec, table: AssistantTableInfo, c: Checke
     if (reads(formulaReferences(spec.formula ?? ''))) info.fromAi = true;
   } else if (spec.type === 'button') {
     checkButton(spec, table, add);
+    if (spec.button) info.buttonAction = spec.button.action;
     if (spec.button?.action === 'openUrl' && reads(formulaReferences(spec.formula ?? ''))) {
       info.fromAi = true;
     }
@@ -470,6 +492,10 @@ function checkOperation(op: AssistantOperation, c: Checker): void {
     for (const spec of op.fields) addField(spec, table, c);
     return;
   }
+  if (op.op === 'createAutomation') {
+    checkAutomation(op, c);
+    return;
+  }
   const table = tables.get(op.table);
   if (!table) {
     add('reference', `There is no table named "${op.table}".`);
@@ -479,29 +505,280 @@ function checkOperation(op: AssistantOperation, c: Checker): void {
     addField(op.field, table, c);
     return;
   }
-  if (op.op === 'createView') {
-    checkView(op, table, add);
-    return;
+  checkView(op, table, add);
+  table.views ??= [];
+  table.views.push({ name: op.name, type: op.type });
+}
+
+/**
+ * Header names that carry credentials: a plan never holds those (the user adds them as secret
+ * headers in the builder, where their values are stored encrypted).
+ */
+const SECRET_HEADER_RE =
+  /^(authorization|proxy-authorization|cookie)$|auth|token|secret|key|password|passwd|session|signature|credential/i;
+/** An HTTP header name (RFC 9110 token), as the automations engine takes it. */
+const HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/;
+
+const holdsTokens = (text: string) => {
+  try {
+    return templatePaths(text).length > 0;
+  } catch {
+    // A malformed token: the automation service names it.
+    return true;
   }
-  for (const name of op.watchFields ?? []) {
-    if (!fieldOf(table, name)) add('reference', `"${table.name}" has no field "${name}".`, name);
-  }
-  for (const action of op.actions) {
-    if (action.type === 'sendEmail') continue;
-    const target = action.type === 'createRecord' ? tables.get(action.table) : table;
-    if (!target) {
-      add(
-        'reference',
-        `There is no table named "${action.type === 'createRecord' ? action.table : op.table}".`
-      );
+};
+
+const USER_TYPES: readonly string[] = ['user', 'createdBy', 'lastModifiedBy'];
+
+/** The query engine's `isWithin` ranges a plan's text value can name. */
+export const ASSISTANT_DATE_RANGES = [
+  'pastWeek',
+  'pastMonth',
+  'pastYear',
+  'nextWeek',
+  'nextMonth',
+  'nextYear',
+] as const;
+const RELATIVE_DAYS: readonly string[] = ['today', 'tomorrow', 'yesterday'];
+const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})/;
+
+/** A day as the query engine reads one: `today`/`tomorrow`/`yesterday` or a real `YYYY-MM-DD`. */
+function isFilterDay(value: string): boolean {
+  if (RELATIVE_DAYS.includes(value)) return true;
+  const m = DAY_RE.exec(value);
+  if (!m) return false;
+  const day = `${m[1]}-${m[2]}-${m[3]}`;
+  const d = new Date(`${day}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === day;
+}
+
+/** A planned filter's conditions against a table, as the query engine would take them. */
+function checkFilter(
+  filter: AssistantFilter,
+  table: AssistantTableInfo,
+  add: Add,
+  where: string,
+  tokens: boolean
+): void {
+  for (const cond of filter.conditions) {
+    const field = fieldOf(table, cond.field);
+    if (!field) {
+      add('reference', `${where}: "${table.name}" has no field "${cond.field}".`, cond.field);
       continue;
     }
-    for (const cell of action.cells) {
-      const field = fieldOf(target, cell.field);
-      if (!field) add('reference', `"${target.name}" has no field "${cell.field}".`, cell.field);
-      else if (READ_ONLY_PLAN_TYPES.includes(field.type)) {
-        add('type', `"${field.name}" is computed: an automation can't set it.`, field.name);
+    const at = `${where}: "${field.name}"`;
+    if (isFieldTypeName(field.type)) {
+      const ops = getFieldType(field.type).filterOperators;
+      if (!ops.includes(cond.operator)) {
+        add(
+          'type',
+          `${at} (a ${field.type} field) can't be filtered with "${cond.operator}"; use one of ${ops.join(', ')}.`,
+          field.name
+        );
+        continue;
+      }
+    }
+    if (cond.operator === 'isEmpty' || cond.operator === 'isNotEmpty') continue;
+    const value = cond.value?.trim() ?? '';
+    if (value === '') {
+      add('type', `${at} "${cond.operator}" needs a value.`, field.name);
+      continue;
+    }
+    if (holdsTokens(value)) {
+      if (!tokens) add('type', `${at}: the trigger's conditions can't hold tokens.`, field.name);
+      continue;
+    }
+    if (field.type === 'link' && (cond.operator === 'hasAnyOf' || cond.operator === 'hasNoneOf')) {
+      add(
+        'type',
+        `${at} "${cond.operator}" takes record ids: match the linked records' names with contains.`,
+        field.name
+      );
+    } else if (USER_TYPES.includes(field.type) && value !== 'me') {
+      add('type', `${at} takes user ids: only "me" (who the automation runs as) fits.`, field.name);
+    } else if (field.type === 'checkbox' && !['true', 'false', '1', '0'].includes(value)) {
+      add('type', `${at} is a checkbox: its value is true or false.`, field.name);
+    } else if (
+      isFieldTypeName(field.type) &&
+      getFieldType(field.type).sort === 'chronological' &&
+      (cond.operator === 'isWithin'
+        ? !(ASSISTANT_DATE_RANGES as readonly string[]).includes(value)
+        : !isFilterDay(value))
+    ) {
+      add(
+        'type',
+        cond.operator === 'isWithin'
+          ? `${at} "isWithin" takes one of ${ASSISTANT_DATE_RANGES.join(', ')}.`
+          : `${at} takes a date YYYY-MM-DD, today, tomorrow or yesterday: "${value}" isn't one.`,
+        field.name
+      );
+    } else if (
+      isFieldTypeName(field.type) &&
+      !getFieldType(field.type).computed &&
+      getFieldType(field.type).sort === 'number' &&
+      !Number.isFinite(Number(value))
+    ) {
+      add('type', `${at} holds numbers: "${value}" isn't one.`, field.name);
+    }
+  }
+}
+
+/** Cells an action sets: fields of the table that an automation can write. */
+function checkCells(
+  cells: readonly { field: string }[],
+  table: AssistantTableInfo,
+  add: Add
+): void {
+  for (const cell of cells) {
+    const field = fieldOf(table, cell.field);
+    if (!field) add('reference', `"${table.name}" has no field "${cell.field}".`, cell.field);
+    else if (READ_ONLY_PLAN_TYPES.includes(field.type)) {
+      add('type', `"${field.name}" is computed: an automation can't set it.`, field.name);
+    }
+  }
+}
+
+function checkHttp(a: Extract<AssistantAction, { type: 'httpRequest' }>, add: Add, n: number) {
+  const url = a.url.trim();
+  if (url === '') add('type', `Step ${n} needs a URL.`);
+  else if (!holdsTokens(url) && !isHttpUrl(url)) {
+    add('type', `Step ${n}: "${url}" isn't an http or https URL.`);
+  }
+  for (const h of a.headers) {
+    if (!HEADER_NAME_RE.test(h.name)) {
+      add('type', `Step ${n}: "${h.name}" isn't a valid header name.`);
+    } else if (SECRET_HEADER_RE.test(h.name)) {
+      add(
+        'type',
+        `Step ${n}: the header ${h.name} looks like a credential. Leave it out and add it as a secret header in the automation's builder.`
+      );
+    } else if (/[\r\n\0]/.test(h.value)) {
+      add('type', `Step ${n}: the header ${h.name} has a line break.`);
+    }
+  }
+  if (a.body !== null && a.body.trim() !== '') {
+    if (a.method === 'GET') add('type', `Step ${n}: a GET request sends no body.`);
+    else {
+      try {
+        JSON.parse(a.body);
+      } catch {
+        add('type', `Step ${n}: the body isn't JSON.`);
       }
     }
   }
+}
+
+/**
+ * A planned automation: its trigger's table and what the trigger names there (a form view, a
+ * button that runs automations, conditions, a schedule the engine takes), then each action's
+ * table and fields. Tokens in values are left to the automation service.
+ */
+function checkAutomation(op: AssistantAutomationOp, c: Checker): void {
+  const { tables, add } = c;
+  const tableless = TABLELESS_TRIGGERS.includes(op.trigger);
+  let table: AssistantTableInfo | undefined;
+  if (op.table !== null) {
+    table = tables.get(op.table);
+    if (!table) {
+      add('reference', `There is no table named "${op.table}".`);
+      return;
+    }
+  } else if (!tableless) {
+    add('reference', `A ${op.trigger} trigger needs its table.`);
+    return;
+  }
+
+  if (table && op.trigger === 'recordUpdated') {
+    for (const name of op.watchFields ?? []) {
+      if (!fieldOf(table, name)) add('reference', `"${table.name}" has no field "${name}".`, name);
+    }
+  }
+  if (table && op.trigger === 'recordMatches') {
+    if (!op.filter) add('type', 'A recordMatches trigger needs the conditions records enter.');
+    else checkFilter(op.filter, table, add, 'The trigger', false);
+  }
+  if (table && op.trigger === 'formSubmitted') {
+    const view = op.formView
+      ? table.views?.find((v) => lower(v.name) === lower(op.formView ?? ''))
+      : undefined;
+    if (!view) {
+      add('reference', `A formSubmitted trigger needs a form view of "${table.name}".`);
+    } else if (view.type !== 'form') {
+      add('type', `"${view.name}" is a ${view.type} view, not a form.`);
+    }
+  }
+  if (table && op.trigger === 'buttonClicked') {
+    const button = op.buttonField ? fieldOf(table, op.buttonField) : undefined;
+    if (!button) {
+      add('reference', `A buttonClicked trigger needs a button field of "${table.name}".`);
+    } else if (button.type !== 'button') {
+      add('type', `"${button.name}" is a ${button.type} field, not a button.`, button.name);
+    } else if (button.buttonAction !== 'runAutomation') {
+      add(
+        'type',
+        `The button "${button.name}" opens a URL: set its action to run automations.`,
+        button.name
+      );
+    }
+  }
+  if (op.trigger === 'scheduled') {
+    const parsed = op.schedule ? scheduleSchema.safeParse(op.schedule) : undefined;
+    if (!parsed) add('type', 'A scheduled trigger needs a schedule.');
+    else if (!parsed.success) {
+      add('type', `The schedule can't be used: ${parsed.error.issues[0]?.message ?? 'invalid'}.`);
+    }
+  }
+
+  // The table each findRecords step reads, by its number, for updates of what it found.
+  const found = new Map<number, AssistantTableInfo | null>();
+  op.actions.forEach((a, i) => {
+    const n = i + 1;
+    if (a.type === 'sendEmail') return;
+    if (a.type === 'httpRequest') {
+      checkHttp(a, add, n);
+      return;
+    }
+    if (a.type === 'findRecords') {
+      const target = tables.get(a.table);
+      found.set(n, target ?? null);
+      if (!target) {
+        add('reference', `There is no table named "${a.table}".`);
+        return;
+      }
+      if (a.limit !== null && (a.limit < 1 || a.limit > MAX_FIND_RECORDS)) {
+        add('type', `Step ${n} finds 1 to ${MAX_FIND_RECORDS} records.`);
+      }
+      if (a.filter) checkFilter(a.filter, target, add, `Step ${n}`, true);
+      return;
+    }
+    if (a.type === 'createRecord') {
+      const target = tables.get(a.table);
+      if (!target) add('reference', `There is no table named "${a.table}".`);
+      else checkCells(a.cells, target, add);
+      return;
+    }
+    let target: AssistantTableInfo | undefined;
+    if (a.step === null) {
+      if (!RECORD_TRIGGERS.includes(op.trigger)) {
+        add(
+          'reference',
+          `Step ${n} updates the trigger's record, but a ${op.trigger} trigger has none: update the records a findRecords step found.`
+        );
+        return;
+      }
+      target = table;
+    } else {
+      if (!found.has(a.step)) {
+        add(
+          'reference',
+          `Step ${n} updates what step ${a.step} found: it isn't an earlier findRecords step.`
+        );
+        return;
+      }
+      target = found.get(a.step) ?? undefined;
+      // The find step's own problem already says its table is missing.
+      if (!target) return;
+    }
+    if (target) checkCells(a.cells, target, add);
+  });
 }
