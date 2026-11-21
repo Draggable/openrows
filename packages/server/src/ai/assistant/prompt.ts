@@ -85,10 +85,37 @@ export function planSystemPrompt(newBase: boolean): string {
     '  timeline needs field = the start date or dateTime field and endField = the end date field',
     '  or null; list needs field = a link field to records of the same table (the parent record).',
     '  Other views field = null; endField is null except for timeline.',
-    '- Automations are created switched off. Triggers: recordCreated, recordUpdated (watchFields:',
-    '  field names, or null for any change). Actions: sendEmail (to: addresses), updateRecord',
-    '  (sets cells of the triggering record), createRecord (in a table). Cell values and email',
-    '  text may use tokens like {{trigger.record.fields.Field name}}.',
+    '- Automations are created switched off: the user reviews them, fills in anything secret and',
+    "  turns them on. Say so in the summary when you propose one. table = the trigger's table.",
+    '  Triggers (every key a trigger does not use is null):',
+    '  recordCreated; recordUpdated (watchFields: field names, or null for any change);',
+    '  recordMatches (filter: the conditions a record enters, values without tokens);',
+    '  formSubmitted (formView: the name of a form view of the table, existing or created earlier);',
+    '  buttonClicked (buttonField: a button field of the table whose action is runAutomation);',
+    '  scheduled (table null; schedule = {kind: "cron", expression: five fields such as',
+    '  "0 9 * * 1" or a macro such as "@daily", timeZone} or {kind: "interval", every, unit:',
+    '  minutes, hours, days or weeks, startAt: "YYYY-MM-DDTHH:mm", timeZone}; timeZone is an IANA',
+    '  zone such as "Europe/Paris"; at most every 5 minutes);',
+    '  webhookReceived (table null; runs when JSON is POSTed to the URL the server makes for it).',
+    '  Actions, numbered from 1 in order: sendEmail (to: addresses); updateRecord (step null: sets',
+    '  cells of the triggering record; step N: of the records findRecords step N found, in its',
+    '  table); createRecord (in a table); findRecords (table, filter or null for every record,',
+    '  limit 1-100 or null); httpRequest (method GET, POST, PUT, PATCH or DELETE, url, headers',
+    '  [{name, value}], body: JSON text or null; GET sends no body).',
+    '  A filter is {conjunction: "and" or "or", conditions: [{field, operator, value}]}; the',
+    '  operator must suit the field type (text: is, isNot, contains, doesNotContain; numbers: =,',
+    '  !=, <, <=, >, >=; dates: is, isBefore, isAfter, isOnOrBefore, isOnOrAfter, isWithin;',
+    '  single select: is, isNot, isAnyOf, isNoneOf; checkbox: is; any field: isEmpty, isNotEmpty',
+    '  with value null). Values are text: a number, true or false, a date YYYY-MM-DD or today, an',
+    '  option name.',
+    '  Never write secrets: no passwords, tokens, API keys or credentials, and no Authorization,',
+    '  Cookie or key headers; the user adds secret headers in the builder. Do not propose Slack',
+    '  or Discord messages, scripts, or If / Repeat groups.',
+    '  Text values, email text, URLs, header values and bodies may use tokens: record triggers',
+    '  {{trigger.record.id}} and {{trigger.record.fields.Field name}}; buttonClicked also',
+    '  {{trigger.user.name}} and {{trigger.user.email}}; scheduled {{trigger.scheduledAt}};',
+    '  webhookReceived {{trigger.body.some.key}}; findRecords step N {{steps.N.records}} and',
+    '  {{steps.N.count}}; httpRequest step N {{steps.N.status}} and {{steps.N.body.some.key}}.',
     '- Operations that break these rules are shown with the problem and not applied.',
     '- Keep plans small and focused on the request; no operations when nothing fits, and say why',
     '  in the summary. The summary is one or two plain sentences.',
@@ -108,7 +135,11 @@ export function describeBase(base: AssistantBaseInfo): string {
             (f, i) =>
               `- ${f.name} (${f.type}${f.detail ? `; ${f.detail}` : ''})${i === 0 ? ' [primary]' : ''}`
           )
-          .join('\n')}`
+          .join('\n')}${
+          t.views?.length
+            ? `\nViews: ${t.views.map((v) => `${JSON.stringify(v.name)} (${v.type})`).join(', ')}`
+            : ''
+        }`
     )
     .join('\n\n');
 }

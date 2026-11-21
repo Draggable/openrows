@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { checkFormulaSuggestion, checkPlan } from './check.js';
+import { type AssistantBaseInfo, checkFormulaSuggestion, checkPlan } from './check.js';
 import {
   type AssistantPlan,
   assistantPlanOutputSchema,
   assistantPlanSchema,
+  MAX_PLAN_ACTIONS,
+  MAX_PLAN_CONDITIONS,
   MAX_PLAN_OPERATIONS,
 } from './plan.js';
 
@@ -234,7 +236,7 @@ const view = (type: string, f: string | null, endField: string | null = null) =>
   field: f,
   endField,
 });
-const kinds = (p: AssistantPlan, b = linked) =>
+const kinds = (p: AssistantPlan, b: AssistantBaseInfo = linked) =>
   checkPlan(p, b).map((x) => [x.operation, x.kind, x.field]);
 
 describe('assistant plans: lookups, rollups, counts, buttons, AI fields, timelines and lists', () => {
@@ -510,5 +512,320 @@ describe('assistant plans: lookups, rollups, counts, buttons, AI fields, timelin
       [6, 'type', 'Status'],
       [7, 'type', 'Customer'],
     ]);
+  });
+});
+
+/** A base with a form view and buttons, for the wider automation triggers and actions. */
+const withForms: AssistantBaseInfo = {
+  tables: [
+    {
+      name: 'Orders',
+      fields: [
+        { name: 'Name', type: 'singleLineText' },
+        { name: 'Qty', type: 'number' },
+        { name: 'Status', type: 'singleSelect' },
+        { name: 'Paid', type: 'checkbox' },
+        { name: 'Owner', type: 'user' },
+        { name: 'Customer', type: 'link', linkedTable: 'Customers' },
+        { name: 'Total', type: 'formula', resultType: 'number' },
+        { name: 'Notify', type: 'button', buttonAction: 'runAutomation' },
+        { name: 'Open', type: 'button', buttonAction: 'openUrl' },
+      ],
+      views: [
+        { name: 'Grid view', type: 'grid' },
+        { name: 'Intake', type: 'form' },
+      ],
+    },
+    {
+      name: 'Customers',
+      fields: [
+        { name: 'Company', type: 'singleLineText' },
+        { name: 'Orders', type: 'link', linkedTable: 'Orders' },
+      ],
+    },
+  ],
+};
+
+const automation = (extra: Record<string, unknown>) => ({
+  op: 'createAutomation',
+  table: 'Orders',
+  name: 'Auto',
+  trigger: 'recordCreated',
+  watchFields: null,
+  actions: [{ type: 'sendEmail', to: ['ops@example.com'], subject: 'Hi', body: '' }],
+  ...extra,
+});
+const where = (conditions: unknown[], conjunction = 'and') => ({ conjunction, conditions });
+const cond = (f: string, operator: string, value: string | null) => ({ field: f, operator, value });
+const find = (table: string, filter: unknown = null, limit: number | null = null) => ({
+  type: 'findRecords',
+  table,
+  filter,
+  limit,
+});
+const http = (extra: Record<string, unknown> = {}) => ({
+  type: 'httpRequest',
+  method: 'POST',
+  url: 'https://example.com/hooks/orders',
+  headers: [],
+  body: null,
+  ...extra,
+});
+const update = (cells: { field: string; value: string }[], step: number | null = null) => ({
+  type: 'updateRecord',
+  cells,
+  step,
+});
+
+describe('assistant plans: wider automation triggers and actions', () => {
+  it('accepts every trigger and action the assistant proposes when they fit', () => {
+    const p = plan([
+      automation({
+        trigger: 'formSubmitted',
+        formView: 'Intake',
+        actions: [update([{ field: 'Status', value: 'New' }])],
+      }),
+      automation({
+        table: null,
+        trigger: 'scheduled',
+        schedule: { kind: 'cron', expression: '0 9 * * 1', timeZone: 'Europe/Paris' },
+        actions: [
+          find('Orders', where([cond('Status', 'is', 'Open'), cond('Qty', '>', '10')]), 50),
+          update([{ field: 'Status', value: 'Late' }], 1),
+          http({
+            body: '{"count": "{{steps.1.count}}"}',
+            headers: [{ name: 'X-Source', value: 'a' }],
+          }),
+        ],
+      }),
+      automation({
+        table: null,
+        trigger: 'scheduled',
+        schedule: {
+          kind: 'interval',
+          every: 2,
+          unit: 'hours',
+          startAt: '2026-01-05T08:00',
+          timeZone: 'UTC',
+        },
+      }),
+      automation({
+        table: null,
+        trigger: 'webhookReceived',
+        actions: [
+          {
+            type: 'createRecord',
+            table: 'Customers',
+            cells: [{ field: 'Company', value: '{{trigger.body.company}}' }],
+          },
+        ],
+      }),
+      automation({ trigger: 'buttonClicked', buttonField: 'Notify' }),
+      automation({
+        trigger: 'recordMatches',
+        filter: where([cond('Paid', 'is', 'true'), cond('Customer', 'isEmpty', null)], 'or'),
+        actions: [http({ method: 'GET', url: 'https://example.com/{{trigger.record.id}}' })],
+      }),
+      // A form view and a button created earlier in the plan.
+      { op: 'createView', table: 'Customers', name: 'Sign up', type: 'form', field: null },
+      automation({ table: 'Customers', trigger: 'formSubmitted', formView: 'sign up' }),
+      onCustomers(field('Ping', 'button', { button: { label: 'Ping', action: 'runAutomation' } })),
+      automation({ table: 'Customers', trigger: 'buttonClicked', buttonField: 'Ping' }),
+      // Find with a token and no filter.
+      automation({
+        actions: [
+          find('Customers', where([cond('Company', 'is', '{{trigger.record.fields.Name}}')])),
+          find('Customers'),
+          update([{ field: 'Company', value: 'Seen' }], 2),
+        ],
+      }),
+    ]);
+    expect(checkPlan(p, withForms)).toEqual([]);
+    // Keys added later default to null, so older bodies still read.
+    expect(p.operations[0]).toMatchObject({ filter: null, buttonField: null, schedule: null });
+    const first = p.operations[0];
+    expect(first?.op === 'createAutomation' && first.actions[0]).toMatchObject({ step: null });
+  });
+
+  it('still caps automations', () => {
+    const many = Array.from({ length: MAX_PLAN_ACTIONS + 1 }, () => http());
+    expect(() => plan([automation({ actions: many })])).toThrow();
+    expect(() => plan([automation({ actions: many.slice(1) })])).not.toThrow();
+    const conditions = Array.from({ length: MAX_PLAN_CONDITIONS + 1 }, () => cond('Qty', '>', '1'));
+    expect(() => plan([automation({ actions: [find('Orders', where(conditions))] })])).toThrow();
+    // Only the known triggers, actions and methods parse at all.
+    for (const bad of [
+      automation({ trigger: 'emailReceived' }),
+      automation({ actions: [{ type: 'slackMessage', text: 'Hi' }] }),
+      automation({ actions: [{ type: 'runScript', script: 'x' }] }),
+      automation({ actions: [http({ method: 'TRACE' })] }),
+      automation({ actions: [http({ headers: [{ name: 'X', value: 'y', secret: true }] })] }),
+    ]) {
+      expect(
+        assistantPlanSchema.safeParse({ summary: 's', baseName: null, operations: [bad] }).success
+      ).toBe(false);
+    }
+  });
+
+  it('reports triggers that name no form view, button, conditions or valid schedule', () => {
+    const p = plan([
+      automation({ trigger: 'formSubmitted', formView: 'Nope' }),
+      automation({ trigger: 'formSubmitted', formView: 'Grid view' }),
+      automation({ trigger: 'formSubmitted' }),
+      automation({ trigger: 'buttonClicked', buttonField: 'Nope' }),
+      automation({ trigger: 'buttonClicked', buttonField: 'Qty' }),
+      automation({ trigger: 'buttonClicked', buttonField: 'Open' }),
+      automation({ trigger: 'recordMatches' }),
+      automation({ table: null, trigger: 'scheduled' }),
+      automation({
+        table: null,
+        trigger: 'scheduled',
+        schedule: { kind: 'cron', expression: '* * * * *', timeZone: 'UTC' },
+      }),
+      automation({
+        table: null,
+        trigger: 'scheduled',
+        schedule: { kind: 'cron', expression: 'every day', timeZone: 'UTC' },
+      }),
+      automation({
+        table: null,
+        trigger: 'scheduled',
+        schedule: { kind: 'cron', expression: '@daily', timeZone: 'Mars/Olympus' },
+      }),
+      automation({
+        table: null,
+        trigger: 'scheduled',
+        schedule: {
+          kind: 'interval',
+          every: 0,
+          unit: 'days',
+          startAt: '2026-01-01T00:00',
+          timeZone: 'UTC',
+        },
+      }),
+      automation({
+        table: null,
+        trigger: 'scheduled',
+        schedule: {
+          kind: 'interval',
+          every: 1,
+          unit: 'days',
+          startAt: 'tomorrow',
+          timeZone: 'UTC',
+        },
+      }),
+      automation({ table: null, trigger: 'recordCreated' }),
+      automation({ table: 'Ghosts', trigger: 'webhookReceived' }),
+    ]);
+    expect(kinds(p, withForms)).toEqual([
+      [0, 'reference', null],
+      [1, 'type', null],
+      [2, 'reference', null],
+      [3, 'reference', null],
+      [4, 'type', 'Qty'],
+      [5, 'type', 'Open'],
+      [6, 'type', null],
+      [7, 'type', null],
+      [8, 'type', null],
+      [9, 'type', null],
+      [10, 'type', null],
+      [11, 'type', null],
+      [12, 'type', null],
+      [13, 'reference', null],
+      [14, 'reference', null],
+    ]);
+    expect(checkPlan(p, withForms)[8]?.message).toContain('at most every 5 minutes');
+  });
+
+  it('reports filters, finds and updates that name unknown fields or values that do not fit', () => {
+    const p = plan([
+      automation({ actions: [find('Orders', where([cond('Nope', 'is', 'x')]))] }),
+      automation({ actions: [find('Ghosts')] }),
+      automation({ actions: [find('Orders', where([cond('Qty', 'contains', '1')]))] }),
+      automation({ actions: [find('Orders', where([cond('Qty', '>', 'ten')]))] }),
+      automation({ actions: [find('Orders', where([cond('Status', 'is', null)]))] }),
+      automation({ actions: [find('Orders', where([cond('Paid', 'is', 'yes')]))] }),
+      automation({ actions: [find('Orders', where([cond('Owner', 'hasAnyOf', 'Ann')]))] }),
+      automation({ actions: [find('Orders', where([cond('Customer', 'hasAnyOf', 'Acme')]))] }),
+      automation({ actions: [find('Orders', null, 500)] }),
+      automation({
+        trigger: 'recordMatches',
+        filter: where([cond('Name', 'is', '{{trigger.record.id}}')]),
+      }),
+      automation({ actions: [update([{ field: 'Nope', value: 'x' }])] }),
+      automation({ actions: [update([{ field: 'Total', value: '1' }])] }),
+      automation({ actions: [find('Customers'), update([{ field: 'Qty', value: '1' }], 1)] }),
+      // Step 1 isn't a find; step 3 comes later.
+      automation({ actions: [http(), update([{ field: 'Qty', value: '1' }], 1)] }),
+      automation({ actions: [update([{ field: 'Qty', value: '1' }], 3), find('Orders')] }),
+      // A schedule or webhook has no record to update.
+      automation({
+        table: null,
+        trigger: 'webhookReceived',
+        actions: [update([{ field: 'Qty', value: '1' }])],
+      }),
+    ]);
+    expect(kinds(p, withForms)).toEqual([
+      [0, 'reference', 'Nope'],
+      [1, 'reference', null],
+      [2, 'type', 'Qty'],
+      [3, 'type', 'Qty'],
+      [4, 'type', 'Status'],
+      [5, 'type', 'Paid'],
+      [6, 'type', 'Owner'],
+      [7, 'type', 'Customer'],
+      [8, 'type', null],
+      [9, 'type', 'Name'],
+      [10, 'reference', 'Nope'],
+      [11, 'type', 'Total'],
+      [12, 'reference', 'Qty'],
+      [13, 'reference', null],
+      [14, 'reference', null],
+      [15, 'reference', null],
+    ]);
+  });
+
+  it('reports HTTP steps that are not allowed or would carry a secret', () => {
+    const p = plan([
+      automation({ actions: [http({ url: 'ftp://example.com/x' })] }),
+      automation({ actions: [http({ url: 'not a url' })] }),
+      automation({ actions: [http({ url: ' ' })] }),
+      automation({ actions: [http({ headers: [{ name: 'Authorization', value: 'Bearer x' }] })] }),
+      automation({ actions: [http({ headers: [{ name: 'X-Api-Key', value: 'k' }] })] }),
+      automation({ actions: [http({ headers: [{ name: 'Bad header', value: 'v' }] })] }),
+      automation({ actions: [http({ headers: [{ name: 'X-Ok', value: 'a\nb' }] })] }),
+      automation({ actions: [http({ body: '{not json' })] }),
+      automation({ actions: [http({ method: 'GET', body: '{}' })] }),
+    ]);
+    const problems = checkPlan(p, withForms);
+    expect(problems.map((x) => [x.operation, x.kind])).toEqual(
+      Array.from({ length: 9 }, (_, i) => [i, 'type'])
+    );
+    expect(problems[3]?.message).toContain('secret header');
+  });
+
+  it('reports automations that need a left-out operation', () => {
+    const p = plan([
+      // A form view of a table that can't be made, and an automation on it.
+      {
+        op: 'createTable',
+        name: 'Orders',
+        description: null,
+        fields: [field('Name', 'singleLineText')],
+      },
+      {
+        op: 'createTable',
+        name: 'Leads',
+        description: null,
+        fields: [field('Name', 'singleLineText'), field('Lost', 'count', { linkField: 'Nope' })],
+      },
+      { op: 'createView', table: 'Leads', name: 'Sign up', type: 'form', field: null },
+      automation({ table: 'Leads', trigger: 'formSubmitted', formView: 'Sign up' }),
+      // A field that can't be made, and a find over it.
+      onOrders(field('Bad', 'formula', { formula: '{Nope}' })),
+      automation({ actions: [find('Orders', where([cond('Bad', 'isEmpty', null)]))] }),
+      automation({ trigger: 'formSubmitted', formView: 'Intake' }),
+    ]);
+    expect(checkPlan(p, withForms).map((x) => x.operation)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 });
