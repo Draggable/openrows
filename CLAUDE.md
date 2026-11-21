@@ -270,8 +270,9 @@ packages/
                              numbers and charts through the RecordService's summaries,
                              `aggregateRecords`/`groupRecordValues`; chartRows: caps, "Other")
 : runtime.ts (a page's records projected like a share link's,
-                             the page filter with `me` as the viewer; edits and form submissions
-                             limited to the page; a record review's automation buttons, through
+                             the page filter with `me` as the viewer; edits (a record review's
+                             editable fields, kanban/calendar/timeline drags of shown fields) and
+                             form submissions limited to the page; a record review's automation buttons, through
                              automations/buttons.ts, and the files a page shows, both checked
                              against the published page per request), collaborators.ts (interface-only collaborators,
                              `interface_members`; invitations through workspaces/service.ts)
@@ -501,7 +502,8 @@ packages/
                              page: password form, sign-in prompt, table tabs, read-only grid; with
                              `embed`, the compact /embed/:token?theme= page),
                              SharedLayouts.tsx (read-only kanban, calendar, gallery,
-                             timeline and list on the app views' models), SharedCell.tsx, model.ts
+                             timeline and list on the app views' models; `edit`, an interface
+                             page's drags, off by default), SharedCell.tsx, model.ts
                              (embed code, embed origins)
                              PublicFormPage (the public /f/:token form), FormLinkDialog
                              (a form view's "Share form"), form-model.ts
@@ -520,7 +522,8 @@ packages/
                              SVG charts, `--chart-1..6` in index.css), chart-model.ts,
                              DataElementSettings.tsx, useDashboardData.ts (the page's data, live)
 : PageRuntime.tsx (pages through the interface's routes: forms,
-                             kanban/calendar/timeline on share/SharedLayouts.tsx, interface-only
+                             kanban/calendar/timeline on share/SharedLayouts.tsx with drags
+                             through the page's record route, interface-only
                              viewers' lists and reviews), InterfaceApp.tsx (/i/:interfaceId, an
                              interface on its own), LayoutSettings.tsx, ShareInterfaceDialog.tsx
     src/features/templates/  the template gallery: TemplateGallery (categories, tiles, the

@@ -27,10 +27,11 @@ import { InvitationSchema } from './workspace.js';
  * has no record list, only its elements.
  *
  * More layouts: form (a new record from the fields it lists), kanban, calendar and
- * timeline (the views' layouts, `kanban`/`calendar`/`timeline`, drawn read-only from the page's
- * records route as share links draw views). Every page's records are read through that route,
- * projected to the fields the page shows, with the page filter applied on the server: interface-
- * only collaborators see nothing else of the base.
+ * timeline (the views' layouts, `kanban`/`calendar`/`timeline`, drawn from the page's records
+ * route as share links draw views; viewers who may edit records drag cards, events and bars
+ * through the page's record route, writing only the fields the page shows). Every page's records
+ * are read through that route, projected to the fields the page shows, with the page filter
+ * applied on the server: interface-only collaborators see nothing else of the base.
  */
 
 export const INTERFACE_LAYOUTS = [
@@ -438,7 +439,10 @@ export const InterfacePageRecordsSchema = z.object({
   records: z.array(SharedRecordSchema),
   offset: z.int(),
   total: z.int(),
-  /** Fields the viewer may edit through the page (a record review's editable field elements). */
+  /**
+   * Fields the viewer may edit through the page: a record review's editable field elements, or
+   * the shown fields a kanban, calendar or timeline page's drags write (a stack, dates).
+   */
   editable: z.array(z.uuid()),
   /** The viewer may submit the page's form. */
   canSubmit: z.boolean(),
@@ -460,7 +464,10 @@ const cells = z
     `At most ${MAX_INTERFACE_WRITE_CELLS} fields`
   );
 
-/** `PATCH .../pages/:pageId/records/:recordId`: cells of fields the page makes editable. */
+/**
+ * `PATCH .../pages/:pageId/records/:recordId`: cells of fields the page makes editable (its
+ * `editable`), on a record the page lists.
+ */
 export const interfacePageRecordUpdateSchema = z.object({ fields: cells }).strict();
 /** `POST .../pages/:pageId/submissions`: a form page's answers, by field id. */
 export const interfacePageSubmissionSchema = z.object({ fields: cells }).strict();

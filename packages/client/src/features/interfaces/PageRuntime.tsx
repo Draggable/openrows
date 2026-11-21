@@ -18,7 +18,7 @@ import { Button, Skeleton, toast } from '../../components/ui';
 import { cn } from '../../lib/utils';
 import { cellText } from '../grid/cells/model';
 import { asFieldMeta, type FileLinks, interfaceFileLinks, SharedCell } from '../share/SharedCell';
-import { type LayoutRecordsSource, SharedLayout } from '../share/SharedLayouts';
+import { type LayoutEdits, type LayoutRecordsSource, SharedLayout } from '../share/SharedLayouts';
 import { PreviewInput } from '../views/form/FormPreview';
 import { Canvas, type DesignerProps, type ElementContext, type PageButtons } from './Canvas';
 import { dataFilters, type FilterValues } from './model';
@@ -31,7 +31,8 @@ const LAYOUT_MAX_RECORDS = 1000;
  * A page drawn from the interface's own routes: its records come projected to the fields
  * the page shows, filtered on the server for this viewer (`me` is them), so it works the same for
  * interface-only collaborators, who can't read the base. Record lists and reviews, forms, the
- * view-like layouts (kanban, calendar, timeline: the share links' read-only layouts) and
+ * view-like layouts (kanban, calendar, timeline: the share links' layouts, with drags that write
+ * through the page's record route when the server lists fields this viewer may edit) and
  * dashboards.
  */
 export function PageRuntime({
@@ -62,6 +63,37 @@ export function PageRuntime({
     () => interfaceFileLinks(source.interfaceId, source.pageId, source.draft),
     [source.interfaceId, source.pageId, source.draft]
   );
+  const qc = useQueryClient();
+  const editable = records.data?.editable;
+  // A view-like page's drags write through the published page's record route, only the fields
+  // the server lists for this viewer; never in the designer or on a draft.
+  const layoutEdits = useMemo((): LayoutEdits | null => {
+    if (!viewLike || designer || source.draft || !editable || editable.length === 0) return null;
+    return {
+      fields: new Set(editable),
+      save: async (recordId, patch) => {
+        try {
+          await api.interfaces.updatePageRecord({
+            params: { interfaceId: source.interfaceId, pageId: source.pageId, recordId },
+            body: { fields: patch },
+          });
+        } finally {
+          await qc.invalidateQueries({
+            queryKey: queryKeys.interfaces.records(source.baseId, source.pageId),
+          });
+        }
+      },
+    };
+  }, [
+    viewLike,
+    designer,
+    editable,
+    qc,
+    source.draft,
+    source.interfaceId,
+    source.pageId,
+    source.baseId,
+  ]);
 
   if (records.isPending) return <Skeleton className="h-10" />;
   if (records.isError || !records.data) {
@@ -178,6 +210,7 @@ export function PageRuntime({
             shared={shared}
             records={layoutSource}
             files={files}
+            edit={layoutEdits}
           />
         </div>
       </div>

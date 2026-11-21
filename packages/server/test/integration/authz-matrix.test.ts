@@ -145,6 +145,8 @@ interface Params extends Record<string, string> {
   syncId: string;
   /** A form page of the interface. */
   formPageId: string;
+  /** A kanban page of the interface, its cards showing Notes (which its drags may write). */
+  boardPageId: string;
   /** The interface's read-only interface-only collaborator, and a pending interface invitation. */
   interfaceMemberId: string;
   interfaceInvitationId: string;
@@ -572,9 +574,11 @@ const CASES: Record<string, Case> = {
   'GET /api/interfaces/:interfaceId': roles(200, ALL),
   'GET /api/me/interfaces': signedIn(200),
   'POST /api/interfaces/:interfaceId/pages/:pageId/records': roles(200, ALL, {}),
-  'PATCH /api/interfaces/:interfaceId/pages/:pageId/records/:recordId': roles(204, EDITORS, {
-    fields: {},
-  }),
+  // A record edit through a kanban page (a drag's write): a field its cards show.
+  'PATCH /api/interfaces/:interfaceId/pages/:pageId/records/:recordId': {
+    ...roles(204, EDITORS, (p) => ({ fields: { [p.fieldId]: 'Dragged' } })),
+    params: { pageId: 'boardPageId' },
+  },
   'POST /api/interfaces/:interfaceId/pages/:pageId/submissions': {
     ...roles(201, EDITORS, { fields: {} }),
     params: { pageId: 'formPageId' },
@@ -1583,6 +1587,26 @@ describe('cross-tenant authorization matrix', () => {
       })
       .returning();
     if (!formPage) throw new Error('matrix: no form page');
+    const boardConfig = {
+      layout: 'kanban',
+      tableId: table.id,
+      sorts: [],
+      fields: [],
+      elements: [],
+      kanban: { stackFieldId: null, cardFields: [field.id] },
+    };
+    const [boardPage] = await t.db
+      .insert(interfacePages)
+      .values({
+        workspaceId: workspace.id,
+        interfaceId: iface.id,
+        name: 'Board',
+        draft: boardConfig,
+        published: boardConfig,
+        publishedAt: new Date(),
+      })
+      .returning();
+    if (!boardPage) throw new Error('matrix: no board page');
     users.interfaceEditor = await createUser(t.db);
     users.interfaceViewer = await createUser(t.db);
     await t.db.insert(interfaceMembers).values([
@@ -1710,6 +1734,7 @@ describe('cross-tenant authorization matrix', () => {
       syncTableId: mirror.id,
       syncId: mirrorSync.id,
       formPageId: formPage.id,
+      boardPageId: boardPage.id,
       interfaceMemberId: users.interfaceViewer.id,
       interfaceInvitationId: interfaceInvitation.id,
       provider: 'polar',
