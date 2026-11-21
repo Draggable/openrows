@@ -583,12 +583,13 @@ function PageActions({
   );
 }
 
-/** Layouts drawn by PageRuntime: form, kanban, calendar and timeline pages. */
+/** Layouts drawn by PageRuntime: form, kanban, calendar, timeline and hierarchical list pages. */
 const RUNTIME_LAYOUTS: readonly InterfacePageConfig['layout'][] = [
   'form',
   'kanban',
   'calendar',
   'timeline',
+  'list',
 ];
 
 /** The page: the designer (with its panel) for editors in edit mode, else the page itself. */
@@ -1011,7 +1012,9 @@ function DesignerPanel({
             </div>
           </section>
           <LayoutSettings config={config} fields={fields} onChange={onChange} />
-          {(config.layout === 'recordList' || config.layout === 'recordReview') && (
+          {(config.layout === 'recordList' ||
+            config.layout === 'recordReview' ||
+            config.layout === 'list') && (
             <ListFields config={config} fields={fields} onChange={onChange} />
           )}
         </>

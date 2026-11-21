@@ -447,3 +447,85 @@ describe('kanban, calendar and timeline interface pages', () => {
     expect(page.writes).toEqual([]);
   });
 });
+
+describe('hierarchical list interface pages', () => {
+  const parent = uuid(6);
+  const notes: SharedField = {
+    id: uuid(7),
+    name: 'Details',
+    type: 'singleLineText',
+    options: {},
+    isPrimary: false,
+  };
+  const secretId = uuid(8);
+  const config: InterfacePageConfig = {
+    ...base,
+    layout: 'list',
+    fields: [notes.id, secretId],
+    list: { parentFieldId: parent },
+  };
+  const ids = { epic: uuid(31), task: uuid(32), sub: uuid(33), orphan: uuid(34) };
+  // As the server answers: the parent link as ids of listed records only (the orphan's parent
+  // isn't listed, so it comes as a root), and only the fields the page shows this viewer.
+  const treeRecords: SharedRecord[] = [
+    { id: ids.epic, fields: { [name.id]: 'Epic', [notes.id]: 'top' }, links: { [parent]: [] } },
+    {
+      id: ids.task,
+      fields: { [name.id]: 'Task', [notes.id]: 'middle' },
+      links: { [parent]: [ids.epic] },
+    },
+    {
+      id: ids.sub,
+      fields: { [name.id]: 'Sub', [notes.id]: 'leaf' },
+      links: { [parent]: [ids.task] },
+    },
+    { id: ids.orphan, fields: { [name.id]: 'Orphan', [notes.id]: null }, links: { [parent]: [] } },
+  ];
+  const listExtra = { list: { parentFieldId: parent, rowFields: [notes.id] } };
+
+  /** The rows' titles in order, with their depth (by indentation). */
+  const rowsOf = (list: HTMLElement) =>
+    within(list)
+      .getAllByRole('listitem')
+      .map((li) => `${li.style.paddingLeft} ${li.querySelector('.truncate')?.textContent}`);
+
+  it('nests the listed records under their parent, and collapses a parent', async () => {
+    const page = fakePage({
+      fields: [name, notes],
+      records: treeRecords,
+      editable: [],
+      extra: listExtra,
+    });
+    renderPage(config);
+    const list = await screen.findByRole('list', { name: 'Plan' });
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(4));
+    expect(rowsOf(list)).toEqual(['12px Epic', '32px Task', '52px Sub', '12px Orphan']);
+    expect(within(list).getByText('middle')).toBeTruthy();
+    fireEvent.click(within(list).getByRole('button', { name: 'Collapse Epic' }));
+    expect(rowsOf(list)).toEqual(['12px Epic', '12px Orphan']);
+    fireEvent.click(within(list).getByRole('button', { name: 'Expand Epic' }));
+    expect(rowsOf(list)).toHaveLength(4);
+    expect(page.writes).toEqual([]);
+    expect(page.others).toEqual([]);
+  });
+
+  it("shows nothing the server left out, and nests nothing without the parent's structure", async () => {
+    // Values of a field the server doesn't list never render, nor a parent it doesn't list.
+    fakePage({
+      fields: [name, notes],
+      records: [
+        { id: ids.task, fields: { [name.id]: 'Task', [secretId]: 'TOP-SECRET' }, links: {} },
+        { id: ids.sub, fields: { [name.id]: 'Sub' }, links: { [parent]: [ids.epic] } },
+      ],
+      editable: [],
+      extra: { list: { parentFieldId: null, rowFields: [notes.id] } },
+    });
+    renderPage(config);
+    const list = await screen.findByRole('list', { name: 'Plan' });
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(2));
+    expect(rowsOf(list)).toEqual(['12px Task', '12px Sub']);
+    expect(screen.queryByText('TOP-SECRET')).toBeNull();
+    expect(screen.queryByText('Epic')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Collapse/ })).toBeNull();
+  });
+});

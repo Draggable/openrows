@@ -47,7 +47,8 @@ Everything below is in this repository, under the AGPL-3.0.
   with dependencies), list (nested by a self link) and form views, each with filters, sorts,
   groups, row colors and hidden fields; personal and locked views.
 - Interfaces: pages built from a base's data (record lists, record review, dashboards with numbers
-  and charts, forms, boards, calendars and timelines), with interface-only collaborators.
+  and charts, forms, boards, calendars, timelines and hierarchical lists), with interface-only
+  collaborators.
 - CSV import and export, base and account exports (ZIP), base snapshots and restore, duplicate a
   base, a 30-day trash, record revision history, and 10 built-in templates plus "Save as template".
 - Import from Airtable: schema, records, links, attachments and views, with a report of what

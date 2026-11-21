@@ -270,7 +270,8 @@ packages/
                              numbers and charts through the RecordService's summaries,
                              `aggregateRecords`/`groupRecordValues`; chartRows: caps, "Other")
 : runtime.ts (a page's records projected like a share link's,
-                             the page filter with `me` as the viewer; edits (a record review's
+                             the page filter with `me` as the viewer; a hierarchical list's
+                             parents as ids of listed records, read-only; edits (a record review's
                              editable fields, kanban/calendar/timeline drags of shown fields) and
                              form submissions limited to the page; a record review's automation buttons, through
                              automations/buttons.ts, and the files a page shows, both checked
@@ -523,7 +524,8 @@ packages/
                              DataElementSettings.tsx, useDashboardData.ts (the page's data, live)
 : PageRuntime.tsx (pages through the interface's routes: forms,
                              kanban/calendar/timeline on share/SharedLayouts.tsx with drags
-                             through the page's record route, interface-only
+                             through the page's record route, hierarchical lists on its
+                             read-only list, interface-only
                              viewers' lists and reviews), InterfaceApp.tsx (/i/:interfaceId, an
                              interface on its own), LayoutSettings.tsx, ShareInterfaceDialog.tsx
     src/features/templates/  the template gallery: TemplateGallery (categories, tiles, the
